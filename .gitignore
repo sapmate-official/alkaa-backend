@@ -1,0 +1,6 @@
+.env
+package-lock.json
+node_modules
+prisma/migrations
+localhost-key.pem
+localhost.pem
