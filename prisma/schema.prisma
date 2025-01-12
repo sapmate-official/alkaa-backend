@@ -1,0 +1,132 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String         @id @default(cuid())
+  email             String         @unique
+  name              String?
+  role              Role           @default(EMPLOYEE)
+  hashedPassword    String?
+  refreshToken      String?
+  status            user_status?
+  verificationToken String?        @unique
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  annualPackage     Float?
+  hiredDate         DateTime?
+  dateOfBirth       DateTime?
+  leaveRequest      leaveRequest[]
+  leaveBalance      leaveRecord[]
+  attendanceRecords AttendanceRecord[] 
+  salary            salary[]
+}
+model AttendanceRecord {
+  id              String           @id @default(cuid())
+  userId          String
+  date            DateTime         @default(now())
+  sessionNumber   Int              // New field to track multiple sessions per day
+  checkInTime     DateTime
+  checkOutTime    DateTime?
+  checkInLocation Json      
+  checkOutLocation Json?    
+  status          AttendanceStatus @default(PRESENT)
+  notes           String?
+  duration        Json?            // New field to store session duration
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  user            User             @relation(fields: [userId], references: [id])
+
+  @@index([userId, date]) 
+  @@unique([userId, date, sessionNumber])
+}
+model leaveRequest {
+  id           String      @id @default(cuid())
+  userId       String
+  startDate    DateTime
+  endDate      DateTime
+  status       leaveStatus @default(PENDING)
+  leaveTypeId  String
+  reason       String?
+  approvedBy   String?
+  approvedAt   DateTime?
+  rejectedReason String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  User         User        @relation(fields: [userId], references: [id])
+  leaveType    LeaveType   @relation(fields: [leaveTypeId], references: [id])
+}
+
+model leaveRecord {
+  id            String    @id @default(cuid())
+  userId        String
+  leaveTypeId   String
+  usedDays      Int       // Days used
+  remainingDays Int       // Days remaining
+  year          Int       // Track by year
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  User          User      @relation(fields: [userId], references: [id])
+  leaveType     LeaveType @relation(fields: [leaveTypeId], references: [id])
+}
+
+
+
+model LeaveType {
+  id           String    @id @default(cuid())
+  name         String    @unique
+  description  String?
+  annualLimit  Int
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  leaveRecord   leaveRecord[]
+  leaveRequest  leaveRequest[]
+}
+model salary {
+  id           String    @id @default(cuid())
+  userId       String
+  month        Int
+  year         Int
+  salary       Float
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  User         User      @relation(fields: [userId], references: [id])
+}
+
+enum leaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+}
+
+enum user_status {
+  active
+  inactive
+  suspended
+}
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LATE
+  EARLY_DEPARTURE
+}
