@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { configDotenv } from 'dotenv';
 import fs from 'fs'
+import ServerlessHttp from 'serverless-http';
 // import https from 'https'
 
 configDotenv()
@@ -47,13 +48,15 @@ app.use("/api/v1/salary/",salary)
 app.get('/', (req, res) => {
     res.sendFile(path.join(dirname, 'public', 'interface.html'))
 })
-const options = {
-    key: fs.readFileSync("localhost-key.pem"),
-    cert: fs.readFileSync("localhost.pem"),
-  };
+// const options = {
+//     key: fs.readFileSync("localhost-key.pem"),
+//     cert: fs.readFileSync("localhost.pem"),
+//   };
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`)
 })
 // https.createServer(options, app).listen(3001, () => {
 //     console.log("Server running on https://192.168.0.193:3001");
 //   });
+
+// export const handler = ServerlessHttp(app);

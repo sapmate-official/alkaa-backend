@@ -4,3 +4,5 @@ node_modules
 prisma/migrations
 localhost-key.pem
 localhost.pem
+# Local Netlify folder
+.netlify
