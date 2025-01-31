@@ -51,9 +51,9 @@ const options = {
     key: fs.readFileSync("localhost-key.pem"),
     cert: fs.readFileSync("localhost.pem"),
   };
-// app.listen(port,"192.168.0.193", () => {
-//     console.log(`Server is running on port ${port}`)
-// })
-https.createServer(options, app).listen(3001, () => {
-    console.log("Server running on https://192.168.0.193:3001");
-  });
+app.listen(port, () => {
+    console.log(`Server is running on port ${port}`)
+})
+// https.createServer(options, app).listen(3001, () => {
+//     console.log("Server running on https://192.168.0.193:3001");
+//   });
