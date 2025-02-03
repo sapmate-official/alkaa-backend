@@ -52,7 +52,7 @@ app.get('/', (req, res) => {
 //     key: fs.readFileSync("localhost-key.pem"),
 //     cert: fs.readFileSync("localhost.pem"),
 //   };
-app.listen(port, () => {
+app.listen(port,'0.0.0.0', () => {
     console.log(`Server is running on port ${port}`)
 })
 // https.createServer(options, app).listen(3001, () => {
