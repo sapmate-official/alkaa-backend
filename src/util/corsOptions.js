@@ -7,6 +7,7 @@ const allowedOrigins = [
     'https://192.168.0.193:5173',
     'http://sapmate-employee-bucket.s3-website.ap-south-1.amazonaws.com',
     "https://main.dy4iqzhph9mgs.amplifyapp.com",
+    "https://www.alkaa.sapmate.com",
     "*"
 ]
 
