@@ -1,5 +1,5 @@
 import e from 'express'
-import { leaveTypeList } from '../controller/leave/leave.controller.js'
+import { leaveTypeList } from '../../controller/v1/leave/leave.controller.js'
 
 const router = e.Router()
 
