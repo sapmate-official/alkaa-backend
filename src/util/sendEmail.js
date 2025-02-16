@@ -19,3 +19,4 @@ export const sendPasswordResetEmail = async (email,verificationToken) => {
         return error
     }
 }
+

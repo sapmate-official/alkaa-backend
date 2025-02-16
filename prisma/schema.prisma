@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,120 +7,426 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// System-level Administration
+model SuperAdmin {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  hashedPassword String
+  refreshToken   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// Multi-tenant Organization Management
+model Organization {
+  id                String    @id @default(cuid())
+  name              String
+  industry          String?
+  subscriptionPlan  String
+  subscriptionStart DateTime  @default(now())
+  subscriptionEnd   DateTime?
+  isActive          Boolean   @default(true)
+  settings          Json? // Organizational settings/configurations
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  departments           Department[]
+  users                 User[]
+  roles                 Role[]
+  leaveTypes            LeaveType[]
+  notificationTemplates NotificationTemplate[]
+  holidays              Holiday[]
+}
+
+// Department Management
+model Department {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  description String?
+  code        String? // Department code (e.g., "HR", "IT", "FIN")
+  headId      String? // Department head/manager
+  parentId    String? // For hierarchical department structure
+  status      Boolean  @default(true) // Active/Inactive status
+  location    String? // Physical location of department
+  budget      Float? // Annual budget allocation
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization     Organization @relation(fields: [orgId], references: [id])
+  users            User[]       @relation("UserDepartment")
+  departmentHead   User?        @relation("DepartmentHead", fields: [headId], references: [id])
+  parentDepartment Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  subDepartments   Department[] @relation("DepartmentHierarchy")
+
+  @@unique([orgId, name])
+  @@unique([orgId, code])
+}
+
+// Role-based Access Control
+model Role {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization     @relation(fields: [orgId], references: [id])
+  permissions  RolePermission[]
+  users        UserRole[]
+
+  @@unique([orgId, name])
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  module      String // e.g., 'leave', 'attendance', 'payroll'
+  action      String // e.g., 'create', 'read', 'update', 'delete'
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+}
+
+// User Management
 model User {
-  id                String         @id @default(cuid())
-  email             String         @unique
-  name              String?
-  role              Role           @default(EMPLOYEE)
+  id                String     @id @default(cuid())
+  orgId             String
+  departmentId      String?
+  managerId         String?//
+  email             String     @unique//
+  firstName         String?//
+  lastName          String?//
   hashedPassword    String?
   refreshToken      String?
-  status            user_status?
-  verificationToken String?        @unique
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  annualPackage     Float?
-  hiredDate         DateTime?
-  dateOfBirth       DateTime?
-  leaveRequest      leaveRequest[]
-  leaveBalance      leaveRecord[]
-  attendanceRecords AttendanceRecord[] 
-  salary            salary[]
-}
-model AttendanceRecord {
-  id              String           @id @default(cuid())
-  userId          String
-  date            DateTime         @default(now())
-  sessionNumber   Int              // New field to track multiple sessions per day
-  checkInTime     DateTime
-  checkOutTime    DateTime?
-  checkInLocation Json      
-  checkOutLocation Json?    
-  status          AttendanceStatus @default(PRESENT)
-  notes           String?
-  duration        Json?            // New field to store session duration
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  user            User             @relation(fields: [userId], references: [id])
+  status            UserStatus @default(active)
+  verificationToken String?    @unique
 
-  @@index([userId, date]) 
-  @@unique([userId, date, sessionNumber])
-}
-model leaveRequest {
-  id           String      @id @default(cuid())
-  userId       String
-  startDate    DateTime
-  endDate      DateTime
-  status       leaveStatus @default(PENDING)
-  leaveTypeId  String
-  reason       String?
-  approvedBy   String?
-  approvedAt   DateTime?
-  rejectedReason String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  User         User        @relation(fields: [userId], references: [id])
-  leaveType    LeaveType   @relation(fields: [leaveTypeId], references: [id])
+  // Personal Information
+  dateOfBirth  DateTime?//
+  address      String?//
+  mobileNumber String?//
+  adharNumber  String? // India-specific//
+  panNumber    String? // India-specific//
+
+  // Employment Information
+  employeeId      String? // Company-specific ID
+  hiredDate       DateTime? @default(now())
+  terminationDate DateTime?
+  annualPackage   Float?    @default(0.0)//
+  monthlySalary   Float?    @default(0.0)//
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  organization      Organization       @relation(fields: [orgId], references: [id])
+  department        Department?        @relation("UserDepartment", fields: [departmentId], references: [id])
+  manager           User?              @relation("UserManager", fields: [managerId], references: [id])
+  subordinates      User[]             @relation("UserManager")
+  roles             UserRole[]
+  bankDetails       BankDetails?
+  leaveRequests     LeaveRequest[]
+  leaveBalances     LeaveBalance[]
+  attendanceRecords AttendanceRecord[]
+  salaryRecords     SalaryRecord[]
+  notifications     Notification[]
+  salaryParameter   SalaryParameter?
+  Department        Department[]       @relation("DepartmentHead")
+
+  @@unique([orgId, email])
+  @@index([orgId, departmentId])
 }
 
-model leaveRecord {
-  id            String    @id @default(cuid())
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+}
+
+// Banking Information
+model BankDetails {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  accountHolder String//
+  accountNumber String//
+  ifscCode      String//
+  bankName      String//
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// Leave Management
+model LeaveType {
+  id               String   @id @default(cuid())
+  orgId            String
+  name             String
+  description      String?
+  annualLimit      Int
+  requiresApproval Boolean  @default(true)
+  isPaid           Boolean  @default(true)
+  carryForward     Boolean  @default(false)
+  maxCarryForward  Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization  Organization   @relation(fields: [orgId], references: [id])
+  leaveBalances LeaveBalance[]
+  leaveRequests LeaveRequest[]
+
+  @@unique([orgId, name])
+}
+
+model LeaveBalance {
+  id            String   @id @default(cuid())
   userId        String
   leaveTypeId   String
-  usedDays      Int       // Days used
-  remainingDays Int       // Days remaining
-  year          Int       // Track by year
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  User          User      @relation(fields: [userId], references: [id])
-  leaveType     LeaveType @relation(fields: [leaveTypeId], references: [id])
+  usedDays      Int      @default(0)
+  remainingDays Int
+  carryForward  Int      @default(0)
+  year          Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id])
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@unique([userId, leaveTypeId, year])
 }
 
+model LeaveRequest {
+  id             String      @id @default(cuid())
+  userId         String
+  leaveTypeId    String
+  startDate      DateTime
+  endDate        DateTime
+  numberOfDays   Float // Support half-day leaves
+  status         LeaveStatus @default(PENDING)
+  reason         String?
+  approvedBy     String?
+  approvedAt     DateTime?
+  rejectedReason String?
+  attachments    Json? // URLs to uploaded documents
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
+  user      User      @relation(fields: [userId], references: [id])
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+}
 
-model LeaveType {
+// Attendance Management
+model AttendanceRecord {
+  id               String           @id @default(cuid())
+  userId           String
+  date             DateTime         @default(now())
+  sessionNumber    Int
+  checkInTime      DateTime
+  checkOutTime     DateTime?
+  checkInLocation  Json // {latitude, longitude, address}
+  checkOutLocation Json? // {latitude, longitude, address}
+  status           AttendanceStatus @default(PRESENT)
+  notes            String?
+  duration         Json? // {hours, minutes}
+  ipAddress        String? // For audit
+  deviceInfo       String? // For audit
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date, sessionNumber])
+  @@index([userId, date])
+}
+
+// Payroll Management
+model SalaryParameter {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Allowance parameters (percentages)
+  hraPercentage Float @default(40) // Default 40% of basic//
+  daPercentage  Float @default(10) // Default 10% of basic//
+  taPercentage  Float @default(10) // Default 10% of basic//
+
+  // Deduction parameters
+  pfPercentage   Float @default(12) // Default 12% of basic//
+  taxPercentage  Float @default(10) // Default 10% of basic//
+  insuranceFixed Float @default(1000) // Fixed amount//
+
+  // Other custom components (JSON for flexibility)
+  additionalAllowances Json? // Store any additional allowances
+  additionalDeductions Json? // Store any additional deductions
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model SalaryRecord {
+  id          String        @id @default(cuid())
+  userId      String
+  month       Int
+  year        Int
+  basicSalary Float
+  allowances  Json? // {hra, da, ta, etc}
+  deductions  Json? // {pf, tax, insurance, etc}
+  tax         Float         @default(0)
+  netSalary   Float
+  status      PayrollStatus @default(PENDING)
+  processedAt DateTime?
+  paymentRef  String? // Payment reference number
+  paymentMode String? // Bank transfer, Cash, etc
+  remarks     String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, month, year])
+  @@index([userId, year, month])
+}
+
+// Notification System
+model NotificationTemplate {
+  id        String           @id @default(cuid())
+  orgId     String
+  name      String
+  type      NotificationType
+  subject   String
+  content   String
+  variables Json? // Template variables
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  organization  Organization   @relation(fields: [orgId], references: [id])
+  notifications Notification[]
+
+  @@unique([orgId, name])
+}
+
+model Notification {
+  id         String    @id @default(cuid())
+  userId     String
+  templateId String
+  content    String
+  isRead     Boolean   @default(false)
+  readAt     DateTime?
+  metadata   Json? // Additional notification data
+  createdAt  DateTime  @default(now())
+
+  user     User                 @relation(fields: [userId], references: [id])
+  template NotificationTemplate @relation(fields: [templateId], references: [id])
+
+  @@index([userId, isRead])
+}
+
+// Background Jobs
+model BackgroundJob {
   id           String    @id @default(cuid())
-  name         String    @unique
-  description  String?
-  annualLimit  Int
+  type         JobType
+  status       JobStatus @default(PENDING)
+  payload      Json
+  scheduledFor DateTime
+  priority     Int       @default(0)
+  attempts     Int       @default(0)
+  maxAttempts  Int       @default(3)
+  completedAt  DateTime?
+  error        String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
-  leaveRecord   leaveRecord[]
-  leaveRequest  leaveRequest[]
-}
-model salary {
-  id           String    @id @default(cuid())
-  userId       String
-  month        Int
-  year         Int
-  salary       Float
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  User         User      @relation(fields: [userId], references: [id])
+
+  @@index([status, scheduledFor])
 }
 
-enum leaveStatus {
+// Holiday Calendar
+model Holiday {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  date        DateTime
+  description String?
+  isOptional  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, date])
+}
+
+// Enums
+enum UserStatus {
+  active
+  inactive
+  suspended
+}
+
+enum LeaveStatus {
   PENDING
   APPROVED
   REJECTED
   CANCELLED
 }
 
-
-
-enum Role {
-  EMPLOYEE
-  MANAGER
-}
-
-enum user_status {
-  active
-  inactive
-  suspended
-}
 enum AttendanceStatus {
   PRESENT
   ABSENT
   HALF_DAY
   LATE
   EARLY_DEPARTURE
+}
+
+enum PayrollStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  PAID
+  FAILED
+}
+
+enum NotificationType {
+  EMAIL
+  PUSH
+  IN_APP
+}
+
+enum JobType {
+  PAYROLL_PROCESSING
+  LEAVE_BALANCE_UPDATE
+  NOTIFICATION_DISPATCH
+  ATTENDANCE_REPORT
+  DATA_BACKUP
+  SYSTEM_MAINTENANCE
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
 }

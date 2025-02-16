@@ -30,12 +30,12 @@ app.use((req, res, next) => {
 
 
 
-  import manager from './src/router/manager.router.js'
-  import employee from './src/router/employee.router.js'
-  import general from './src/router/general.router.js'
-  import leave from './src/router/leave.router.js'
-  import attendance from './src/router/attendance.router.js'
-  import salary from './src/router/salary.router.js'
+  import manager from './src/router/v1/manager.router.js'
+  import employee from './src/router/v1/employee.router.js'
+  import general from './src/router/v1/general.router.js'
+  import leave from './src/router/v1/leave.router.js'
+  import attendance from './src/router/v1/attendance.router.js'
+  import salary from './src/router/v1/salary.router.js'
 
 app.use("/api/v1/manager/",manager)
 app.use("/api/v1/employee/",employee)
@@ -43,6 +43,10 @@ app.use("/api/v1/general/",general)
 app.use("/api/v1/leave/",leave)
 app.use("/api/v1/attendance/",attendance)
 app.use("/api/v1/salary/",salary)
+
+
+import mainV2Router from './src/router/v2/main.router.js'
+app.use("/api/v2/",mainV2Router)
 
 
 app.get('/', (req, res) => {

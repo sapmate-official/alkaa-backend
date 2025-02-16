@@ -1,11 +1,10 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 
-function generateTokens(email,role,userId, accessTokenExpiry, refreshTokenExpiry) {
+function generateTokens(email,userId, accessTokenExpiry, refreshTokenExpiry) {
     try {
       const accessToken = jwt.sign(
         { email: email,
-          role:role,
           id:userId
          },
         process.env.ACCESS_TOKEN_SECRET,
@@ -14,7 +13,6 @@ function generateTokens(email,role,userId, accessTokenExpiry, refreshTokenExpiry
     
       const refreshToken = jwt.sign(
         { email: email,
-          role:role,
           id:userId
 
          },
