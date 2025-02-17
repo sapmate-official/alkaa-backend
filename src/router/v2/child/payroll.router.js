@@ -152,6 +152,12 @@ router.get('/user/:userId', async (req, res) => {
   console.log('Fetching salary records for user:', req.params.userId);
   try {
     const { userId } = req.params;
+    const salaryParameter = await prisma.salaryParameter.findUnique({
+      where: { userId }
+    });
+    const bankDetails = await prisma.bankDetails.findUnique({
+      where: { userId }
+    });
     const salaryRecords = await prisma.salaryRecord.findMany({
       where: { userId },
       include:{
@@ -165,7 +171,7 @@ router.get('/user/:userId', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
     console.log(`Found ${salaryRecords.length} salary records`);
-    res.json(salaryRecords);
+    res.json({salaryRecords, salaryParameter, bankDetails});
   } catch (error) {
     console.error('Error fetching salary records:', error);
     res.status(500).json({ error: error.message });
