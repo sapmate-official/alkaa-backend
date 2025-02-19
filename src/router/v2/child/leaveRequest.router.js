@@ -1,5 +1,5 @@
 import express from "express";
-import { createLeaveRequest, deleteLeaveRequest, getLeaveRequestById, getLeaveRequestByUserId, getLeaveRequests, updateLeaveRequest, getLeaveRequestByManagerId,rejectLeaveRequest,approveLeaveRequest,cancelLeaveRequest } from "../../../controller/v2/LeaveRequest/leaveRequest.controller.js";
+import { createLeaveRequest, deleteLeaveRequest, getLeaveRequestById, getLeaveRequestByUserId, getLeaveRequests, updateLeaveRequest, getLeaveRequestByManagerId,rejectLeaveRequest,approveLeaveRequest,cancelLeaveRequest } from "../../../controller/v2/leaveRequest/leaveRequest.controller.js";
 
 const router = express.Router();
 
