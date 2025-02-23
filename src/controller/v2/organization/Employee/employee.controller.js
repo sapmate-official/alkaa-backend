@@ -172,7 +172,7 @@ const createEmployee = async (req, res) => {
             }
         });
         const verificationToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        sendPasswordResetEmail(newUser.email,verificationToken)
+        sendPasswordResetEmail(employee.email,verificationToken)
         await prisma.user.update({
             where: { id: employee.id },
             data: { verificationToken },
