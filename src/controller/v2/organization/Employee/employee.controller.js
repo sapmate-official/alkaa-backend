@@ -92,6 +92,38 @@ const createEmployee = async (req, res) => {
         } = req.body.data;
         const orgId = req.body.orgId;
 
+        // Add this check before the validation
+        const existingEmployee = await prisma.user.findFirst({
+            where: {
+                orgId,
+                email
+            }
+        });
+        console.log(existingEmployee);
+        
+
+        if (existingEmployee) {
+            return res.status(400).json({ 
+                error: 'An employee with this email already exists in your organization' 
+            });
+        }
+
+        // Add this check after the email check
+        const existingEmployeeId = await prisma.user.findFirst({
+            where: {
+                orgId,
+                employeeId
+            }
+        });
+        console.log("existing",existingEmployeeId);
+        
+
+        if (existingEmployeeId) {
+            return res.status(400).json({ 
+                error: 'An employee with this Employee ID already exists in your organization' 
+            });
+        }
+
         // Basic validation
         console.log('Validating required fields...');
         if (!firstName || !lastName || !email || !mobileNumber || !employeeId || !departmentId || !roleIds || !orgId || !managerId ) {
