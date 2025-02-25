@@ -233,12 +233,14 @@ router.get('/statistics', async (req, res) => {
   }
 });
 
-router.get('/users/active', async (req, res) => {
+router.get('/users/active/:org_id', async (req, res) => {
     try {
+      const { org_id } = req.params;
       const activeEmployees = await prisma.user.findMany({
         where: {
           status: 'active',
-          terminationDate: null
+          terminationDate: null,
+          orgId: org_id
         },
         select: {
           id: true,

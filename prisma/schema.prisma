@@ -109,19 +109,19 @@ model User {
   id                String     @id @default(cuid())
   orgId             String
   departmentId      String?
-  managerId         String?//
-  email             String     @unique//
-  firstName         String?//
-  lastName          String?//
+  managerId         String? //
+  email             String     @unique //
+  firstName         String?    @default("unknown")
+  lastName          String?    @default("unknown")
   hashedPassword    String?
   refreshToken      String?
   status            UserStatus @default(active)
   verificationToken String?    @unique
 
   // Personal Information
-  dateOfBirth  DateTime?//
-  address      String?//
-  mobileNumber String?//
+  dateOfBirth  DateTime? //
+  address      String? //
+  mobileNumber String? //
   adharNumber  String? // India-specific//
   panNumber    String? // India-specific//
 
@@ -129,8 +129,8 @@ model User {
   employeeId      String? // Company-specific ID
   hiredDate       DateTime? @default(now())
   terminationDate DateTime?
-  annualPackage   Float?    @default(0.0)//
-  monthlySalary   Float?    @default(0.0)//
+  annualPackage   Float?    @default(0.0) //
+  monthlySalary   Float?    @default(0.0) //
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -170,10 +170,10 @@ model UserRole {
 model BankDetails {
   id            String   @id @default(cuid())
   userId        String   @unique
-  accountHolder String//
-  accountNumber String//
-  ifscCode      String//
-  bankName      String//
+  accountHolder String //
+  accountNumber String //
+  ifscCode      String //
+  bankName      String //
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
