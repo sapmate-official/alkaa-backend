@@ -54,13 +54,22 @@ export const createUser = async (req, res) => {
     }
 
     const { email, name, orgId, role } = req.body;
+    
     try {
+        const organizationName = await prisma.organization.findUnique({
+            where: { id: orgId },
+            select: { name: true }
+        });
+        const date_ = new Date();
+        const employeeId = organizationName+date_.getFullYear().toString().slice(-2)+date_.getMonth().toString().padStart(2, '0');
+
         const newUser = await prisma.user.create({
             data: {
                 email,
                 name,
                 orgId,
                 role,
+                employeeId
             },
         });
         const verificationToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);

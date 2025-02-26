@@ -107,10 +107,11 @@ const loginUser = async (req, res) => {
         }
         console.log(user.hashedPassword);
 
-        const isPasswordValid = bcrypt.compare(password, user.hashedPassword);
+        const isPasswordValid = await bcrypt.compare(password, user.hashedPassword);
+        
         if (!isPasswordValid) {
             return res.status(401).send({
-                message: "Invalid credentials",
+            message: "Invalid credentials",
             });
         }
         const userRole = await prisma.userRole.findFirst({
