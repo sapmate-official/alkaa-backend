@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt";
 import prisma from "../../../db/connectDb.js";
 import jwt from "jsonwebtoken";
-import { generateTokens } from "../../../utils/generate.js";
+import { generateTokens } from "../../../util/generate.js";
 import exp from "constants";
 const setPassword = async (req, res) => {
     try {
@@ -110,7 +110,9 @@ const loginUser = async (req, res) => {
 
         const isPasswordValid = await bcrypt.compare(password, user.hashedPassword);
         
+        
         if (!isPasswordValid) {
+            
             return res.status(401).send({
             message: "Invalid credentials",
             });
@@ -127,6 +129,19 @@ const loginUser = async (req, res) => {
                 }
             }
         })
+        const organisationStatus = await prisma.organization.findFirst({
+            where: {
+                id: user.orgId
+            },
+            select:{
+                isActive:true,
+            }
+        })
+        if (!organisationStatus.isActive) {
+            return res.status(401).send({
+                message: "Organization is inactive",
+            });
+        }
         const { accessToken, refreshToken } = generateTokens(
             user.email,
             user.id,
@@ -176,7 +191,8 @@ const validatetoken = async (req, res) => {
         where: { email: req.user.email }, include: {
             organization: {
                 select: {
-                    id: true
+                    id: true,
+                    isActive: true
                 }
             },
             Department: {
@@ -187,7 +203,9 @@ const validatetoken = async (req, res) => {
         }
     });
     console.log(data);
-    
+    if(data?.organization?.isActive == false){
+        return res.status(401).json({ message: "Organization is inactive" });
+    }
     if (!data) {
         data = await prisma.superAdmin.findUnique({ where: { email: req.user.email } });
     }

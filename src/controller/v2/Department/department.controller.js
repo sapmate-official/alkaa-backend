@@ -60,14 +60,16 @@ export const createDepartment = [
     body('name').isString().withMessage('Name must be a string'),
     body('description').optional().isString(),
     body('code').optional().isString(),
-    body('headId').optional().isString(),
-    body('parentId').optional().isString(),
+    body('headId').optional({nullable:true}).isString(),
+    body('parentId').optional({ nullable: true }).isString(),
     body('location').optional().isString(),
     body('budget').optional().isFloat(),
     body('status').optional().isBoolean(),
     async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
+            console.log(errors);
+            
             return res.status(400).json({ errors: errors.array() });
         }
 
@@ -104,6 +106,8 @@ export const createDepartment = [
             });
             res.status(201).json(newDepartment);
         } catch (error) {
+            console.log(error);
+            
             res.status(500).json({ error: error.message });
         }
     }

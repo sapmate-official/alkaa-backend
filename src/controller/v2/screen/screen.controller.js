@@ -1,5 +1,5 @@
 import prisma from '../../../db/connectDb.js';
-import { getCurrentDate } from '../../../utils/date.js';
+import { getCurrentDate } from '../../../util/date.js';
 
 const dashboardController = async (req, res) => {
     try {
