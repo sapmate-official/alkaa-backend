@@ -103,6 +103,7 @@ const createEmployee = async (req, res) => {
         
 
         if (existingEmployee) {
+            console.log("existing",existingEmployee);
             return res.status(400).json({ 
                 error: 'An employee with this email already exists in your organization' 
             });
@@ -126,9 +127,9 @@ const createEmployee = async (req, res) => {
 
         // Basic validation
         console.log('Validating required fields...');
-        if (!firstName || !lastName || !email || !mobileNumber || !employeeId || !departmentId || !roleIds || !orgId || !managerId ) {
-            console.log(firstName, lastName, email, mobileNumber, employeeId, departmentId);
-            console.log('Validation failed: Missing required fields');
+        if (!firstName || !lastName || !email || !mobileNumber || !employeeId  || !roleIds.length>0 || !orgId || !managerId ) {
+            console.log(firstName, lastName, email, mobileNumber, employeeId, departmentId,roleIds,orgId,managerId);
+            console.log('Validation failed: Missing required fields', firstName?true:false, lastName?true:false, email?true:false, mobileNumber?true:false, employeeId?true:false, departmentId?true:false,roleIds?true:false,orgId?true:false,managerId?true:false);
             return res.status(400).json({ error: 'Required fields are missing' });
         }
 
@@ -150,7 +151,7 @@ const createEmployee = async (req, res) => {
         const employee = await prisma.user.create({
             data: {
                 orgId,
-                departmentId,
+                departmentId:departmentId?departmentId:null,
                 managerId,
                 email,
                 firstName,

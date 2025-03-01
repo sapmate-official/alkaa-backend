@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import prisma from "../../../db/connectDb.js";
 import jwt from "jsonwebtoken";
 import { generateTokens } from "../../../utils/generate.js";
+import exp from "constants";
 const setPassword = async (req, res) => {
     try {
         const { password, verificationToken } = req.body;
@@ -400,4 +401,4 @@ const updateProfile = async (req, res) => {
     }
 }
 
-export { setPassword, loginUser, validatetoken, refreshToken, logout, Profiledetails, updateProfile }
+export { setPassword, loginUser, validatetoken, refreshToken, logout, Profiledetails, updateProfile };
