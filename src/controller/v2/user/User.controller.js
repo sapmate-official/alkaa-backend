@@ -6,7 +6,24 @@ import { sendPasswordResetEmail } from '../../../util/sendEmail.js';
 
 export const getUser = async (req, res) => {
     try {
-        const users = await prisma.user.findMany();
+        const { orgId } = req.params;
+        const users = await prisma.user.findMany({ where: { orgId } ,
+        include:{
+            organization:true,
+            roles:{
+                include:{
+                    role:{
+                        include:{
+                            permissions:{
+                                include:{
+                                    permission:true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }});
         res.status(200).json(users);
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });
@@ -61,7 +78,8 @@ export const createUser = async (req, res) => {
             select: { name: true }
         });
         const date_ = new Date();
-        const employeeId = organizationName+date_.getFullYear().toString().slice(-2)+date_.getMonth().toString().padStart(2, '0');
+        const nameInitials = organizationName.name.split(' ').map(word=>word.charAt(0)).join('');
+        const employeeId = nameInitials+date_.getFullYear().toString().slice(-2)+date_.getMonth().toString().padStart(2, '0');
 
         const newUser = await prisma.user.create({
             data: {
@@ -157,6 +175,49 @@ export const deleteUser = async (req, res) => {
         await prisma.user.delete({ where: { id } });
         res.status(204).send();
     } catch (error) {
+        console.log(error)
         res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+export const updateUserRole = async (req, res) => {
+    const { userId,prevRole, roleId } = req.params;
+    try {
+        console.log(userId,prevRole,roleId);
+        let user
+        if(roleId=='null'){
+             user = await prisma.userRole.delete({
+                where: {
+                    userId_roleId: {
+                        userId: userId,
+                        roleId: prevRole
+                    }
+                }
+            });
+        }
+        else if(prevRole=='null'){
+             user = await prisma.userRole.create({
+                data: {
+                    userId: userId,
+                    roleId: roleId
+                }
+            });
+        }else{
+
+             user = await prisma.userRole.update({
+                where: {
+                    userId_roleId: {
+                        userId: userId,
+                        roleId: prevRole
+                    }
+                },
+                data: {
+                    roleId: roleId,
+                },
+            });
+        }
+        res.status(200).json(user);
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+}

@@ -32,6 +32,7 @@ const setPassword = async (req, res) => {
 const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
+        console.log(email,password)
         if (!email || !password) {
             return res.status(400).send({
                 message: "college_uid and password are required",
@@ -42,13 +43,16 @@ const loginUser = async (req, res) => {
                 email,
             },
         });
+        console.log(superAdmin);
         if (superAdmin) {
             const isPasswordValid = await bcrypt.compare(password, superAdmin.hashedPassword);
+            console.log(isPasswordValid);   
             if (!isPasswordValid) {
                 return res.status(401).send({
                     message: "Invalid credentials",
                 });
             }
+            
             const { accessToken, refreshToken } = generateTokens(
                 superAdmin.email,
                 superAdmin.id,

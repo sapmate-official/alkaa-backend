@@ -88,9 +88,9 @@ export const createRole = async (req, res) => {
                 description,
                 isDefault,
                 permissions: {
-                    create: permissions.map(permissionId => ({
+                    create: permissions.map(permission => ({
                         permission: {
-                            connect: { id: permissionId }
+                            connect: { id: permission.permissionId }
                         }
                     }))
                 }
@@ -114,15 +114,16 @@ export const createRole = async (req, res) => {
 // Update role
 export const updateRole = async (req, res) => {
     try {
-        const { id, orgId, name, description, permissions = [], isDefault } = req.body;
+        const { roleId } = req.params;
+        const { name, description, permissions = [], isDefault } = req.body;
 
-        if (!id || !orgId) {
-            return res.status(400).json({ message: "Role ID and Organization ID are required" });
+        if (!roleId) {
+            return res.status(400).json({ message: "Role ID is required" });
         }
 
         // Check if role exists
         const existingRole = await prisma.role.findFirst({
-            where: { id, orgId },
+            where: { id: roleId },
         });
 
         if (!existingRole) {
@@ -131,23 +132,25 @@ export const updateRole = async (req, res) => {
 
         // Delete existing permissions
         await prisma.rolePermission.deleteMany({
-            where: { roleId: id },
+            where: { roleId: roleId },
         });
 
         // Update role with new permissions
         const updatedRole = await prisma.role.update({
-            where: { id },
+            where: { id: roleId },
             data: {
-                name,
-                description,
-                isDefault,
+                name: name || existingRole.name,
+                description: description || existingRole.description,
+                isDefault: isDefault || existingRole.isDefault,
                 permissions: {
-                    create: permissions.map(permissionId => ({
+                    create: permissions.map(permission => ({
                         permission: {
-                            connect: { id: permissionId }
+                            connect: { id: permission.permissionId }
                         }
-                    }))
+                    })
+                    )
                 }
+                
             },
             include: {
                 permissions: {
@@ -168,15 +171,16 @@ export const updateRole = async (req, res) => {
 // Delete role
 export const deleteRole = async (req, res) => {
     try {
-        const { id, orgId } = req.body;
+        const { roleId } = req.params;
+        const id = roleId;
 
-        if (!id || !orgId) {
-            return res.status(400).json({ message: "Role ID and Organization ID are required" });
+        if (!id ) {
+            return res.status(400).json({ message: "Role ID is required" });
         }
 
         // Check if role exists
         const existingRole = await prisma.role.findFirst({
-            where: { id, orgId },
+            where: { id },
         });
 
         if (!existingRole) {
