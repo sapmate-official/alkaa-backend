@@ -230,6 +230,7 @@ model AttendanceRecord {
   updatedAt        DateTime         @updatedAt
   deviceInfo       String?
   ipAddress        String?
+  verificationStatus AttendanceVerificationStatus? @default(UNVERIFIED)
   user             User             @relation(fields: [userId], references: [id])
 
   @@unique([userId, date, sessionNumber])
@@ -387,4 +388,9 @@ enum JobStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+enum AttendanceVerificationStatus {
+  UNVERIFIED
+  VERIFIED
+  REJECTED
 }

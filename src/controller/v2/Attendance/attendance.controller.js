@@ -376,3 +376,182 @@ export const getUserAttendance = async(req, res) => {
         res.status(500).json({error:"Failed to fetch user attendance"})
     }
 }
+
+export const getEmployeeRecords = async(req, res) => {
+    const {managerId} = req.params
+    try {
+        const rawdata = await prisma.user.findMany({
+            where: {
+                managerId: managerId
+            },
+            select: {
+                attendanceRecords: {
+                    include:{
+                        user:{
+                            select:{
+                                firstName:true,
+                                lastName:true,
+                                email:true,
+                                department:{
+                                    select:{
+                                        name:true
+                                    }
+                                },
+                                roles:{
+                                    select:{
+                                        role:{
+                                            select:{
+                                                name:true
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+        rawdata.forEach(employees=>{
+            employees.attendanceRecords.forEach(records=>{
+                console.log(records.user);
+                
+                records.user = {
+                    name: `${records?.user?.firstName} ${records?.user?.lastName}`,
+                    email: records?.user?.email,
+                    department: records?.user?.department?.name,
+                    role: records?.user?.roles[0]?.role?.name,
+                }
+            })
+        })
+        const HalfpreparedData = rawdata.map(data=>data.attendanceRecords)
+        const preparedData = HalfpreparedData.flat()
+        res.status(200).json(preparedData)
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({error:"Failed to fetch employee records"})
+    }
+}
+export const verifyAttendance = async(req, res) => {
+    const {userId,attendanceId,verificationStatus} = req.body
+    try {
+        const attendance = await prisma.attendanceRecord.update({
+            where:{
+                id:attendanceId
+            },
+            data:{
+                verificationStatus
+            }
+        })
+        res.status(200).json(attendance)
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({error:"Failed to verify attendance"})
+    }
+}
+export const getTodaysAttendance = async(req, res) => {
+    try {
+        const {managerId} = req.params
+        // Get today's date (start and end)
+        const today = new Date();
+        const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+
+        // Get all users with their attendance records for today
+        const users = await prisma.user.findMany({
+            where: {
+                // Optionally filter by organization if needed
+                // orgId: req.user.orgId,
+                status: 'active',
+                managerId
+            },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                department: {
+                    select: {
+                        name: true
+                    }
+                },
+                roles: {
+                    select: {
+                        role: {
+                            select: {
+                                name: true
+                            }
+                        }
+                    }
+                },
+                attendanceRecords: {
+                    where: {
+                        date: {
+                            gte: startOfDay,
+                            lte: endOfDay
+                        }
+                    },
+                    orderBy: {
+                        sessionNumber: 'asc'
+                    }
+                }
+            }
+        });
+
+        // Transform the data to match frontend expectations
+        const formattedData = users.map(user => {
+            // Basic user info
+            const userInfo = {
+                id: user.id,
+                name: `${user.firstName} ${user.lastName}`,
+                email: user.email,
+                department: user.department?.name || 'Unassigned',
+                position: user.roles[0]?.role?.name || 'Unknown'
+            };
+
+            // Format attendance records
+            const records = user.attendanceRecords.map(record => ({
+                id: record.id,
+                userId: record.userId,
+                date: record.date,
+                sessionNumber: record.sessionNumber,
+                checkInTime: record.checkInTime,
+                checkOutTime: record.checkOutTime || undefined,
+                checkInLocation: record.checkInLocation,
+                checkOutLocation: record.checkOutLocation || undefined,
+                status: record.status,
+                notes: record.notes,
+                duration: record.duration,
+                createdAt: record.createdAt,
+                updatedAt: record.updatedAt,
+                deviceInfo: record.deviceInfo,
+                ipAddress: record.ipAddress,
+                verificationStatus: record.verificationStatus
+            }));
+
+            return {
+                user: userInfo,
+                records
+            };
+        });
+
+        // Group records by user ID for easier frontend consumption
+        const groupedRecords = formattedData.reduce((acc, { user, records }) => {
+            acc[user.id] = records;
+            return acc;
+        }, {});
+
+        res.status(200).json({
+            users: formattedData.map(item => item.user),
+            attendanceRecords: groupedRecords
+        });
+
+    } catch (error) {
+        console.error("Error in getTodaysAttendance:", error);
+        res.status(500).json({ 
+            error: "Failed to fetch today's attendance records",
+            details: error.message 
+        });
+    }
+}
