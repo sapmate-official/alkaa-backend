@@ -555,3 +555,80 @@ export const getTodaysAttendance = async(req, res) => {
         });
     }
 }
+export const getCheckOutPast = async(req, res) => {
+    try {
+        const userId = req.user.id;
+        const data = await prisma.attendanceRecord.findMany({
+            where: {
+                userId,
+                checkOutTime: null,
+                date: {
+                    lt: new Date() // Only get past sessions
+                }
+            },
+            orderBy: {
+                date: 'desc'
+            }
+        });
+        
+        res.status(200).json(data);
+        
+    } catch (error) {
+        console.error("Error in getCheckOutPast:", error);
+        res.status(500).json({
+            error: "Failed to fetch past unchecked sessions",
+            details: error.message
+        });
+    }
+};
+
+export const postPastCheckOut = async(req, res) => {
+    try {
+        const { attendanceId, checkOutTime, notes } = req.body;
+        const userId = req.user.id;
+        console.log('Request body:', { attendanceId, checkOutTime, notes });
+        
+        // Validate the attendance record belongs to the user
+        const attendance = await prisma.attendanceRecord.findFirst({
+            where: {
+                id: attendanceId,
+                userId
+            }
+        });
+
+        if (!attendance) {
+            return res.status(404).json({ error: "Attendance record not found" });
+        }
+
+        const checkOutDateTime = new Date(checkOutTime);
+        const checkInDateTime = new Date(attendance.checkInTime);
+
+        if (checkOutDateTime <= checkInDateTime) {
+            return res.status(400).json({ 
+                error: "Check-out time must be after check-in time" 
+            });
+        }
+
+        const sessionDuration = calculateSessionDuration(attendance.checkInTime, checkOutDateTime);
+        
+        const updated = await prisma.attendanceRecord.update({
+            where: {
+                id: attendanceId
+            },
+            data: {
+                checkOutTime: checkOutDateTime,
+                notes: notes ? `${attendance.notes || ''} | Late checkout reason: ${notes}`.trim() : attendance.notes,
+                duration: sessionDuration,
+                status: determineStatus(sessionDuration.hours)
+            }
+        });
+
+        res.status(200).json(updated);
+    } catch (error) {
+        console.error("Error in postPastCheckOut:", error);
+        res.status(500).json({
+            error: "Failed to update past session",
+            details: error.message
+        });
+    }
+};
