@@ -74,14 +74,40 @@ model Role {
   @@unique([orgId, name])
 }
 
-model Permission {
-  id          String           @id @default(cuid())
+model PermissionCategory {
+  id            String                  @id @default(cuid())
+  name          String
+  description   String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  subcategories PermissionSubcategory[]
+
+  @@unique([name])
+}
+
+model PermissionSubcategory {
+  id          String             @id @default(cuid())
+  categoryId  String
   name        String
   description String?
-  module      String
-  action      String
-  createdAt   DateTime         @default(now())
-  roles       RolePermission[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  category    PermissionCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  permissions Permission[]
+
+  @@unique([categoryId, name])
+}
+
+model Permission {
+  id            String                @id @default(cuid())
+  name          String
+  description   String?
+  module        String
+  action        String
+  subcategoryId String?
+  createdAt     DateTime              @default(now())
+  subcategory   PermissionSubcategory? @relation(fields: [subcategoryId], references: [id], onDelete: Cascade)
+  roles         RolePermission[]
 }
 
 model RolePermission {
@@ -215,23 +241,23 @@ model LeaveRequest {
 }
 
 model AttendanceRecord {
-  id               String           @id @default(cuid())
-  userId           String
-  date             DateTime         @default(now())
-  sessionNumber    Int
-  checkInTime      DateTime
-  checkOutTime     DateTime?
-  checkInLocation  Json
-  checkOutLocation Json?
-  status           AttendanceStatus @default(PRESENT)
-  notes            String?
-  duration         Json?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  deviceInfo       String?
-  ipAddress        String?
+  id                 String                        @id @default(cuid())
+  userId             String
+  date               DateTime                      @default(now())
+  sessionNumber      Int
+  checkInTime        DateTime
+  checkOutTime       DateTime?
+  checkInLocation    Json
+  checkOutLocation   Json?
+  status             AttendanceStatus              @default(PRESENT)
+  notes              String?
+  duration           Json?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  deviceInfo         String?
+  ipAddress          String?
   verificationStatus AttendanceVerificationStatus? @default(UNVERIFIED)
-  user             User             @relation(fields: [userId], references: [id])
+  user               User                          @relation(fields: [userId], references: [id])
 
   @@unique([userId, date, sessionNumber])
   @@index([userId, date])
@@ -389,6 +415,7 @@ enum JobStatus {
   FAILED
   CANCELLED
 }
+
 enum AttendanceVerificationStatus {
   UNVERIFIED
   VERIFIED

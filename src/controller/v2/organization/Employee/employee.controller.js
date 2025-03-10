@@ -70,6 +70,7 @@ const createEmployee = async (req, res) => {
             email,
             mobileNumber,
             dateOfBirth,
+            hiredDate,
             address,
             adharNumber,
             panNumber,
@@ -127,7 +128,7 @@ const createEmployee = async (req, res) => {
 
         // Basic validation
         console.log('Validating required fields...');
-        if (!firstName || !lastName || !email || !mobileNumber || !employeeId  || !roleIds.length>0 || !orgId  ) {
+        if (!firstName || !lastName || !email || !mobileNumber || !employeeId  || !roleIds.length>0 || !orgId || !hiredDate  ) {
             console.log(firstName, lastName, email, mobileNumber, employeeId, departmentId,roleIds,orgId);
             console.log('Validation failed: Missing required fields', firstName?true:false, lastName?true:false, email?true:false, mobileNumber?true:false, employeeId?true:false, departmentId?true:false,roleIds?true:false,orgId?true:false);
             return res.status(400).json({ error: 'Required fields are missing' });
@@ -146,6 +147,17 @@ const createEmployee = async (req, res) => {
             employeeId,
             roleIds
         });
+        const organizationValidation = await prisma.organization.findUnique({
+            where:{
+                id:orgId
+            },
+            select:{
+                name:true
+            }
+        })
+        if(!organizationValidation){
+            return res.status(400).json({ error: 'Organization not found' });
+        }
 
         // Create user with nested creates for related data
         const employee = await prisma.user.create({
@@ -158,6 +170,7 @@ const createEmployee = async (req, res) => {
                 lastName,
                 employeeId,
                 mobileNumber,
+                hiredDate: hiredDate ? new Date(hiredDate) : new Date(),
                 dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
                 address,
                 adharNumber,
@@ -205,7 +218,7 @@ const createEmployee = async (req, res) => {
             }
         });
         const verificationToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        sendPasswordResetEmail(employee.email,verificationToken)
+        sendPasswordResetEmail(employee.email,verificationToken, organizationValidation.name,hiredDate)
         // sendPasswordResetEmail('gpampa138@gmail.com',verificationToken)
         await prisma.user.update({
             where: { id: employee.id },

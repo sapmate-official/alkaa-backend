@@ -46,7 +46,9 @@ app.use("/api/v1/salary/",salary)
 
 
 import mainV2Router from './src/router/v2/main.router.js'
+import mainv3Router from './src/router/v3/main.router.js'
 app.use("/api/v2/",mainV2Router)
+app.use("/api/v3/",mainv3Router)
 
 
 app.get('/', (req, res) => {
