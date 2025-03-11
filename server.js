@@ -10,6 +10,7 @@ import ServerlessHttp from 'serverless-http'
 import morgan from 'morgan'
 import winston from 'winston'
 import 'winston-daily-rotate-file'
+import WinstonCloudWatch from 'winston-cloudwatch'
 // import https from 'https'
 
 const filename = fileURLToPath(import.meta.url)
@@ -70,6 +71,16 @@ if (process.env.NODE_ENV !== 'production') {
   }))
 }
 
+// Add CloudWatch transport to your Winston logger
+if (process.env.NODE_ENV === 'production') {
+  logger.add(new WinstonCloudWatch({
+    logGroupName: 'alkaa-backend',
+    logStreamName: `${process.env.NODE_ENV}-${new Date().toISOString().slice(0, 10)}`,
+    awsRegion: 'ao-south-1',
+    messageFormatter: ({ level, message, ...meta }) => `[${level}] ${message} ${JSON.stringify(meta)}`,
+    retentionInDays: 14
+  }));
+}
 
 const detailedTransport = new winston.transports.DailyRotateFile({
   filename: path.join(logDirectory, 'details-%DATE%.log'),
