@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
-import { corsOptions } from './src/util/corsOptions.js'
+import { allowedOrigins, corsOptions } from './src/util/corsOptions.js'
 import { fileURLToPath } from "url"
 import path from "path"
 import { configDotenv } from 'dotenv'
