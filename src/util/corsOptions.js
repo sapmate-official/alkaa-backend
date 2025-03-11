@@ -8,10 +8,8 @@ export const allowedOrigins = [
     'http://sapmate-employee-bucket.s3-website.ap-south-1.amazonaws.com',
     "https://main.dy4iqzhph9mgs.amplifyapp.com",
     "https://www.alkaa.sapmate.com",
-    "https://alkaa.online",
     "https://www.alkaa.online",
     "https://api.alkaa.online" ,
-    "https://www.api.alkaa.online" 
 ]
 
 export const corsOptions = {
