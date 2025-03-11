@@ -10,7 +10,9 @@ export const allowedOrigins = [
     "https://www.alkaa.sapmate.com",
     "*",
     "https://alkaa.online",
-    "https://api.alkaa.online" 
+    "https://www.alkaa.online",
+    "https://api.alkaa.online" ,
+    "https://www.api.alkaa.online" 
 ]
 
 export const corsOptions = {
