@@ -76,7 +76,7 @@ if (process.env.NODE_ENV === 'production') {
   logger.add(new WinstonCloudWatch({
     logGroupName: 'alkaa-backend',
     logStreamName: `${process.env.NODE_ENV}-${new Date().toISOString().slice(0, 10)}`,
-    awsRegion: 'ao-south-1',
+    awsRegion: 'ap-south-1',
     messageFormatter: ({ level, message, ...meta }) => `[${level}] ${message} ${JSON.stringify(meta)}`,
     retentionInDays: 14
   }));
