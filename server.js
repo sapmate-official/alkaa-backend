@@ -70,13 +70,11 @@ if (process.env.NODE_ENV !== 'production') {
   }))
 }
 
-// Add this after your existing logger configuration but before middleware definitions
 
-// Create request-response detail logger transport
 const detailedTransport = new winston.transports.DailyRotateFile({
   filename: path.join(logDirectory, 'details-%DATE%.log'),
   datePattern: 'YYYY-MM-DD',
-  maxFiles: '7d', // Keep for one week
+  maxFiles: '7d',
   zippedArchive: true,
   level: 'debug'
 });
@@ -239,23 +237,6 @@ function sanitizeResponseBody(body) {
       '[Unparseable response]';
   }
 }
-
-// Add this to ensure CORS preflight works correctly
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.header('Access-Control-Allow-Credentials', true);
-  
-  // Handle OPTIONS method
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
 
 // Middleware
 app.use(cors(corsOptions))
