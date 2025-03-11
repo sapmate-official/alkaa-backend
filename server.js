@@ -7,19 +7,28 @@ import path from "path";
 import { configDotenv } from 'dotenv';
 import fs from 'fs'
 import ServerlessHttp from 'serverless-http';
+import morgan from 'morgan';
 // import https from 'https'
+const filename = fileURLToPath(import.meta.url)
+const dirname = path.dirname(filename)
 
 configDotenv()
 const app = express()
 const port = process.env.PORT || 3000
+
+const logDirectory = path.join(dirname, 'logs')
+fs.existsSync(logDirectory) || fs.mkdirSync(logDirectory)
 
 app.use(cors(corsOptions))
 app.use(express.json())
 
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
-const filename = fileURLToPath(import.meta.url)
-const dirname = path.dirname(filename)
+
+const accessLogStream = fs.createWriteStream(path.join(logDirectory, 'access.log'), { flags: 'a' })
+app.use(morgan('combined', { stream: accessLogStream }))
+
+
 app.use('/', express.static(path.join(dirname, 'public')))
 
 
