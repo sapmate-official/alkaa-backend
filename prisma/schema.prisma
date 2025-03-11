@@ -102,7 +102,7 @@ model Permission {
   id            String                @id @default(cuid())
   name          String
   description   String?
-  module        String
+  module        String?
   action        String
   subcategoryId String?
   createdAt     DateTime              @default(now())

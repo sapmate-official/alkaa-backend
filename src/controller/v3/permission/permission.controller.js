@@ -110,6 +110,28 @@ const getAllSubcategories = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch subcategories' });
     }
 };
+const getSubCategoryById = async (req, res) => {
+    const {id} = req.params;
+    try {
+        if(!id){
+            return res.status(400).json({error:'Subcategory ID is required'});
+        }
+        const subcategory = await prisma.permissionSubcategory.findUnique({
+            where: {id},
+            include: {
+                permissions: true,
+                category: true
+            }
+        });
+        if (!subcategory) {
+            return res.status(404).json({ error: 'Subcategory not found' });
+        }
+        res.status(200).json(subcategory);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({error:error})
+    }
+}
 
 const createSubcategory = async (req, res) => {
     try {
@@ -129,6 +151,51 @@ const createSubcategory = async (req, res) => {
         res.status(500).json({ error: 'Failed to create subcategory' });
     }
 };
+const updateSubCategory = async (req, res) => {
+    try {
+        const {id} = req.params;
+        if(!id){
+            return res.status(400).json({error:'Subcategory ID is required'});
+        }
+        const { name, description } = req.body;
+        const subcategoryData = await prisma.permissionSubcategory.findUnique({
+            where: { id }
+        });
+        if (!subcategoryData) {
+            return res.status(404).json({ error: 'Subcategory not found' });
+        }
+        const subcategory = await prisma.permissionSubcategory.update({
+            where: { id },
+            data: {
+                name: name || subcategoryData.name,
+                description: description || subcategoryData.description
+            }
+        });
+        res.status(200).json(subcategory);
+    
+
+    }catch (error) {
+        console.error('Error updating subcategory:', error);
+        res.status(500).json({ error: 'Failed to update subcategory' });
+    }
+}
+const deleteSubCategory = async (req, res) => {
+    try {
+        if (!req.params.id) {
+            return res.status(400).json({ error: 'Subcategory ID is required' });
+        }
+        await prisma.permissionSubcategory.delete({
+            where: { id: req.params.id }
+        });
+
+        res.json({ message: 'Subcategory deleted successfully' });
+    }
+    catch (error) {
+        console.error('Error deleting subcategory:', error);
+        res.status(500).json({ error: 'Failed to delete subcategory' });
+    }
+}
+
 
 // Permission Controllers
 const getAllPermissions = async (req, res) => {
@@ -149,6 +216,33 @@ const getAllPermissions = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch permissions' });
     }
 };
+const getPermissionById = async (req, res) => {
+    const {id} = req.params;
+    try {
+        if(!id){
+            return res.status(400).json({error:'Permission ID is required'});
+        }
+        const permission = await prisma.permission.findUnique({
+            where: {id},
+            include: {
+                subcategory: {
+                    include: {
+                        category: true
+                    }
+                }
+
+            }
+        });
+        if (!permission) {
+            return res.status(404).json({ error: 'Permission not found' });
+        }
+        res.status(200).json(permission);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({error:error})
+    }
+}
+
 
 const createPermission = async (req, res) => {
     try {
@@ -223,6 +317,7 @@ const deletePermission = async (req, res) => {
     }
 }
 
+
 export {
     getAllCategories,
     getCategoryById,
@@ -234,5 +329,10 @@ export {
     getAllPermissions,
     createPermission,
     updatePermission,
-    deletePermission   
+    deletePermission,
+    getSubCategoryById,
+    updateSubCategory,
+    deleteSubCategory,
+    getPermissionById
+    
 }

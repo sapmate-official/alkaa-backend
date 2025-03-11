@@ -1,21 +1,25 @@
 import e from "express";
-import { createCategory, createPermission, createSubcategory, deleteCategory, getAllCategories, getAllPermissions, getAllSubcategories, getCategoryById, updateCategory,updatePermission,deletePermission } from "../../../controller/v3/permission/permission.controller.js";
+import { createCategory, createPermission, createSubcategory, deleteCategory, getAllCategories, getAllPermissions, getAllSubcategories, getCategoryById, updateCategory,updatePermission,deletePermission,getSubCategoryById,updateSubCategory,deleteSubCategory,getPermissionById } from "../../../controller/v3/permission/permission.controller.js";
 
 const router = e.Router();
 
-router.get('/category', getAllCategories);
+router.get('/categories', getAllCategories);
 router.get('/category/:id', getCategoryById);
 router.post('/category', createCategory);
 router.put('/category/:id', updateCategory);
 router.delete('/category/:id', deleteCategory);
 
 // Subcategory routes
-router.get('/subcategory', getAllSubcategories);
+router.get('/subcategories', getAllSubcategories);
+router.get('/subcategory/:id', getSubCategoryById);
 router.post('/subcategory', createSubcategory);
+router.put('/subcategory/:id', updateSubCategory);
+router.delete('/subcategory/:id', deleteSubCategory);
 
 // Permission routes
 router.get('/permissions', getAllPermissions);
-router.post('/permissions', createPermission);
+router.get('/permission/:id', getPermissionById);
+router.post('/permission', createPermission);
 router.put('/permission/:id', updatePermission);
 router.delete('/permission/:id', deletePermission);
 
