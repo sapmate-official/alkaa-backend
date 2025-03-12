@@ -29,6 +29,7 @@
     "resend": "^4.1.1",
     "serverless-http": "^3.2.0",
     "winston": "^3.17.0",
+    "winston-cloudwatch": "^6.3.0",
     "winston-daily-rotate-file": "^5.0.0"
   }
 }
