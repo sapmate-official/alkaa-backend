@@ -130,11 +130,45 @@ const updateLeaveType = async (req, res) => {
 const deleteLeaveType = async (req, res) => {
     const { id } = req.params;
     try {
+        // Check if any leave requests exist for this leave type
+        const leaveRequests = await prisma.leaveRequest.findFirst({
+            where: { leaveTypeId: id },
+        });
+        
+        // Check if any leave balances exist for this leave type
+        const leaveBalances = await prisma.leaveBalance.findFirst({
+            where: { leaveTypeId: id },
+        });
+        
+        // If there are leave requests or balances, prevent deletion
+        if (leaveRequests) {
+            return res.status(400).json({ 
+                error: 'This leave type has associated leave requests. Please process all related leave requests before deleting.' 
+            });
+        }
+        
+        if (leaveBalances) {
+            return res.status(400).json({ 
+                error: 'This leave type has been allocated to employees in their leave balances. Please remove all leave balance allocations for this type before deleting.' 
+            });
+        }
+        
+        // If no related records, proceed with deletion
         await prisma.leaveType.delete({
             where: { id },
         });
+        
         res.status(204).send();
     } catch (error) {
+        console.error(`Failed to delete leave type with ID: ${id}`, error);
+        
+        // Specific error handling for foreign key constraint violations
+        if (error.code === 'P2003' || error.name === 'PrismaClientKnownRequestError') {
+            return res.status(400).json({ 
+                error: 'This leave type cannot be deleted because it is being used by employees. Please ensure all related leave balances and requests are removed first.' 
+            });
+        }
+        
         res.status(500).json({ error: 'Failed to delete leave type' });
     }
 };
