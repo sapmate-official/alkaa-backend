@@ -30,7 +30,7 @@ export const getHolidays = async (req, res) => {
         res.status(200).json(holidays);
     } catch (error) {
         console.error("Error fetching holidays:", error);
-        res.status(500).json({ error: "Failed to fetch holidays", details: process.env.NODE_ENV === 'development' ? error.message : undefined });
+        res.status(500).json({ error: "Failed to fetch holidays",  error });
     }
 };
 
@@ -59,7 +59,7 @@ export const getHolidayById = async (req, res) => {
         res.status(200).json(holiday);
     } catch (error) {
         console.error("Error fetching holiday:", error);
-        res.status(500).json({ error: "Failed to fetch holiday", details: process.env.NODE_ENV === 'development' ? error.message : undefined });
+        res.status(500).json({ error: "Failed to fetch holiday",error});
     }
 };
 
@@ -82,7 +82,7 @@ export const createHoliday = async (req, res) => {
         res.status(201).json(newHoliday);
     } catch (error) {
         console.error("Error creating holiday:", error);
-        res.status(500).json({ error: "Failed to create holiday", details: process.env.NODE_ENV === 'development' ? error.message : undefined });
+        res.status(500).json({ error: "Failed to create holiday",  error});
     }
 };
 
@@ -106,7 +106,7 @@ export const updateHoliday = async (req, res) => {
         res.status(200).json(updatedHoliday);
     } catch (error) {
         console.error("Error updating holiday:", error);
-        res.status(500).json({ error: "Failed to update holiday", details: process.env.NODE_ENV === 'development' ? error.message : undefined });
+        res.status(500).json({ error: "Failed to update holiday",  error});
     }
 };
 
@@ -117,6 +117,6 @@ export const deleteHoliday = async (req, res) => {
         res.status(204).send();
     } catch (error) {
         console.error("Error deleting holiday:", error);
-        res.status(500).json({ error: "Failed to delete holiday", details: process.env.NODE_ENV === 'development' ? error.message : undefined });
+        res.status(500).json({ error: "Failed to delete holiday",  error});
     }
 };
