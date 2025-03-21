@@ -3,7 +3,7 @@ import { createHoliday, deleteHoliday, getHolidayById, getHolidays, updateHolida
 
 const router = express.Router();
 
-router.get("/", getHolidays);
+router.get("/:orgId", getHolidays);
 router.get("/:id", getHolidayById);
 router.post("/", createHoliday);
 router.put("/:id", updateHoliday);

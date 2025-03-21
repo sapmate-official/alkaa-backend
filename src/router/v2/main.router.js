@@ -14,6 +14,7 @@ import permissionRouter from "./child/permission.router.js";
 import rolePermissionRouter from "./child/rolePermission.router.js";
 import userRoleRouter from "./child/userRole.router.js";
 import holidayRouter from "./child/holiday.router.js";
+import holidayTypeRouter from "./child/holidayType.router.js";
 import payrollRouter from "./child/payroll.router.js"
 import notificationRouter from "./child/notification.router.js"
 import screenRouter from "./child/screen.router.js"
@@ -35,6 +36,7 @@ router.use("/permission/",permissionRouter)
 router.use("role-permission/",rolePermissionRouter)
 router.use("/user-role/",userRoleRouter)
 router.use("/holiday/",holidayRouter)
+router.use("/holiday-type/",holidayTypeRouter)
 router.use("/payroll/",payrollRouter)
 router.use("/notification/",notificationRouter)
 router.use("/screen/",screenRouter)

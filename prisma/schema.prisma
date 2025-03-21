@@ -34,6 +34,7 @@ model Organization {
   notificationTemplates NotificationTemplate[]
   roles                 Role[]
   users                 User[]
+  holidayTypes          HolidayType[]
 }
 
 model Department {
@@ -99,13 +100,13 @@ model PermissionSubcategory {
 }
 
 model Permission {
-  id            String                @id @default(cuid())
+  id            String                 @id @default(cuid())
   name          String
   description   String?
   module        String?
   action        String
   subcategoryId String?
-  createdAt     DateTime              @default(now())
+  createdAt     DateTime               @default(now())
   subcategory   PermissionSubcategory? @relation(fields: [subcategoryId], references: [id], onDelete: Cascade)
   roles         RolePermission[]
 }
@@ -356,12 +357,27 @@ model Holiday {
   name         String
   date         DateTime
   description  String?
+  type         String?
   isOptional   Boolean      @default(false)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   organization Organization @relation(fields: [orgId], references: [id])
+  holidayType  HolidayType? @relation(fields: [type], references: [id])
 
   @@unique([orgId, date])
+}
+
+model HolidayType {
+  id        String    @id @default(cuid())
+  name      String
+  policy    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id])
+  Holiday   Holiday[]
+
+  @@unique([name])
 }
 
 enum UserStatus {
