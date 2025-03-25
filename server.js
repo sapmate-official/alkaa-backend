@@ -147,7 +147,7 @@ app.use((req, res, next) => {
     // Capture timing information
     const responseTime = Date.now() - responseStartTime;
     
-    // If we have a chunk being sent in the end call, save it
+    // chunk saving
     if (chunk && typeof chunk !== 'function') {
       responseBody = chunk;
     }
@@ -160,13 +160,11 @@ app.use((req, res, next) => {
       statusCode: res.statusCode,
       statusMessage: res.statusMessage,
       headers: res.getHeaders(),
-      responseTime: responseTime,
-      responseSize: responseBody ? 
-        (typeof responseBody === 'string' ? responseBody.length : 
-          JSON.stringify(responseBody).length) : 0
+      responseTime: `${responseTime}ms`,
+      userAgent: req.get('user-agent')
     };
     
-    // Include full response body for errors or specific endpoints
+    // full response body for errors or specific endpoints
     if (res.statusCode >= 400 || req.path.startsWith('/api')) {
       try {
         responseDetails.body = sanitizeResponseBody(responseBody);
@@ -177,11 +175,11 @@ app.use((req, res, next) => {
     
     // Log response with appropriate level based on status code
     if (res.statusCode >= 500) {
-      logger.error(responseDetails);
+      logger.error(`ERROR [${responseDetails.reqId}] ${responseDetails.method} ${responseDetails.url} ${responseDetails.statusCode} - ${responseDetails.ip}`, responseDetails);
     } else if (res.statusCode >= 400) {
-      logger.warn(responseDetails);
+      logger.warn(`WARN [${responseDetails.reqId}] ${responseDetails.method} ${responseDetails.url} ${responseDetails.statusCode} - ${responseDetails.ip}`, responseDetails);
     } else {
-      logger.debug(responseDetails);
+      logger.debug(`INFO [${responseDetails.reqId}] ${responseDetails.method} ${responseDetails.url} ${responseDetails.statusCode} - ${responseDetails.ip}`, responseDetails);
     }
     
     return originalEnd.apply(res, arguments);
@@ -222,6 +220,21 @@ function sanitizeRequestBody(body) {
 function sanitizeResponseBody(body) {
   if (!body) return undefined;
   
+  // Handle Buffer objects
+  if (Buffer.isBuffer(body)) {
+    try {
+      const textContent = body.toString('utf8');
+      // Check if it looks like JSON
+      if ((textContent.startsWith('{') && textContent.endsWith('}')) || 
+          (textContent.startsWith('[') && textContent.endsWith(']'))) {
+        return JSON.parse(textContent);
+      }
+      return textContent.length > 1000 ? textContent.substring(0, 1000) + '... [truncated]' : textContent;
+    } catch (e) {
+      return `[Buffer content could not be parsed: ${e.message}]`;
+    }
+  }
+  
   let parsed;
   try {
     // If it's a string that looks like JSON, parse it
@@ -234,6 +247,18 @@ function sanitizeResponseBody(body) {
         // For HTML or other string responses, truncate if too long
         return body.length > 1000 ? body.substring(0, 1000) + '... [truncated]' : body;
       }
+    } else if (body && typeof body === 'object' && body.type === 'Buffer' && Array.isArray(body.data)) {
+      // Handle buffer represented as object
+      try {
+        const bufferContent = Buffer.from(body.data).toString('utf8');
+        if ((bufferContent.startsWith('{') && bufferContent.endsWith('}')) || 
+            (bufferContent.startsWith('[') && bufferContent.endsWith(']'))) {
+          return JSON.parse(bufferContent);
+        }
+        return bufferContent;
+      } catch (e) {
+        return `[Buffer content could not be parsed: ${e.message}]`;
+      }
     } else {
       // If it's already an object, use as is
       parsed = body;
@@ -245,7 +270,7 @@ function sanitizeResponseBody(body) {
     // If we can't parse or process, return safe representation
     return typeof body === 'string' ? 
       (body.length > 500 ? body.substring(0, 500) + '... [truncated]' : body) : 
-      '[Unparseable response]';
+      `[Unparseable response: ${e.message}]`;
   }
 }
 
@@ -285,25 +310,29 @@ app.use((req, res, next) => {
 
 // Enhanced error handling middleware - update the existing one
 app.use((err, req, res, next) => {
-  logger.error({
-    type: 'error',
+  const errorLog = {
     reqId: req.reqId,
-    message: err.message,
-    name: err.name,
-    code: err.code,
-    stack: err.stack,
-    method: req.method,
-    url: req.originalUrl,
-    params: req.params,
-    query: req.query,
-    body: sanitizeRequestBody(req.body),
-    headers: req.headers,
-    timestamp: new Date().toISOString()
-  });
+    timestamp: new Date().toISOString(),
+    error: {
+      message: err.message,
+      name: err.name,
+      code: err.code,
+      stack: err.stack,
+    },
+    request: {
+      method: req.method,
+      url: req.originalUrl,
+      path: req.path,
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    }
+  };
+  
+  logger.error(`ERROR [${req.reqId}] ${req.method} ${req.originalUrl} - ${err.name}: ${err.message} - ${req.ip}`, errorLog);
   
   res.status(err.status || 500).json({
     error: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message,
-    requestId: req.reqId // Include for user to reference in reports
+    requestId: req.reqId 
   });
 });
 
@@ -336,5 +365,5 @@ app.listen(port, '0.0.0.0', () => {
     logger.info(`Server is running on port ${port}`)
 })
 
-// Export for serverless
+
 // export const handler = ServerlessHttp(app)
