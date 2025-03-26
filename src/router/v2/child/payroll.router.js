@@ -39,12 +39,12 @@ export class PayrollService {
 
       // Get salary parameters (use defaults if not set)
       const params = user.salaryParameter || {
-        hraPercentage: 40,
-        daPercentage: 10,
-        taPercentage: 10,
-        pfPercentage: 12,
-        taxPercentage: 10,
-        insuranceFixed: 1000,
+        hraPercentage: 0,
+        daPercentage: 0,
+        taPercentage: 0,
+        pfPercentage: 0,
+        taxPercentage: 0,
+        insuranceFixed: 0,
         additionalAllowances: {},
         additionalDeductions: {}
       };
