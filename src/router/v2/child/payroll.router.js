@@ -1,14 +1,12 @@
 import express from "express";
 import prisma from "../../../db/connectDb.js";
+import validateToken from "../../../middleware/validateToken.js";
 
 const router = express.Router();
 
 export class PayrollService {
   async calculateSalary(userId, month, year) {
-    console.log(`Starting salary calculation for user ${userId} for ${month}/${year}`);
     try {
-      // Get user details
-      console.log('Fetching user details...');
       const user = await prisma.user.findUnique({
         where: { id: userId },
         include: {
@@ -35,9 +33,8 @@ export class PayrollService {
       });
 
       if (!user) throw new Error('User not found');
-      console.log('User details fetched:', { userId: user.id, name: user.name });
 
-      // Get salary parameters (use defaults if not set)
+      
       const params = user.salaryParameter || {
         hraPercentage: 0,
         daPercentage: 0,
@@ -48,28 +45,31 @@ export class PayrollService {
         additionalAllowances: {},
         additionalDeductions: {}
       };
+      console.log('Salary parameters:', params);
+      
 
-      // Calculate basic salary (monthly)
+      
       const basicSalary = user.monthlySalary || 0;
       console.log('Basic salary:', basicSalary);
 
-      // Calculate allowances using custom parameters
+      
       const allowances = {
         hra: basicSalary * (params.hraPercentage / 100),
         da: basicSalary * (params.daPercentage / 100),
         ta: basicSalary * (params.taPercentage / 100),
         ...params.additionalAllowances
       };
-      console.log('Calculated allowances:', allowances);
 
-      // Calculate deductions based on leaves and attendance
-      const workingDays = this.getWorkingDays(month, year);
-      console.log('Working days in month:', workingDays);
+      
+      const workingDays = this.getWorkingDays(month, year); 
+      const presentDays = user.attendanceRecords.length;
+      console.log('Present days:', presentDays);
+       // if in working days the employee is absent then we will check for that , on that day employee was on leave or not, if on leave then we will not deduct the salary otherwise we will deduct the salary
 
-      const leaveDeductions = this.calculateLeaveDeductions(user.leaveRequests, basicSalary, workingDays);
+      const leaveDeductions = this.calculateLeaveAndAbsentDeductions(user.leaveRequests, basicSalary, workingDays, presentDays);
       console.log('Leave deductions:', leaveDeductions);
       
-      // Calculate deductions using custom parameters
+      
       const deductions = {
         pf: basicSalary * (params.pfPercentage / 100),
         insurance: params.insuranceFixed,
@@ -79,13 +79,20 @@ export class PayrollService {
       };
       console.log('Total deductions:', deductions);
 
-      // Calculate net salary
+      
       const totalAllowances = Object.values(allowances).reduce((a, b) => a + b, 0);
       const totalDeductions = Object.values(deductions).reduce((a, b) => a + b, 0);
-      const netSalary = basicSalary + totalAllowances - totalDeductions;
+      let netSalary = basicSalary + totalAllowances - totalDeductions;
+      
+      // Prevent negative salary
+      if (netSalary < 0) {
+        console.log('Warning: Calculated salary was negative, setting to 0 instead');
+        netSalary = 0;
+      }
+      
       console.log('Final calculation:', { totalAllowances, totalDeductions, netSalary });
 
-      // Create salary record
+      
       console.log('Creating salary record...');
       const salaryRecord = await prisma.salaryRecord.create({
         data: {
@@ -111,14 +118,21 @@ export class PayrollService {
 
   getWorkingDays(month, year) {
     console.log(`Calculating working days for ${month}/${year}`);
-    // Calculate working days excluding weekends
+    
     const date = new Date(year, month - 1, 1);
     const days = new Date(year, month, 0).getDate();
     let workingDays = 0;
 
+    console.log(`Month has ${days} total days`);
+    
     for (let i = 1; i <= days; i++) {
       date.setDate(i);
-      if (date.getDay() !== 0 && date.getDay() !== 6) {
+      const dayOfWeek = date.getDay();
+      const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+      
+      console.log(`Day ${i}: ${date.toDateString()}, day of week: ${dayOfWeek}, isWeekend: ${isWeekend}`);
+      
+      if (!isWeekend) {
         workingDays++;
       }
     }
@@ -127,10 +141,18 @@ export class PayrollService {
     return workingDays;
   }
 
-  calculateLeaveDeductions(leaves, basicSalary, workingDays) {
+  calculateLeaveAndAbsentDeductions(leaves, basicSalary, workingDays, presentDays) {
     console.log('Calculating leave deductions:', { leaves: leaves.length, basicSalary, workingDays });
     const perDaySalary = basicSalary / workingDays;
+    console.log('Per day salary:', perDaySalary);
+    
+    const absentDays = workingDays - presentDays;
+    console.log('Absent days:', absentDays);
+
     let deduction = 0;
+
+    deduction += absentDays * perDaySalary;
+    console.log('Absent deduction:', deduction);
 
     leaves.forEach(leave => {
       console.log('Processing leave:', { leaveId: leave.id, days: leave.numberOfDays, isPaid: leave.leaveType.isPaid });
@@ -144,10 +166,10 @@ export class PayrollService {
   }
 }
 
-// Create an instance of PayrollService
+
 const payrollService = new PayrollService();
 
-// Router endpoints
+
 router.get('/user/:userId', async (req, res) => {
   console.log('Fetching salary records for user:', req.params.userId);
   try {
@@ -187,6 +209,21 @@ router.post('/generate', async (req, res) => {
     res.json(salaryRecord);
   } catch (error) {
     console.error('Error generating salary:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+router.delete('/:id', async (req, res) => {
+  console.log('Deleting salary record:', req.params.id);
+  try {
+    const { id } = req.params;
+    const deletedRecord = await prisma.salaryRecord.delete({
+      where: { id }
+    });
+    console.log('Salary record deleted successfully');
+    res.json(deletedRecord);
+  }
+  catch (error) {
+    console.error('Error deleting salary record:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -260,7 +297,7 @@ router.get('/users/active/:org_id', async (req, res) => {
     }
   });
   
-  // Check existing salary records
+  
   router.post('/check-existing', async (req, res) => {
     try {
       const { userId, month, year } = req.body;
@@ -279,19 +316,19 @@ router.get('/users/active/:org_id', async (req, res) => {
     }
   });
   
-  // Bulk generate salaries
+  
   router.post('/bulk-generate', async (req, res) => {
     const { employeeIds, month, year } = req.body;
     
     try {
-      // Start a transaction
+      
       const results = await prisma.$transaction(async (prisma) => {
         const generatedSalaries = [];
         const errors = [];
   
         for (const employeeId of employeeIds) {
           try {
-            // Check for existing salary record
+            
             const existing = await prisma.salaryRecord.findFirst({
               where: {
                 userId: employeeId,
@@ -308,7 +345,7 @@ router.get('/users/active/:org_id', async (req, res) => {
               continue;
             }
   
-            // Generate salary record
+            
             const salary = await payrollService.calculateSalary(employeeId, month, year);
             generatedSalaries.push(salary);
           } catch (error) {
@@ -365,19 +402,19 @@ router.get('/parameters/:userId', async (req, res) => {
   }
 });
 
-// You'll need to import your payment gateway SDK
-// Example: const razorpay = require('razorpay');
-// const paymentGateway = new razorpay({
-//   key_id: process.env.RAZORPAY_KEY_ID,
-//   key_secret: process.env.RAZORPAY_KEY_SECRET
-// });
 
-// Initiate salary transaction
+
+
+
+
+
+
+
 router.post('/initiate-transaction', async (req, res) => {
     const { salaryRecordId, userId, amount, bankDetails } = req.body;
   
     try {
-      // 1. Validate the salary record
+      
       const salaryRecord = await prisma.salaryRecord.findUnique({
         where: { id: salaryRecordId },
         include: {
@@ -397,10 +434,10 @@ router.post('/initiate-transaction', async (req, res) => {
         return res.status(400).json({ message: 'Salary already paid' });
       }
   
-      // 2. Generate OTP
+      
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       
-      // 3. Store OTP in database (with expiry)
+      
       await prisma.backgroundJob.create({
         data: {
           type: 'NOTIFICATION_DISPATCH',
@@ -409,15 +446,15 @@ router.post('/initiate-transaction', async (req, res) => {
             type: 'SALARY_TRANSACTION_OTP',
             userId,
             otp,
-            expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes expiry
+            expiresAt: new Date(Date.now() + 10 * 60 * 1000) 
           },
           scheduledFor: new Date(),
           priority: 1
         }
       });
   
-      // 4. Send OTP via email and SMS
-      // Implement your notification service here
+      
+      
   
       res.json({ message: 'OTP sent successfully' });
     } catch (error) {
@@ -426,12 +463,12 @@ router.post('/initiate-transaction', async (req, res) => {
     }
   });
   
-  // Verify OTP and process transaction
+  
   router.post('/verify-transaction', async (req, res) => {
     const { salaryRecordId, otp } = req.body;
   
     try {
-      // 1. Verify OTP
+      
       const otpJob = await prisma.backgroundJob.findFirst({
         where: {
           type: 'NOTIFICATION_DISPATCH',
@@ -450,7 +487,7 @@ router.post('/initiate-transaction', async (req, res) => {
         return res.status(400).json({ message: 'Invalid OTP' });
       }
   
-      // 2. Get salary record with user details
+      
       const salaryRecord = await prisma.salaryRecord.findUnique({
         where: { id: salaryRecordId },
         include: {
@@ -462,31 +499,31 @@ router.post('/initiate-transaction', async (req, res) => {
         }
       });
   
-      // 3. Initiate payment gateway transaction
-      // Example using a payment gateway:
-      // const transfer = await paymentGateway.transfer.create({
-      //   account: salaryRecord.user.bankDetails.accountNumber,
-      //   amount: salaryRecord.netSalary * 100, // Convert to smallest currency unit
-      //   currency: 'INR',
-      //   reference_id: salaryRecordId,
-      // });
+      
+      
+      
+      
+      
+      
+      
+      
   
-      // 4. Update salary record status
+      
       await prisma.salaryRecord.update({
         where: { id: salaryRecordId },
         data: {
           status: 'PAID',
           processedAt: new Date(),
-          paymentRef: 'transfer.id', // Use actual payment reference
+          paymentRef: 'transfer.id', 
           paymentMode: 'BANK_TRANSFER'
         }
       });
   
-      // 5. Create notification for successful transaction
+      
       await prisma.notification.create({
         data: {
           userId: salaryRecord.userId,
-          templateId: 'cm72bckox0001tla4c4w12h3p', // Use your actual template ID
+          templateId: 'cm72bckox0001tla4c4w12h3p', 
           content: `Your salary of ₹${salaryRecord.netSalary} has been credited to your account`,
           metadata: {
             salaryRecordId,
@@ -498,7 +535,7 @@ router.post('/initiate-transaction', async (req, res) => {
   
       res.json({ 
         message: 'Salary transferred successfully',
-        transactionId: 'transfer.id' // Use actual transaction ID
+        transactionId: 'transfer.id' 
       });
     } catch (error) {
       console.error('Transaction processing error:', error);
@@ -506,5 +543,77 @@ router.post('/initiate-transaction', async (req, res) => {
     }
   });
   
+
+  router.post("/complete-transaction", validateToken, async (req, res) => {
+    try {
+      const { salaryRecordId, transactionId, mode, incentive, bonus, remarks } = req.body;
+      const senderUserId = req.user.id;
+      
+      const salaryRecord = await prisma.salaryRecord.findUnique({
+        where: { id: salaryRecordId },
+        include: {
+          user: {
+            include: {
+              bankDetails: true
+            }
+          }
+        }
+      });
+      
+      if (!salaryRecord) {
+        return res.status(404).json({ message: 'Salary record not found' });
+      }
+      
+      if (salaryRecord.status === 'PAID') {
+        return res.status(400).json({ message: 'Salary already paid' });
+      }
+      
+      // Calculate the amount correctly
+      const incentiveAmount = incentive ? parseFloat(incentive) : 0;
+      const bonusAmount = bonus ? parseFloat(bonus) : 0;
+      const totalAmount = salaryRecord.netSalary + incentiveAmount + bonusAmount;
+      
+      // Create transaction record
+      const transaction = await prisma.transactionTable.create({
+        data: {
+          senderUserId,
+          recieverUserId: salaryRecord.userId,
+          amount: totalAmount,
+          bankTransactionId: transactionId,
+          type: 'SALARY'
+        }
+      });
+      
+      // Link transaction to salary record
+      await prisma.salaryTransactionTable.create({
+        data: {
+          salaryRecordId,
+          transactionId: transaction.id
+        }
+      });
+      
+      // Update salary record status
+      await prisma.salaryRecord.update({
+        where: { id: salaryRecordId },
+        data: {
+          status: 'PAID',
+          processedAt: new Date(),
+          paymentMode: mode,
+          remarks: remarks,
+          incentive: incentiveAmount,
+          bonus: bonus,
+        }
+      });
+      
+      // Send success response
+      res.status(200).json({
+        message: 'Transaction completed successfully',
+        transactionId: transaction.id
+      });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
 export default router;

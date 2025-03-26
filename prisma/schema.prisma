@@ -30,11 +30,11 @@ model Organization {
   settings              Json?
   departments           Department[]
   holidays              Holiday[]
+  holidayTypes          HolidayType[]
   leaveTypes            LeaveType[]
   notificationTemplates NotificationTemplate[]
   roles                 Role[]
   users                 User[]
-  holidayTypes          HolidayType[]
 }
 
 model Department {
@@ -77,13 +77,11 @@ model Role {
 
 model PermissionCategory {
   id            String                  @id @default(cuid())
-  name          String
+  name          String                  @unique
   description   String?
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
   subcategories PermissionSubcategory[]
-
-  @@unique([name])
 }
 
 model PermissionSubcategory {
@@ -93,8 +91,8 @@ model PermissionSubcategory {
   description String?
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
-  category    PermissionCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   permissions Permission[]
+  category    PermissionCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([categoryId, name])
 }
@@ -105,8 +103,8 @@ model Permission {
   description   String?
   module        String?
   action        String
-  subcategoryId String?
   createdAt     DateTime               @default(now())
+  subcategoryId String?
   subcategory   PermissionSubcategory? @relation(fields: [subcategoryId], references: [id], onDelete: Cascade)
   roles         RolePermission[]
 }
@@ -123,42 +121,44 @@ model RolePermission {
 }
 
 model User {
-  id                String             @id @default(cuid())
-  orgId             String
-  departmentId      String?
-  managerId         String?
-  email             String             @unique
-  hashedPassword    String?
-  refreshToken      String?
-  status            UserStatus         @default(active)
-  verificationToken String?            @unique
-  annualPackage     Float?             @default(0.0)
-  monthlySalary     Float?             @default(0.0)
-  hiredDate         DateTime?          @default(now())
-  dateOfBirth       DateTime?
-  address           String?
-  adharNumber       String?
-  panNumber         String?
-  mobileNumber      String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  employeeId        String?
-  terminationDate   DateTime?
-  firstName         String?            @default("unknown")
-  lastName          String?            @default("unknown")
-  attendanceRecords AttendanceRecord[]
-  bankDetails       BankDetails?
-  Department        Department[]       @relation("DepartmentHead")
-  leaveBalances     LeaveBalance[]
-  leaveRequests     LeaveRequest[]
-  notifications     Notification[]
-  salaryParameter   SalaryParameter?
-  salaryRecords     SalaryRecord[]
-  department        Department?        @relation("UserDepartment", fields: [departmentId], references: [id])
-  manager           User?              @relation("UserManager", fields: [managerId], references: [id])
-  subordinates      User[]             @relation("UserManager")
-  organization      Organization       @relation(fields: [orgId], references: [id])
-  roles             UserRole[]
+  id                   String             @id @default(cuid())
+  orgId                String
+  departmentId         String?
+  managerId            String?
+  email                String             @unique
+  hashedPassword       String?
+  refreshToken         String?
+  status               UserStatus         @default(active)
+  verificationToken    String?            @unique
+  annualPackage        Float?             @default(0.0)
+  monthlySalary        Float?             @default(0.0)
+  hiredDate            DateTime?          @default(now())
+  dateOfBirth          DateTime?
+  address              String?
+  adharNumber          String?
+  panNumber            String?
+  mobileNumber         String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  employeeId           String?
+  terminationDate      DateTime?
+  firstName            String?            @default("unknown")
+  lastName             String?            @default("unknown")
+  attendanceRecords    AttendanceRecord[]
+  bankDetails          BankDetails?
+  Department           Department[]       @relation("DepartmentHead")
+  leaveBalances        LeaveBalance[]
+  leaveRequests        LeaveRequest[]
+  notifications        Notification[]
+  salaryParameter      SalaryParameter?
+  salaryRecords        SalaryRecord[]
+  receivedTransactions TransactionTable[] @relation("ReceiverTransaction")
+  sentTransactions     TransactionTable[] @relation("SenderTransaction")
+  department           Department?        @relation("UserDepartment", fields: [departmentId], references: [id])
+  manager              User?              @relation("UserManager", fields: [managerId], references: [id])
+  subordinates         User[]             @relation("UserManager")
+  organization         Organization       @relation(fields: [orgId], references: [id])
+  roles                UserRole[]
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -281,23 +281,26 @@ model SalaryParameter {
 }
 
 model SalaryRecord {
-  id          String        @id @default(cuid())
-  userId      String
-  month       Int
-  year        Int
-  basicSalary Float
-  tax         Float         @default(0)
-  netSalary   Float
-  status      PayrollStatus @default(PENDING)
-  processedAt DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  allowances  Json?
-  paymentMode String?
-  paymentRef  String?
-  remarks     String?
-  deductions  Json?
-  user        User          @relation(fields: [userId], references: [id])
+  id                 String                   @id @default(cuid())
+  userId             String
+  month              Int
+  year               Int
+  basicSalary        Float
+  tax                Float                    @default(0)
+  netSalary          Float
+  status             PayrollStatus            @default(PENDING)
+  processedAt        DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  allowances         Json?
+  paymentMode        String?
+  paymentRef         String?
+  remarks            String?
+  deductions         Json?
+  incentive          Float?
+  bonus              Float?
+  user               User                     @relation(fields: [userId], references: [id])
+  salaryTransactions salaryTransactionTable[]
 
   @@unique([userId, month, year])
   @@index([userId, year, month])
@@ -357,10 +360,10 @@ model Holiday {
   name         String
   date         DateTime
   description  String?
-  type         String?
   isOptional   Boolean      @default(false)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
+  type         String?
   organization Organization @relation(fields: [orgId], references: [id])
   holidayType  HolidayType? @relation(fields: [type], references: [id])
 
@@ -368,16 +371,39 @@ model Holiday {
 }
 
 model HolidayType {
-  id        String    @id @default(cuid())
-  name      String
-  policy    String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id           String       @id @default(cuid())
+  name         String
+  policy       String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
   orgId        String
+  Holiday      Holiday[]
   organization Organization @relation(fields: [orgId], references: [id])
-  Holiday   Holiday[]
 
-  @@unique([name])
+  @@unique([orgId, name])
+}
+
+model TransactionTable {
+  id                 String                   @id @default(cuid())
+  senderUserId       String
+  recieverUserId     String
+  amount             Float
+  type               String
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  bankTransactionId  String?
+  recieverDetails    User                     @relation("ReceiverTransaction", fields: [recieverUserId], references: [id])
+  senderDetails      User                     @relation("SenderTransaction", fields: [senderUserId], references: [id])
+  salaryTransactions salaryTransactionTable[]
+}
+
+model salaryTransactionTable {
+  transactionId  String
+  salaryRecordId String
+  salaryRecord   SalaryRecord     @relation(fields: [salaryRecordId], references: [id])
+  transaction    TransactionTable @relation(fields: [transactionId], references: [id])
+
+  @@unique([transactionId, salaryRecordId])
 }
 
 enum UserStatus {

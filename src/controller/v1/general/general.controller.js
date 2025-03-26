@@ -71,11 +71,13 @@ const loginUser = async (req, res) => {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
                 sameSite: "strict",
+                maxAge: 7 * 24 * 60 * 60 * 1000  // 7 days in milliseconds
             });
             res.cookie("accessToken", accessToken, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
                 sameSite: "strict",
+                maxAge: 2 * 24 * 60 * 60 * 1000  // 2 days in milliseconds
             });
             return res.status(200).send({
                 message: "Super Admin logged in successfully",
@@ -165,12 +167,14 @@ const loginUser = async (req, res) => {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
+            maxAge: 7 * 24 * 60 * 60 * 1000  // 7 days in milliseconds
         });
 
         res.cookie("accessToken", accessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
+            maxAge: 2 * 24 * 60 * 60 * 1000  // 2 days in milliseconds
         });
 
         return res.status(200).send({
@@ -266,6 +270,7 @@ const refreshToken = async (req, res) => {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
+            maxAge: 7 * 24 * 60 * 60 * 1000  // 7 days in milliseconds
         });
 
 
@@ -273,6 +278,7 @@ const refreshToken = async (req, res) => {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
+            maxAge: 2 * 24 * 60 * 60 * 1000  // 2 days in milliseconds
         });
 
 
