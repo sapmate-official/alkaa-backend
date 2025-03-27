@@ -70,18 +70,20 @@ const loginUser = async (req, res) => {
             res.cookie("refreshToken", refreshToken, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
-                sameSite: "strict",
+                sameSite: "lax",  // Changed from strict to lax for better cross-site compatibility
                 maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days in milliseconds
                 expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-                path: "/"
+                path: "/",
+                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
             });
             res.cookie("accessToken", accessToken, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
-                sameSite: "strict",
+                sameSite: "lax",  // Changed from strict to lax
                 maxAge: 2 * 24 * 60 * 60 * 1000,  // 2 days in milliseconds
                 expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-                path: "/"
+                path: "/",
+                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
             });
             return res.status(200).send({
                 message: "Super Admin logged in successfully",
@@ -170,19 +172,21 @@ const loginUser = async (req, res) => {
         res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
-            sameSite: "strict",
+            sameSite: "lax",  // Changed from strict to lax
             maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days in milliseconds
             expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-            path: "/"
+            path: "/",
+            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
         });
 
         res.cookie("accessToken", accessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
-            sameSite: "strict",
+            sameSite: "lax",  // Changed from strict to lax
             maxAge: 2 * 24 * 60 * 60 * 1000,  // 2 days in milliseconds
             expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-            path: "/"
+            path: "/",
+            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
         });
 
         return res.status(200).send({
@@ -277,20 +281,22 @@ const refreshToken = async (req, res) => {
         res.cookie("refreshToken", newrefreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
-            sameSite: "strict",
+            sameSite: "lax",  // Changed from strict to lax
             maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days in milliseconds
             expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-            path: "/"
+            path: "/",
+            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
         });
 
 
         res.cookie("accessToken", newaccessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
-            sameSite: "strict",
+            sameSite: "lax",  // Changed from strict to lax
             maxAge: 2 * 24 * 60 * 60 * 1000,  // 2 days in milliseconds
             expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-            path: "/"
+            path: "/",
+            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
         });
 
 
