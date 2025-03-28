@@ -1,4 +1,5 @@
 import prisma from "../../../../db/connectDb.js";
+import { sendPushNotification } from "../../../v3/PushNotification/pushNotification.controller.js"; 
 
 
 const getAllnotification = async (req, res) => {
@@ -23,13 +24,33 @@ const getNotificationByUserId = async (req, res) => {
     }
 }
 const createNotification = async (req, res) => {
-    const { title, body, type, userId } = req.body;
+    const { userId, templateId, content, metadata } = req.body;
     try {
         const newNotification = await prisma.notification.create({
-            data: { title, body, type, userId }
+            data: { 
+                userId, 
+                templateId, 
+                content, 
+                metadata: metadata || {} 
+            },
+            include: {
+                template: true
+            }
         });
+        
+        // If template type is PUSH, send push notification
+        if (newNotification.template.type === 'PUSH') {
+            await sendPushNotification(
+                userId, 
+                newNotification.template.name, 
+                content, 
+                metadata?.url || '/'
+            );
+        }
+        
         res.status(201).json(newNotification);
     } catch (error) {
+        console.error('Failed to create notification:', error);
         res.status(500).json({ error: 'Failed to create notification' });
     }
 }
