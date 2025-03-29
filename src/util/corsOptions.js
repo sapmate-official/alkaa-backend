@@ -17,11 +17,13 @@ export const corsOptions = {
         if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
             callback(null, true)
         } else {
+            console.log(`CORS blocked origin: ${origin}`); // Add logging for debugging
             callback(new Error(`Not allowed by CORS: ${origin}`))
         }
     },
     credentials: true,
     optionsSuccessStatus: 200,
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
-    allowedHeaders: "Content-Type,Authorization,X-Requested-With"
+    allowedHeaders: "Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept",
+    exposedHeaders: "Content-Length,Content-Type,Authorization"
 }
