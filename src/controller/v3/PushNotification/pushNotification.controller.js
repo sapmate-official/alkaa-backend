@@ -1,4 +1,4 @@
-import prisma from "../../../../db/connectDb.js";
+import prisma from "../../../db/connectDb.js"
 import webpush from "web-push";
 
 // Set VAPID details
