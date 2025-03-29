@@ -50,7 +50,7 @@ const loginUser = async (req, res) => {
             if (!isPasswordValid) {
                 return res.status(401).send({
                     message: "Invalid credentials",
-                });
+                }); 
             }
             
             const { accessToken, refreshToken } = generateTokens(
