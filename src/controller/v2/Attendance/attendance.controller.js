@@ -2,7 +2,7 @@ import prisma from "../../../db/connectDb.js";
 const WORKING_HOURS = {
     FULL_DAY: 8,
     HALF_DAY: 4,
-    MINIMUM_SESSION: 0.5, // 30 minutes minimum per session
+    MINIMUM_SESSION: 0.0, // 30 minutes minimum per session
     TARGET_DAILY_HOURS: 8
 };
 export const getAttendances = async (req, res) => {
@@ -172,7 +172,12 @@ export const checkIn = async (req, res) => {
  */
 export const checkOut = async (req, res) => {
     try {
-        const { checkInId,date, checkOutTime, checkOutLocation, notes } = req.body;
+        const { checkInId, date, checkOutTime, checkOutLocation, notes, reportContent } = req.body;
+        
+        console.log('=== CHECKOUT REQUEST RECEIVED ===');
+        console.log('Request body:', req.body);
+        console.log('Report content received:', reportContent);
+        console.log('Type of reportContent:', typeof reportContent);
         
         if (!date || !checkOutTime || !checkOutLocation) {
             return res.status(400).json({ message: "All required fields must be provided" });
@@ -232,11 +237,29 @@ export const checkOut = async (req, res) => {
                 deviceInfo: req.headers['user-agent']
             }
         });
+        
+        console.log('Creating daily report with content:', reportContent);
+        
+        let report;
+        try {
+            report = await prisma.userDailyReport.create({
+                data: {
+                    reportContent,
+                    attendanceId: updatedSession.id
+                }
+            });
+            console.log('Daily report created successfully:', report);
+        } catch (reportError) {
+            console.error('Error creating daily report:', reportError);
+            // Continue even if report creation fails
+        }
 
+        console.log('Checkout process completed successfully');
         res.status(200).json({
             session: updatedSession,
             dailyTotal: totalDuration,
-            remainingHours: Math.max(0, WORKING_HOURS.TARGET_DAILY_HOURS - totalDuration.hours)
+            remainingHours: Math.max(0, WORKING_HOURS.TARGET_DAILY_HOURS - totalDuration.hours),
+            reportCreated: !!report
         });
     } catch (error) {
         console.error("Error in checkOut:", error);
@@ -407,7 +430,8 @@ export const getEmployeeRecords = async(req, res) => {
                                     }
                                 }
                             }
-                        }
+                        },
+                        UserDailyReports: true  // Include the daily reports
                     }
                 }
             }
@@ -630,5 +654,108 @@ export const postPastCheckOut = async(req, res) => {
             error: "Failed to update past session",
             details: error.message
         });
+    }
+};
+
+/**
+ * @route POST /api/v2/attendance/past-attendance
+ * @desc Create a complete attendance record for a past day
+ * @access Private
+ */
+export const createPastAttendance = async (req, res) => {
+    try {
+        const { 
+            date, 
+            checkInTime, 
+            checkInLocation, 
+            checkOutTime, 
+            checkOutLocation, 
+            notes,
+            reportContent 
+        } = req.body;
+        
+        console.log('=== PAST ATTENDANCE REQUEST RECEIVED ===');
+        console.log('Request body:', req.body);
+        
+        if (!date || !checkInTime || !checkInLocation || !checkOutTime || !checkOutLocation) {
+            return res.status(400).json({ message: "All required fields must be provided" });
+        }
+
+        const user = req.user;
+        const checkInDateTime = new Date(checkInTime);
+        const checkOutDateTime = new Date(checkOutTime);
+        const attendanceDate = new Date(date);
+        
+        // Validate dates
+        const currentDate = new Date();
+        if (attendanceDate > currentDate) {
+            return res.status(400).json({ message: "Cannot create attendance for future dates" });
+        }
+        
+        if (checkOutDateTime <= checkInDateTime) {
+            return res.status(400).json({ message: "Check-out time must be after check-in time" });
+        }
+
+        // Check if an entry already exists for this date
+        const existingSession = await prisma.attendanceRecord.findFirst({
+            where: {
+                userId: user.id,
+                date: attendanceDate
+            }
+        });
+
+        if (existingSession) {
+            return res.status(400).json({ 
+                message: "An attendance record already exists for this date. Please edit the existing record." 
+            });
+        }
+
+        // Calculate session duration
+        const sessionDuration = calculateSessionDuration(checkInDateTime, checkOutDateTime);
+        const status = determineStatus(sessionDuration.hours);
+        
+        // Create the attendance record
+        const newAttendance = await prisma.attendanceRecord.create({
+            data: {
+                userId: user.id,
+                date: attendanceDate,
+                checkInTime: checkInDateTime,
+                checkOutTime: checkOutDateTime,
+                checkInLocation,
+                checkOutLocation,
+                notes: `Past attendance reason: ${notes}`,
+                status,
+                duration: sessionDuration,
+                sessionNumber: 1,
+                ipAddress: req.ip,
+                deviceInfo: req.headers['user-agent']
+            }
+        });
+        
+        // Create the daily report
+        let report;
+        try {
+            if (reportContent) {
+                report = await prisma.userDailyReport.create({
+                    data: {
+                        reportContent,
+                        attendanceId: newAttendance.id
+                    }
+                });
+                console.log('Daily report created successfully:', report);
+            }
+        } catch (reportError) {
+            console.error('Error creating daily report:', reportError);
+            // Continue even if report creation fails
+        }
+
+        res.status(201).json({
+            attendance: newAttendance,
+            reportCreated: !!report
+        });
+        
+    } catch (error) {
+        console.error("Error in createPastAttendance:", error);
+        res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };

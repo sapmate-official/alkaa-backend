@@ -150,6 +150,7 @@ model User {
   leaveBalances        LeaveBalance[]
   leaveRequests        LeaveRequest[]
   notifications        Notification[]
+  PushSubscription     PushSubscription[]
   salaryParameter      SalaryParameter?
   salaryRecords        SalaryRecord[]
   receivedTransactions TransactionTable[] @relation("ReceiverTransaction")
@@ -159,7 +160,6 @@ model User {
   subordinates         User[]             @relation("UserManager")
   organization         Organization       @relation(fields: [orgId], references: [id])
   roles                UserRole[]
-  PushSubscription     PushSubscription[]
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -260,6 +260,7 @@ model AttendanceRecord {
   ipAddress          String?
   verificationStatus AttendanceVerificationStatus? @default(UNVERIFIED)
   user               User                          @relation(fields: [userId], references: [id])
+  UserDailyReport    UserDailyReport[]
 
   @@unique([userId, date, sessionNumber])
   @@index([userId, date])
@@ -401,13 +402,13 @@ model TransactionTable {
 model salaryTransactionTable {
   transactionId  String
   salaryRecordId String
+  id             String           @id @default(dbgenerated("(gen_random_uuid())::text"))
   salaryRecord   SalaryRecord     @relation(fields: [salaryRecordId], references: [id])
   transaction    TransactionTable @relation(fields: [transactionId], references: [id])
 
   @@unique([transactionId, salaryRecordId])
 }
 
-// Add to your schema.prisma file
 model PushSubscription {
   id             String   @id @default(cuid())
   userId         String
@@ -419,6 +420,15 @@ model PushSubscription {
   user           User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
+}
+
+model UserDailyReport {
+  id            String           @id @default(cuid())
+  attendanceId  String
+  reportContent Json
+  attendance    AttendanceRecord @relation(fields: [attendanceId], references: [id])
+
+  @@index([id, attendanceId])
 }
 
 enum UserStatus {

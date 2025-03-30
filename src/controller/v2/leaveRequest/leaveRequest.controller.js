@@ -70,6 +70,11 @@ export const createLeaveRequest = async (req, res) => {
                 numberOfDays: requestedDays,
             },
         });
+        if(leaveRequest) {
+            // fetch manager of this user
+            // send notification to manager 
+            
+        }
         res.status(201).json(leaveRequest);
     } catch (error) {
         console.log(error);
