@@ -431,7 +431,7 @@ export const getEmployeeRecords = async(req, res) => {
                                 }
                             }
                         },
-                        UserDailyReports: true  // Include the daily reports
+                        UserDailyReport: true  // Include the daily reports
                     }
                 }
             }
