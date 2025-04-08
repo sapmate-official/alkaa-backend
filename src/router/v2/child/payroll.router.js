@@ -61,7 +61,7 @@ export class PayrollService {
       };
 
       
-      const workingDays = this.getWorkingDays(month, year); 
+      const workingDays = await this.getWorkingDays(month, year,userId); 
       const presentDays = user.attendanceRecords.length;
       console.log('Present days:', presentDays);
        // if in working days the employee is absent then we will check for that , on that day employee was on leave or not, if on leave then we will not deduct the salary otherwise we will deduct the salary
@@ -116,7 +116,7 @@ export class PayrollService {
     }
   }
 
-  getWorkingDays(month, year) {
+  async getWorkingDays(month, year,userId) {
     console.log(`Calculating working days for ${month}/${year}`);
     
     const date = new Date(year, month - 1, 1);
@@ -124,15 +124,29 @@ export class PayrollService {
     let workingDays = 0;
 
     console.log(`Month has ${days} total days`);
+    const settings = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { organization:{
+        select:{
+          OrganizationSettings:true
+        }
+      } }
+    });
+console.log('settings:', settings.organization.OrganizationSettings[0].settings);
+
+    const weekOff = settings.organization.OrganizationSettings[0].settings["weekoff"] 
+    console.log('Week off days:', weekOff);
+    const isWeekend = weekOff.includes(date.getDay());
+    
     
     for (let i = 1; i <= days; i++) {
       date.setDate(i);
       const dayOfWeek = date.getDay();
-      const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+      const isWeekoff = weekOff.includes(dayOfWeek);
       
       console.log(`Day ${i}: ${date.toDateString()}, day of week: ${dayOfWeek}, isWeekend: ${isWeekend}`);
       
-      if (!isWeekend) {
+      if (!isWeekoff) {
         workingDays++;
       }
     }
@@ -150,8 +164,10 @@ export class PayrollService {
     console.log('Absent days:', absentDays);
 
     let deduction = 0;
-
+    if(absentDays > 0) {
+ 
     deduction += absentDays * perDaySalary;
+    }
     console.log('Absent deduction:', deduction);
 
     leaves.forEach(leave => {
@@ -163,6 +179,94 @@ export class PayrollService {
 
     console.log('Total leave deduction:', deduction);
     return deduction;
+  }
+
+  async getEmployeePayrollStatistics(userId, month, year) {
+    try {
+      const monthValue = month ? parseInt(month) : null;
+      const yearValue = year ? parseInt(year) : null;
+  
+      const salaryRecordsWithData = await prisma.salaryRecord.findMany({
+        where: {
+          userId,
+          ...(monthValue ? { month: monthValue } : {}),
+          ...(yearValue ? { year: yearValue } : {})
+        },
+        include: {
+          user: {
+            include: {
+              attendanceRecords: {
+                where: {
+                  ...(monthValue && yearValue ? {
+                    AND: [
+                      { date: { gte: new Date(yearValue, monthValue - 1, 1) } },
+                      { date: { lt: new Date(yearValue, monthValue, 1) } }
+                    ]
+                  } : {})
+                }
+              },
+              leaveRequests: {
+                where: {
+                  ...(monthValue && yearValue ? {
+                    AND: [
+                      { 
+                        OR: [
+                          { startDate: { gte: new Date(yearValue, monthValue - 1, 1), lt: new Date(yearValue, monthValue, 1) } },
+                          { endDate: { gte: new Date(yearValue, monthValue - 1, 1), lt: new Date(yearValue, monthValue, 1) } }
+                        ]
+                      }
+                    ]
+                  } : {}),
+                  status: 'APPROVED'
+                },
+                include: { leaveType: true }
+              },
+              organization: {
+                include: {
+                  OrganizationSettings: true,
+                  holidays: {
+                    where: {
+                      ...(monthValue && yearValue ? {
+                        date: {
+                          gte: new Date(yearValue, monthValue - 1, 1),
+                          lt: new Date(yearValue, monthValue, 1)
+                        }
+                      } : {})
+                    }
+                  }
+                }
+              },
+              bankDetails: true,
+              salaryParameter: true
+            }
+          }
+        }
+      });
+  
+      const userStats = {
+        monthlySalaries: [],
+        summary: {
+          totalEarned: 0,
+          totalAttendance: 0,
+          totalLeavesTaken: 0,
+          paidLeavesTaken: 0,
+          unpaidLeavesTaken: 0,
+          averageSalary: 0,
+          salaryRecords: 0
+        },
+        bankDetails: salaryRecordsWithData[0]?.user.bankDetails || null,
+        salaryParameter: salaryRecordsWithData[0]?.user.salaryParameter || null
+      };
+  
+      for (const record of salaryRecordsWithData) {
+        // Process similar to the statistics endpoint
+      }
+  
+      return userStats;
+    } catch (error) {
+      console.error('Error calculating employee payroll statistics:', error);
+      throw error;
+    }
   }
 }
 
@@ -196,6 +300,39 @@ router.get('/user/:userId', async (req, res) => {
     res.json({salaryRecords, salaryParameter, bankDetails});
   } catch (error) {
     console.error('Error fetching salary records:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+router.get("/check-for-extra-days/:userId/:month/:year", async (req, res) => {
+  console.log('Checking for extra days for user:', req.params.userId);
+  try {
+    const { userId,month,year } = req.params;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        attendanceRecords: {
+          where: {
+            AND: [
+              { date: { gte: new Date(year, month - 1, 1) } },
+              { date: { lt: new Date(year, month, 1) } }
+            ]
+          }
+        }
+      }
+    });
+    const presentDays = user.attendanceRecords.length;
+    const workingDays = await payrollService.getWorkingDays(month, year,userId);
+    const extraDays = presentDays - workingDays;
+    if(extraDays > 0) {
+      console.log(`Extra days found: ${extraDays}`);
+      res.json({ extraDays });
+    }
+    else {
+      console.log('No extra days found');
+      res.json({ extraDays: 0 });
+    }
+  }catch (error) {
+    console.error('Error checking for extra days:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -245,27 +382,149 @@ router.patch('/:id/status', async (req, res) => {
   }
 });
 
-router.get('/statistics', async (req, res) => {
-  console.log('Fetching salary statistics:', req.query);
+router.get('/statistics/:userId', async (req, res) => {
+  console.log('Fetching salary statistics for user:', req.params.userId);
   try {
-    const { orgId, month, year } = req.query;
-    const statistics = await prisma.salaryRecord.aggregate({
+    const { userId } = req.params;
+    const { month, year } = req.query;
+    
+    // Parse query parameters
+    const monthValue = month ? parseInt(month) : null;
+    const yearValue = year ? parseInt(year) : null;
+
+    // Fetch salary records for the specific user
+    const salaryRecordsWithData = await prisma.salaryRecord.findMany({
       where: {
-        user: { orgId },
-        month: parseInt(month),
-        year: parseInt(year)
+        userId,
+        ...(monthValue ? { month: monthValue } : {}),
+        ...(yearValue ? { year: yearValue } : {})
       },
-      _sum: {
-        basicSalary: true,
-        netSalary: true,
-        tax: true
-      },
-      _count: true
+      include: {
+        user: {
+          include: {
+            attendanceRecords: {
+              where: {
+                ...(monthValue && yearValue ? {
+                  AND: [
+                    { date: { gte: new Date(yearValue, monthValue - 1, 1) } },
+                    { date: { lt: new Date(yearValue, monthValue, 1) } }
+                  ]
+                } : {})
+              }
+            },
+            leaveRequests: {
+              where: {
+                ...(monthValue && yearValue ? {
+                  AND: [
+                    { 
+                      OR: [
+                        { startDate: { gte: new Date(yearValue, monthValue - 1, 1), lt: new Date(yearValue, monthValue, 1) } },
+                        { endDate: { gte: new Date(yearValue, monthValue - 1, 1), lt: new Date(yearValue, monthValue, 1) } }
+                      ]
+                    }
+                  ]
+                } : {}),
+                status: 'APPROVED'
+              },
+              include: { leaveType: true }
+            },
+            organization: {
+              include: {
+                OrganizationSettings: true,
+                holidays: {
+                  where: {
+                    ...(monthValue && yearValue ? {
+                      date: {
+                        gte: new Date(yearValue, monthValue - 1, 1),
+                        lt: new Date(yearValue, monthValue, 1)
+                      }
+                    } : {})
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     });
-    console.log('Statistics calculated:', statistics);
-    res.json(statistics);
+
+    // Prepare user statistics report
+    const userStats = {
+      monthlySalaries: [],
+      summary: {
+        totalEarned: 0,
+        totalAttendance: 0,
+        totalLeavesTaken: 0,
+        paidLeavesTaken: 0,
+        unpaidLeavesTaken: 0,
+        averageSalary: 0,
+        salaryRecords: 0
+      }
+    };
+
+    for (const record of salaryRecordsWithData) {
+      // Process each salary record
+      const monthlySalary = {
+        id: record.id,
+        month: record.month,
+        year: record.year,
+        basicSalary: record.basicSalary || 0,
+        netSalary: record.netSalary || 0,
+        status: record.status,
+        processedAt: record.processedAt,
+        attendance: record.user.attendanceRecords.length,
+        allowances: record.allowances ? 
+          Object.entries(record.allowances).map(([key, value]) => ({ type: key, amount: parseFloat(value) || 0 })) : [],
+        deductions: record.deductions ? 
+          Object.entries(record.deductions).map(([key, value]) => ({ type: key, amount: parseFloat(value) || 0 })) : [],
+        tax: record.tax || 0
+      };
+
+      // Calculate leaves taken in this month
+      const leaves = record.user.leaveRequests || [];
+      let paidLeaves = 0;
+      let unpaidLeaves = 0;
+      
+      leaves.forEach(leave => {
+        const leaveCount = leave.numberOfDays || 0;
+        if (leave.leaveType.isPaid) {
+          paidLeaves += leaveCount;
+        } else {
+          unpaidLeaves += leaveCount;
+        }
+      });
+
+      monthlySalary.leavesTaken = {
+        total: paidLeaves + unpaidLeaves,
+        paid: paidLeaves,
+        unpaid: unpaidLeaves
+      };
+
+      // Add holidays count if available
+      if (record.user.organization?.holidays) {
+        monthlySalary.holidays = record.user.organization.holidays.length;
+      }
+
+      userStats.monthlySalaries.push(monthlySalary);
+
+      // Update summary statistics
+      userStats.summary.totalEarned += record.netSalary || 0;
+      userStats.summary.totalAttendance += record.user.attendanceRecords.length;
+      userStats.summary.totalLeavesTaken += (paidLeaves + unpaidLeaves);
+      userStats.summary.paidLeavesTaken += paidLeaves;
+      userStats.summary.unpaidLeavesTaken += unpaidLeaves;
+      userStats.summary.salaryRecords++;
+    }
+
+    // Calculate average salary if there are records
+    if (userStats.summary.salaryRecords > 0) {
+      userStats.summary.averageSalary = userStats.summary.totalEarned / userStats.summary.salaryRecords;
+    }
+
+    console.log(`Found ${userStats.monthlySalaries.length} salary records for user ${userId}`);
+    res.json(userStats);
   } catch (error) {
-    console.error('Error calculating statistics:', error);
+    console.error('Error calculating user statistics:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -372,7 +631,17 @@ router.post('/parameters/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const parameters = req.body;
-
+    console.log('Updating salary parameters:', { userId, parameters });
+    
+    const existingParameters = await prisma.salaryParameter.findUnique({
+      where: { userId }
+    });
+    if (existingParameters) {
+      console.log('Existing parameters found:', existingParameters);
+    } else {
+      console.log('No existing parameters found, creating new one');
+    }
+    
     const salaryParameter = await prisma.salaryParameter.upsert({
       where: { userId },
       update: parameters,
@@ -381,7 +650,8 @@ router.post('/parameters/:userId', async (req, res) => {
         ...parameters
       }
     });
-
+    console.log('Salary parameters updated successfully:', salaryParameter);
+    
     res.json(salaryParameter);
   } catch (error) {
     console.log(error);
@@ -401,13 +671,6 @@ router.get('/parameters/:userId', async (req, res) => {
     res.status(500).json({ error: error.message }); 
   }
 });
-
-
-
-
-
-
-
 
 
 router.post('/initiate-transaction', async (req, res) => {
@@ -615,5 +878,231 @@ router.post('/initiate-transaction', async (req, res) => {
       res.status(500).json({ error: error.message });
     }
   });
+
+// Route for managers to get payroll information about their direct reports
+router.get('/manager/employees', validateToken, async (req, res) => {
+  try {
+    const managerId = req.user.id;
+    
+    const employees = await prisma.user.findMany({
+      where: { 
+        managerId 
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        employeeId: true,
+        status: true
+      }
+    });
+    
+    if (!employees.length) {
+      return res.status(200).json({ employees: [], message: "No employees found" });
+    }
+    
+    const employeeIds = employees.map(emp => emp.id);
+    const salaryRecords = await prisma.salaryRecord.findMany({
+      where: {
+        userId: { in: employeeIds }
+      },
+      orderBy: { 
+        year: 'desc',
+        month: 'desc' 
+      },
+      include: {
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            employeeId: true
+          }
+        }
+      }
+    });
+    
+    const employeePayrollData = employeeIds.map(employeeId => {
+      const employeeRecords = salaryRecords.filter(record => record.userId === employeeId);
+      const employee = employees.find(emp => emp.id === employeeId);
+      
+      return {
+        employee: {
+          id: employeeId,
+          name: `${employee.firstName} ${employee.lastName}`,
+          employeeId: employee.employeeId,
+          status: employee.status
+        },
+        salaryRecords: employeeRecords
+      };
+    });
+    
+    res.json({ employeePayrollData });
+  } catch (error) {
+    console.error('Error fetching manager employees payroll:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Route for admins to get payroll information about all employees in an organization
+router.get('/admin/all-employees/:orgId', validateToken, async (req, res) => {
+  try {
+    const { orgId } = req.params;
+    const { month, year } = req.query;
+    
+    const userWithRoles = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    const hasViewAllPermission = userWithRoles.roles.some(userRole => 
+      userRole.role.permissions.some(perm => 
+        perm.permission?.name === "payroll.view_all"
+      )
+    );
+    
+    if (!hasViewAllPermission) {
+      return res.status(403).json({ error: "You don't have permission to view all payroll data" });
+    }
+    
+    const employees = await prisma.user.findMany({
+      where: { 
+        orgId,
+        status: 'active' 
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        employeeId: true,
+        monthlySalary: true,
+        departmentId: true,
+        department: true
+      },
+      orderBy: {
+        firstName: 'asc'
+      }
+    });
+    
+    if (!employees.length) {
+      return res.status(200).json({ employees: [], message: "No employees found" });
+    }
+    
+    const employeeIds = employees.map(emp => emp.id);
+    const salaryRecordsQuery = {
+      where: { 
+        userId: { in: employeeIds } 
+      },
+      orderBy: { 
+        processedAt: 'desc'
+      }
+    };
+    
+    if (month && year) {
+      salaryRecordsQuery.where.month = parseInt(month);
+      salaryRecordsQuery.where.year = parseInt(year);
+    }
+    
+    const salaryRecords = await prisma.salaryRecord.findMany(salaryRecordsQuery);
+    
+    const employeePayrollData = employees.map(employee => {
+      const employeeRecords = salaryRecords.filter(record => record.userId === employee.id);
+      
+      return {
+        employee: {
+          id: employee.id,
+          name: `${employee.firstName} ${employee.lastName}`,
+          employeeId: employee.employeeId,
+          department: employee.department?.name || 'Unassigned',
+          monthlySalary: employee.monthlySalary
+        },
+        salaryRecords: employeeRecords.map(record => ({
+          id: record.id,
+          month: record.month,
+          year: record.year,
+          netSalary: record.netSalary,
+          status: record.status,
+          processedAt: record.processedAt
+        }))
+      };
+    });
+    
+    res.json({ employeePayrollData });
+  } catch (error) {
+    console.error('Error fetching all employees payroll:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Route to get detailed payroll information for a specific employee
+router.get('/employee/:employeeId', validateToken, async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { month, year } = req.query;
+    
+    const employee = await prisma.user.findUnique({
+      where: { id: employeeId },
+      select: { 
+        id: true, 
+        managerId: true,
+        orgId: true
+      }
+    });
+    
+    if (!employee) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+    
+    const userWithRoles = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    const isManager = employee.managerId === req.user.id;
+    const hasViewAllPermission = userWithRoles.roles.some(userRole => 
+      userRole.role.permissions.some(perm => 
+        perm.permission?.name === "payroll.view_all"
+      )
+    );
+    
+    if (!isManager && !hasViewAllPermission && employee.id !== req.user.id) {
+      return res.status(403).json({ error: "You don't have permission to view this employee's payroll data" });
+    }
+    
+    const response = await payrollService.getEmployeePayrollStatistics(employeeId, month, year);
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching employee payroll details:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 export default router;

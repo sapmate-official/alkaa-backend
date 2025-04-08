@@ -3,6 +3,7 @@ import { getOrganization, getOrganizationById, createOrganization, updateOrganiz
 import employeeRouter from "./employee.router.js";
 
 const router = express.Router();
+router.get("/subordinate-list/",(req,res)=>{res.send("this is the subordinate list")});
 
 router.get("/",getOrganization);
 router.get("/:id",getOrganizationById);

@@ -1,5 +1,5 @@
 import express from "express";
-import { checkIn, checkOut, createAttendance, deleteAttendance, getAttendanceById, getAttendances, getEmployeeAttendance, getUserAttendance, sessionListByDate, updateAttendance,getEmployeeRecords,verifyAttendance, getTodaysAttendance, getCheckOutPast, postPastCheckOut, createPastAttendance } from "../../../controller/v2/Attendance/attendance.controller.js";
+import { checkIn, checkOut, createAttendance, deleteAttendance, getAttendanceById, getAttendances, getEmployeeAttendance, getUserAttendance, sessionListByDate, updateAttendance,getEmployeeRecords,verifyAttendance, getTodaysAttendance, getCheckOutPast, postPastCheckOut, createPastAttendance,getAllUserLiveAttendance } from "../../../controller/v2/Attendance/attendance.controller.js";
 import validateToken from "../../../middleware/validateToken.js";
 
 const  router = express.Router();
@@ -12,6 +12,7 @@ router.patch("/:id", updateAttendance);
 router.delete("/:id", deleteAttendance);
 
 //extra routes
+router.get("/live/all/",validateToken,getAllUserLiveAttendance);
 router.post("/check-in",validateToken,checkIn);
 router.post("/check-out",validateToken,checkOut);
 router.get("/check-out/past",validateToken,getCheckOutPast);

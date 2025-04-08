@@ -1,5 +1,5 @@
 import express from "express";
-import { createSalary, deleteSalary, getSalaryById, getSalaries, updateSalary } from "../../../controller/v2/Salary/salary.controller.js";
+import { createSalary, deleteSalary, getSalaryById, getSalaries, updateSalary,getExistenceOfSalaryRecordBasedOnMonthAndYearForUserID } from "../../../controller/v2/Salary/salary.controller.js";
 import prisma from "../../../db/connectDb.js";
 
 const router = express.Router();
@@ -74,5 +74,6 @@ router.get('/user/:userId', async (req, res) => {
       res.status(500).json({ error: error.message });
     }
   });
+  router.get('/user/:userId/monthly/:month/year/:year', getExistenceOfSalaryRecordBasedOnMonthAndYearForUserID)
 
 export default router;
