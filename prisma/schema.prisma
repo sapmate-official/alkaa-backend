@@ -21,6 +21,8 @@ model Organization {
   id                    String                 @id @default(cuid())
   name                  String
   industry              String?
+  logo                  String?
+  address               String?
   subscriptionPlan      String
   subscriptionStart     DateTime               @default(now())
   subscriptionEnd       DateTime?
@@ -35,6 +37,7 @@ model Organization {
   notificationTemplates NotificationTemplate[]
   roles                 Role[]
   users                 User[]
+  OrganizationSettings  OrganizationSettings[]
 }
 
 model Department {
@@ -102,6 +105,7 @@ model Permission {
   name          String
   description   String?
   module        String?
+  key           String?
   action        String
   createdAt     DateTime               @default(now())
   subcategoryId String?
@@ -324,6 +328,39 @@ model NotificationTemplate {
   @@unique([orgId, name])
 }
 
+// Example attendance verification notification template:
+// {
+//   id: "clx789ghi123",
+//   orgId: "org123",
+//   name: "AttendanceVerificationRequest",
+//   type: "IN_APP",
+//   subject: "Attendance Verification Required",
+//   content: "Employee {{employeeName}} has submitted attendance for a past date ({{attendanceDate}}). Session: {{sessionNumber}}, Check-in: {{checkInTime}}. Please verify this attendance record.",
+//   variables: { 
+//     "employeeName": "string", 
+//     "attendanceDate": "date", 
+//     "sessionNumber": "number", 
+//     "checkInTime": "datetime",
+//     "employeeId": "string",
+//     "attendanceId": "string"
+//   },
+//   createdAt: "2023-05-15T10:00:00Z",
+//   updatedAt: "2023-05-15T10:00:00Z"
+// }
+
+// Example seed data would look like:
+// {
+//   id: "clx123abc456",
+//   orgId: "org123",
+//   name: "LeaveApprovalNotification",
+//   type: "IN_APP",
+//   subject: "Leave Request Approved",
+//   content: "Hello {{userName}}, your leave request from {{startDate}} to {{endDate}} has been {{status}}.",
+//   variables: { "userName": "string", "startDate": "date", "endDate": "date", "status": "string" },
+//   createdAt: "2023-05-15T10:00:00Z",
+//   updatedAt: "2023-05-15T10:00:00Z"
+// }
+
 model Notification {
   id         String               @id @default(cuid())
   userId     String
@@ -338,6 +375,18 @@ model Notification {
 
   @@index([userId, isRead])
 }
+
+// Example mock data:
+// {
+//   id: "clx456def789",
+//   userId: "usr123",
+//   templateId: "tmpl456",
+//   content: "Hello John, your leave request from 2023-06-10 to 2023-06-15 has been approved.",
+//   isRead: false,
+//   createdAt: "2023-05-20T14:30:00Z",
+//   metadata: { "leaveRequestId": "leave789", "leaveType": "Annual Leave" },
+//   readAt: null
+// }
 
 model BackgroundJob {
   id           String    @id @default(cuid())
@@ -429,6 +478,15 @@ model UserDailyReport {
   attendance    AttendanceRecord @relation(fields: [attendanceId], references: [id])
 
   @@index([id, attendanceId])
+}
+
+model OrganizationSettings {
+  id           String       @id @default(cuid())
+  orgId        String
+  settings     Json
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  organization Organization @relation(fields: [orgId], references: [id])
 }
 
 enum UserStatus {

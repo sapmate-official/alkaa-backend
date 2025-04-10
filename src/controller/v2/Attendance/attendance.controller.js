@@ -386,6 +386,66 @@ export const getUserAttendance = async(req, res) => {
         if(!id){
             return res.status(400).json({error:"User id is required"})
         }
+
+        // If the requested user ID is not the current user's ID, check permissions
+        if (id !== req.user.id) {
+            // Check if user has necessary permissions
+            const userWithRoles = await prisma.user.findUnique({
+                where: { id: req.user.id },
+                include: {
+                    roles: {
+                        include: {
+                            role: {
+                                include: {
+                                    permissions: {
+                                        include: {
+                                            permission: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Check for view_all_user_attendance permission
+            const hasViewAllPermission = userWithRoles?.roles.some(userRole => 
+                userRole.role.permissions.some(permission => 
+                    permission.permission.key === 'view_all_user_attendance'
+                )
+            );
+
+            // Check for view_subordinates_attendance permission
+            const hasViewSubordinatesPermission = userWithRoles?.roles.some(userRole => 
+                userRole.role.permissions.some(permission => 
+                    permission.permission.key === 'view_subordinates_attendance'
+                )
+            );
+
+            // If user has view_all_user_attendance permission, they can view any user's attendance
+            if (hasViewAllPermission) {
+                // Allow access
+            } 
+            // If user has view_subordinates_attendance permission, check if the requested user is a subordinate
+            else if (hasViewSubordinatesPermission) {
+                // Check if the requested user is a subordinate of the current user
+                const isSubordinate = await prisma.user.findFirst({
+                    where: {
+                        id: id,
+                        managerId: req.user.id
+                    }
+                });
+
+                if (!isSubordinate) {
+                    return res.status(403).json({error:"Access denied. You can only view your own or your subordinates' attendance records."});
+                }
+            } else {
+                // User doesn't have permissions to view other users' attendance
+                return res.status(403).json({error:"Access denied. You can only view your own attendance records."});
+            }
+        }
+        
         const attendance = await prisma.attendanceRecord.findMany({
             where: {
                 userId: id,
@@ -748,6 +808,65 @@ export const createPastAttendance = async (req, res) => {
             console.error('Error creating daily report:', reportError);
             // Continue even if report creation fails
         }
+        const managerId = await prisma.user.findUnique({
+            where:{
+                id:user.id
+            },
+            select:{
+                managerId:true
+            }
+        })
+        const templateId = await prisma.notificationTemplate.findFirst({
+            where:{
+                id:"cm8yraup50001tlfobklj264q"
+            }
+        })
+        // Format the notification content using the template
+        const content = `Employee ${user.firstName} ${user.lastName} has submitted attendance for ${attendanceDate.toLocaleDateString()} (past date). Please verify this attendance record.`;
+
+        // Check if we have a valid template and manager
+        if (templateId && managerId.managerId) {
+            try {
+                // Create the notification in the database
+                const notification = await prisma.notification.create({
+                    data: {
+                        userId: managerId.managerId,
+                        templateId: templateId.id,
+                        content: content,
+                        isRead: false,
+                        metadata: {
+                            attendanceId: newAttendance.id,
+                            employeeId: user.id,
+                            type: "ATTENDANCE_VERIFICATION"
+                        }
+                    }
+                });
+                
+                console.log('Notification created:', notification);
+                
+                // Schedule as background job for push notification delivery
+                await prisma.backgroundJob.create({
+                    data: {
+                        type: "NOTIFICATION_DISPATCH",
+                        status: "PENDING",
+                        priority: 1,
+                        scheduledFor: new Date(),
+                        payload: {
+                            notificationId: notification.id,
+                            userId: managerId.managerId,
+                            title: "Attendance Verification Required",
+                            content: content,
+                            type: "PUSH"
+                        }
+                    }
+                });
+                
+                console.log('Background job created for notification dispatch');
+            } catch (notificationError) {
+                console.error('Error creating notification:', notificationError);
+                // Continue execution even if notification fails
+            }
+        }
 
         res.status(201).json({
             attendance: newAttendance,
@@ -759,3 +878,138 @@ export const createPastAttendance = async (req, res) => {
         res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
+export const getAllUserLiveAttendance = async (req, res) => {
+    try {
+        console.log('Fetching all users live attendance...');
+        
+        const userId = req.user.id;
+        //check for this user has permission to view all users attendance
+        const userWithRoles = await prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                roles: {
+                    include: {
+                        role: {
+                            include: {
+                                permissions: {
+                                    include: {
+                                        permission: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        // Check for view_all_user_attendance permission
+        const hasViewAllPermission = userWithRoles?.roles.some(userRole => 
+            userRole.role.permissions.some(permission => 
+                permission.permission.key === 'view_all_user_attendance'
+            )
+        );
+
+        if (!hasViewAllPermission) {
+            return res.status(403).json({error:"Access denied. You can only view your own attendance records."});
+        }
+        const today = new Date();
+        const startOfDay = new Date(today);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(today);
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        // Get all active users
+        const users = await prisma.user.findMany({
+            where: {
+                status: 'active',
+                orgId: req.user.orgId
+            },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                department: {
+                    select: {
+                        name: true
+                    }
+                },
+                roles: {
+                    select: {
+                        role: {
+                            select: {
+                                name: true
+                            }
+                        }
+                    }
+                },
+                attendanceRecords: {
+                    where: {
+                        date: {
+                            gte: startOfDay,
+                            lte: endOfDay
+                        }
+                    },
+                    orderBy: {
+                        sessionNumber: 'asc'
+                    }
+                }
+            }
+        });
+        
+        if (users.length === 0) {
+            return res.status(200).json({ 
+                users: [],
+                attendanceRecords: {}
+            });
+        }
+        
+        // Transform user data to match frontend expectations
+        const formattedUsers = users.map(user => ({
+            id: user.id,
+            name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+            email: user.email,
+            department: user.department?.name || 'Unassigned',
+            position: user.roles[0]?.role?.name || 'Unknown',
+            avatarUrl: user.avatarUrl
+        }));
+        
+        // Group attendance records by user ID
+        const attendanceRecords = users.reduce((acc, user) => {
+            if (user.attendanceRecords.length > 0) {
+                acc[user.id] = user.attendanceRecords.map(record => ({
+                    id: record.id,
+                    userId: record.userId,
+                    date: record.date,
+                    sessionNumber: record.sessionNumber,
+                    checkInTime: record.checkInTime,
+                    checkOutTime: record.checkOutTime || undefined,
+                    checkInLocation: record.checkInLocation,
+                    checkOutLocation: record.checkOutLocation || undefined,
+                    status: record.status,
+                    notes: record.notes,
+                    duration: record.duration,
+                    createdAt: record.createdAt,
+                    updatedAt: record.updatedAt,
+                    deviceInfo: record.deviceInfo,
+                    ipAddress: record.ipAddress,
+                    verificationStatus: record.verificationStatus
+                }));
+            } else {
+                acc[user.id] = [];
+            }
+            return acc;
+        }, {});
+        
+        console.log(`Found ${formattedUsers.length} users with attendance records`);
+        
+        res.status(200).json({
+            users: formattedUsers,
+            attendanceRecords
+        });
+
+    } catch (error) {
+            console.error('Error fetching attendance:', error);
+            res.status(500).json({ error: 'Failed to fetch attendance records' });
+    }
+}
