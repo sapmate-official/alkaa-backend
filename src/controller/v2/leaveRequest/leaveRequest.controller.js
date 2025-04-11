@@ -37,9 +37,17 @@ export const createLeaveRequest = async (req, res) => {
         const start = new Date(startDate);
         const end = new Date(endDate);
         
-        // If start and end date are same, count as 1 day
-        const requestedDays = start.getTime() === end.getTime() ? 1 : 
-            Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+        // Handle same-day leave request
+        let requestedDays;
+        
+        // If it's the same day (comparing date parts only, not time)
+        if (start.toDateString() === end.toDateString()) {
+            requestedDays = 1;
+        } else {
+            // For multi-day requests, count inclusive (including both start and end days)
+            const diffTime = Math.abs(end.getTime() - start.getTime());
+            requestedDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        }
         
         // Get user's leave balance for this leave type
         const userLeaveBalance = await prisma.leaveBalance.findFirst({
@@ -56,7 +64,7 @@ export const createLeaveRequest = async (req, res) => {
         // Check if enough balance is available
         if (userLeaveBalance.remainingDays < requestedDays) {
             return res.status(400).json({ 
-                error: `Insufficient leave balance. Available: ${userLeaveBalance.balance} days, Requested: ${requestedDays} days`
+                error: `Insufficient leave balance. Available: ${userLeaveBalance.remainingDays} days, Requested: ${requestedDays} days`
             });
         }
 

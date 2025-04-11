@@ -66,6 +66,15 @@ const createOrganization = [
                     settings
                 }
             });
+            const newSettings = await prisma.organizationSettings.create({
+                data: {
+                    organizationId: newOrganization.id,
+                    settings: {
+                        weekof: [0, 6]
+                    }   
+                }
+            });
+            console.log(newSettings);
             console.log(newOrganization);
             
             res.status(201).json(newOrganization);

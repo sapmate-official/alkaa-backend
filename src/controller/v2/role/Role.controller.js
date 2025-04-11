@@ -124,41 +124,62 @@ export const updateRole = async (req, res) => {
         // Check if role exists
         const existingRole = await prisma.role.findFirst({
             where: { id: roleId },
+            include: {
+                permissions: true
+            }
         });
 
         if (!existingRole) {
             return res.status(404).json({ message: "Role not found" });
         }
 
-        // Delete existing permissions
-        await prisma.rolePermission.deleteMany({
-            where: { roleId: roleId },
-        });
+        // Get current permission IDs
+        const currentPermissionIds = existingRole.permissions.map(p => p.permissionId);
+        // Get new permission IDs
+        const newPermissionIds = permissions.map(p => p.permissionId);
 
-        // Update role with new permissions
-        const updatedRole = await prisma.role.update({
-            where: { id: roleId },
-            data: {
-                name: name || existingRole.name,
-                description: description || existingRole.description,
-                isDefault: isDefault || existingRole.isDefault,
-                permissions: {
-                    create: permissions.map(permission => ({
-                        permission: {
-                            connect: { id: permission.permissionId }
+        // Find permissions to add and remove
+        const permissionsToAdd = newPermissionIds.filter(id => !currentPermissionIds.includes(id));
+        const permissionsToRemove = currentPermissionIds.filter(id => !newPermissionIds.includes(id));
+
+        // Update role and manage permissions in a transaction
+        const updatedRole = await prisma.$transaction(async (tx) => {
+            // Remove permissions that are no longer needed
+            if (permissionsToRemove.length > 0) {
+                await tx.rolePermission.deleteMany({
+                    where: {
+                        roleId,
+                        permissionId: { in: permissionsToRemove }
+                    }
+                });
+            }
+
+            // Add new permissions
+            for (const permissionId of permissionsToAdd) {
+                await tx.rolePermission.create({
+                    data: {
+                        roleId,
+                        permissionId
+                    }
+                });
+            }
+
+            // Update the role itself
+            return tx.role.update({
+                where: { id: roleId },
+                data: {
+                    name: name !== undefined ? name : existingRole.name,
+                    description: description !== undefined ? description : existingRole.description,
+                    isDefault: isDefault !== undefined ? isDefault : existingRole.isDefault,
+                },
+                include: {
+                    permissions: {
+                        include: {
+                            permission: true
                         }
-                    })
-                    )
-                }
-                
-            },
-            include: {
-                permissions: {
-                    include: {
-                        permission: true
                     }
                 }
-            }
+            });
         });
 
         return res.status(200).json(updatedRole);

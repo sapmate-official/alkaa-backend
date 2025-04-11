@@ -172,3 +172,45 @@ export const deleteDepartment = [
         }
     }
 ];
+
+// Update department head
+export const updateDepartmentHead = async (req, res) => {
+    const { id, userId } = req.params;
+    
+    try {
+        // Check if both department and user exist
+        const department = await prisma.department.findUnique({
+            where: { id }
+        });
+        
+        if (!department) {
+            return res.status(404).json({ error: 'Department not found' });
+        }
+        
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // Update the department with the new head
+        const updatedDepartment = await prisma.department.update({
+            where: { id },
+            data: { headId: userId },
+            include: {
+                organization: true,
+                departmentHead: true,
+                parentDepartment: true,
+                subDepartments: true,
+                users: true
+            }
+        });
+        
+        res.status(200).json(updatedDepartment);
+    } catch (error) {
+        console.error('Error updating department head:', error);
+        res.status(500).json({ error: error.message });
+    }
+};
