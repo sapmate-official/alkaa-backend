@@ -295,6 +295,23 @@ app.use((req, res, next) => {
   next();
 });
 
+// Add to your authentication middleware
+const tokenValidationMiddleware = (req, res, next) => {
+  // Log token details for debugging
+  logger.debug({
+    message: 'Token validation attempt',
+    tokenExists: !!req.cookies.accessToken,
+    tokenLength: req.cookies.accessToken ? req.cookies.accessToken.length : 0,
+    urlPath: req.path
+  });
+  
+  // Continue with your existing token validation
+  next();
+};
+
+// Apply this middleware to protected routes
+app.use('/api/v3', tokenValidationMiddleware);
+
 // Morgan HTTP request logger with Winston integration
 const morganFormat = process.env.NODE_ENV !== 'production' ? 'dev' : 'combined'
 app.use(morgan(morganFormat, {
