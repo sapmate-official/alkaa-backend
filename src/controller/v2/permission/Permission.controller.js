@@ -22,7 +22,7 @@ export const getPermissionById = async (req, res) => {
 };
 
 export const createPermission = async (req, res) => {
-    const { name, description, module, action } = req.body;
+    const { name, description, module, action,key } = req.body;
     try {
         const newPermission = await prisma.permission.create({
             data: {  name, description, module, action },
@@ -35,7 +35,7 @@ export const createPermission = async (req, res) => {
 
 export const updatePermission = async (req, res) => {
     const { id } = req.params;
-    const { name, description, module, action } = req.body;
+    const { name, description, module, action,key } = req.body;
     try {
         const updatedPermission = await prisma.permission.update({
             where: { id },

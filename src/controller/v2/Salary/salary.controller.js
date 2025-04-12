@@ -70,3 +70,22 @@ export const deleteSalary = async (req, res) => {
         res.status(500).json({ error: 'Failed to delete salary' });
     }
 };
+export const getExistenceOfSalaryRecordBasedOnMonthAndYearForUserID = async (req, res) => {
+    const { userId, month, year } = req.params;
+    try {
+        const salaryRecord = await prisma.salaryRecord.findFirst({
+            where: {
+                userId: userId,
+                month: parseInt(month),
+                year: parseInt(year)
+            }
+        });
+        if (salaryRecord) {
+            res.status(200).json({ exists: true });
+        } else {
+            res.status(200).json({ exists: false });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to check salary record existence' });
+    }
+}

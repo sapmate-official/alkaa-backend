@@ -246,14 +246,14 @@ const getPermissionById = async (req, res) => {
 
 const createPermission = async (req, res) => {
     try {
-        const { name, description, subcategoryId, action } = req.body;
+        const { name, description, subcategoryId, action, key } = req.body;
 
         if (!name || !subcategoryId || !action) {
             return res.status(400).json({ error: 'Name, subcategory ID, and action are required' });
         }
 
         const permission = await prisma.permission.create({
-            data: { name, description, subcategoryId, action }
+            data: { name, description, subcategoryId, action, key }
         });
 
         res.status(201).json(permission);
@@ -264,7 +264,7 @@ const createPermission = async (req, res) => {
 };
 const updatePermission = async (req, res) => {
     try {
-        const { name, subcategoryId, description, action } = req.body;
+        const { name, subcategoryId, description, action, key } = req.body;
 
         const permissionId = req.params.id;
 
@@ -288,9 +288,10 @@ const updatePermission = async (req, res) => {
             where: { id: req.params.id },
             data: {
                 name: name || permissionData.name,
-                subcategoryId: subcategoryId || permissionData.subcategoryId
-                , description: description || permissionData.description,
-                action: action || permissionData.action
+                subcategoryId: subcategoryId || permissionData.subcategoryId,
+                description: description || permissionData.description,
+                action: action || permissionData.action,
+                key: key || permissionData.key
             }
         });
 

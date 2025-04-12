@@ -10,6 +10,7 @@ export const getUser = async (req, res) => {
         const users = await prisma.user.findMany({ where: { orgId } ,
         include:{
             organization:true,
+            department:true,
             roles:{
                 include:{
                     role:{
@@ -221,3 +222,206 @@ export const updateUserRole = async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 }
+export const fetchAllSubordinates = async (req, res) => {
+    try {
+        let managerId = req.params.managerId;
+        
+        if(!managerId) {
+            if (!req.user || !req.user.id) {
+                console.log("User information not available in token");
+                return res.status(401).json({ error: 'User authentication required' });
+            }
+            
+            managerId = req.user.id;
+            console.log("Using ID from token:", managerId);
+        }
+        
+        // Check for view_subordinates_attendance permission
+        const userWithRoles = await prisma.user.findUnique({
+            where: { id: req.user.id },
+            include: {
+                roles: {
+                    include: {
+                        role: {
+                            include: {
+                                permissions: {
+                                    include: {
+                                        permission: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        const hasViewSubordinatesPermission = userWithRoles?.roles.some(userRole => 
+            userRole.role.permissions.some(permission => 
+                permission.permission.key === 'view_subordinates_attendance'
+            )
+        );
+
+        // If managerId is not the user's own ID, ensure they have permission to view subordinates
+        if (managerId !== req.user.id && !hasViewSubordinatesPermission) {
+            return res.status(403).json({ error: 'Access denied: Required permission not found' });
+        }
+
+        // Check if manager exists
+        const managerExists = await prisma.user.findUnique({
+            where: { id: managerId }
+        });
+        
+        if (!managerExists) {
+            console.log(`Manager with ID ${managerId} not found`);
+            return res.status(404).json({ error: 'Manager not found' });
+        }
+        
+        const subordinates = await prisma.user.findMany({
+            where: {
+                managerId: managerId,
+                status: 'active'
+            },
+            include: {
+                department: true,
+                roles: {
+                    include: {
+                        role: true
+                    }
+                }
+            }
+        });
+        
+        res.status(200).json(subordinates);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: 'Internal Server Error', error });
+    }
+}
+
+export const fetchAllUsersFromOrg = async (req, res) => {
+    try {
+        // Check if the user has necessary permissions
+        const { user } = req;
+        if (!user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        // Check for permissions
+        const userWithRoles = await prisma.user.findUnique({
+            where: { id: user.id },
+            include: {
+                roles: {
+                    include: {
+                        role: {
+                            include: {
+                                permissions: {
+                                    include: {
+                                        permission: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Check if user has view_all_user_attendance permission
+        const hasViewAllPermission = userWithRoles?.roles.some(userRole => 
+            userRole.role.permissions.some(permission => 
+                permission.permission.key === 'view_all_user_attendance'
+            )
+        );
+
+        if (!hasViewAllPermission) {
+            return res.status(403).json({ error: 'Access denied: Required permission not found' });
+        }
+
+        // Use orgId from params or from the authenticated user
+        const orgId = req.params.orgId || user.orgId;
+        
+        const users = await prisma.user.findMany({
+            where: {
+                orgId: orgId,
+                status: 'active'
+            },
+            include: {
+                department: true,
+                roles: {
+                    include: {
+                        role: true
+                    }
+                }
+            }
+        });
+        
+        res.status(200).json(users);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: 'Internal Server Error', error });
+    }
+}
+
+export const fetchManagers = async (req, res) => {
+
+    // manager are those whose has permission of manager sub category level of all category ..
+    try {
+        const { orgId } = req.params;
+        
+        if (!orgId) {
+            return res.status(400).json({ error: 'Organization ID is required' });
+        }
+        
+        // Find users with manager permissions
+        const managersWithPermissions = await prisma.user.findMany({
+            where: {
+                orgId,
+                status: 'active',
+                
+            },
+            include: {
+                department: true,
+            }
+        });
+        
+        if (!managersWithPermissions.length) {
+            return res.status(200).json([]);
+        }
+        
+        return res.status(200).json(managersWithPermissions);
+    } catch (error) {
+        console.error("Error fetching managers:", error);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+}
+export const updateUserDepartment = async (req, res) => {
+    const { userId, departmentId } = req.params;
+    
+    try {
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: { departmentId },
+            include: {
+                department: true
+            }
+        });
+        
+        res.status(200).json({
+            message: "User department updated successfully",
+            user: updatedUser
+        });
+    } catch (error) {
+        console.error("Error updating user department:", error);
+        
+        if (error.code === 'P2025') {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        if (error.code === 'P2003') {
+            return res.status(400).json({ error: 'Invalid department ID' });
+        }
+        
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};

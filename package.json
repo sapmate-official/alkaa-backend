@@ -25,6 +25,7 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "nodemon": "^3.1.9",
+    "pdfkit": "^0.13.0",
     "prisma": "^6.2.1",
     "resend": "^4.1.1",
     "serverless-http": "^3.2.0",
