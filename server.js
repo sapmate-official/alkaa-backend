@@ -280,6 +280,21 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 
+// Add in your middleware or authentication-related code
+app.use((req, res, next) => {
+  // Clear any duplicate tokens
+  if (req.cookies.accessToken) {
+    res.clearCookie('accessToken');
+    res.cookie('accessToken', req.cookies.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      domain: process.env.NODE_ENV === 'production' ? '.alkaa.online' : 'localhost'
+    });
+  }
+  next();
+});
+
 // Morgan HTTP request logger with Winston integration
 const morganFormat = process.env.NODE_ENV !== 'production' ? 'dev' : 'combined'
 app.use(morgan(morganFormat, {
