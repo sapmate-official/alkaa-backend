@@ -231,38 +231,28 @@ const validatetoken = async (req, res) => {
     }
     res.status(200).json({ message: "Token is valid", user: data });
 }
+// Update the refreshToken function
 const refreshToken = async (req, res) => {
     try {
         const { refreshToken } = req.body;
-        let incomingRefreshToken = req.cookies.refreshToken || req.headers.authorization?.split(' ')[1];
-
-
-        if (!incomingRefreshToken && !refreshToken) {
-            return res
-                .status(401)
-                .json({ message: "Access denied. No token provided." });
+        
+        if (!refreshToken) {
+            return res.status(401).json({ message: "Refresh token is required." });
         }
 
-
-        if (!incomingRefreshToken) {
-            incomingRefreshToken = refreshToken;
-        }
-
-
+        // Verify refresh token
         const decodedToken = jwt.verify(
-            incomingRefreshToken,
+            refreshToken,
             process.env.REFRESH_TOKEN_SECRET
         );
 
-
+        // Find user
         const user = await findUserById(decodedToken.email);
-        if (!user || user.refreshToken !== incomingRefreshToken) {
-            return res
-                .status(403)
-                .json({ message: "Access denied. Invalid Token." });
+        if (!user || user.refreshToken !== refreshToken) {
+            return res.status(403).json({ message: "Invalid refresh token." });
         }
 
-
+        // Generate new tokens
         const tokens = generateTokens(
             user.email,
             user.id,
@@ -270,47 +260,20 @@ const refreshToken = async (req, res) => {
             "7d"
         );
 
-        const newaccessToken = tokens.accessToken;
-        const newrefreshToken = tokens.refreshToken;
-        console.log(newaccessToken, newrefreshToken);
+        // Update user's refresh token
+        await updateUser(user.email, { refreshToken: tokens.refreshToken });
 
-
-        await updateUser(user.email, { refreshToken: newrefreshToken });
-
-
-        res.cookie("refreshToken", newrefreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",  // Changed from strict to lax
-            maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days in milliseconds
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
-        });
-
-
-        res.cookie("accessToken", newaccessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",  // Changed from strict to lax
-            maxAge: 2 * 24 * 60 * 60 * 1000,  // 2 days in milliseconds
-            expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
-        });
-
-
+        // Return new tokens
         return res.status(200).json({
-            message: "Access Token Refreshed Successfully",
-            refreshToken: newrefreshToken,
-            accessToken: newaccessToken,
+            message: "Tokens refreshed successfully",
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken
         });
     } catch (error) {
-        console.log(error);
-
+        console.error("Token refresh error:", error);
         return res.status(403).json({ message: "Invalid refresh token." });
     }
-}
+};
 const logout = async (req, res) => {
     try {
         // Get access token from Authorization header
