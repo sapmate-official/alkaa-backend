@@ -29,6 +29,7 @@ const setPassword = async (req, res) => {
 
     }
 }
+
 const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -45,56 +46,59 @@ const loginUser = async (req, res) => {
         });
         console.log(superAdmin);
         if (superAdmin) {
-            const isPasswordValid = await bcrypt.compare(password, superAdmin.hashedPassword);
-            console.log(isPasswordValid);   
-            if (!isPasswordValid) {
-                return res.status(401).send({
-                    message: "Invalid credentials",
-                }); 
-            }
+            return res.status(401).send({
+                message: "Super Admins cannot login through this endpoint",
+            });
+            // const isPasswordValid = await bcrypt.compare(password, superAdmin.hashedPassword);
+            // console.log(isPasswordValid);   
+            // if (!isPasswordValid) {
+            //     return res.status(401).send({
+            //         message: "Invalid credentials",
+            //     }); 
+            // }
             
-            const { accessToken, refreshToken } = generateTokens(
-                superAdmin.email,
-                superAdmin.id,
-                "2d",
-                "7d"
-            );
-            const puttoken = await prisma.superAdmin.update({
-                where: {
-                    email: email
-                },
-                data: {
-                    refreshToken: refreshToken,
-                }
-            })
-            res.cookie("refreshToken", refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",  // Changed from strict to lax for better cross-site compatibility
-                maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days in milliseconds
-                expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-                path: "/",
-                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
-            });
-            res.cookie("accessToken", accessToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",  // Changed from strict to lax
-                maxAge: 2 * 24 * 60 * 60 * 1000,  // 2 days in milliseconds
-                expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-                path: "/",
-                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
-            });
-            return res.status(200).send({
-                message: "Super Admin logged in successfully",
-                userData: {
-                    id: superAdmin.id,
-                    email: superAdmin.email,
-                    name: superAdmin.name,
-                },
-                refreshToken,
-                accessToken,
-            });
+            // const { accessToken, refreshToken } = generateTokens(
+            //     superAdmin.email,
+            //     superAdmin.id,
+            //     "2d",
+            //     "7d"
+            // );
+            // const puttoken = await prisma.superAdmin.update({
+            //     where: {
+            //         email: email
+            //     },
+            //     data: {
+            //         refreshToken: refreshToken,
+            //     }
+            // })
+            // res.cookie("refreshToken", refreshToken, {
+            //     httpOnly: true,
+            //     secure: process.env.NODE_ENV === "production",
+            //     sameSite: "lax",  // Changed from strict to lax for better cross-site compatibility
+            //     maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days in milliseconds
+            //     expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+            //     path: "/",
+            //     domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
+            // });
+            // res.cookie("accessToken", accessToken, {
+            //     httpOnly: true,
+            //     secure: process.env.NODE_ENV === "production",
+            //     sameSite: "lax",  // Changed from strict to lax
+            //     maxAge: 2 * 24 * 60 * 60 * 1000,  // 2 days in milliseconds
+            //     expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
+            //     path: "/",
+            //     domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
+            // });
+            // return res.status(200).send({
+            //     message: "Super Admin logged in successfully",
+            //     userData: {
+            //         id: superAdmin.id,
+            //         email: superAdmin.email,
+            //         name: superAdmin.name,
+            //     },
+            //     refreshToken,
+            //     accessToken,
+            // });
         }
 
         const user = await prisma.user.findFirst({

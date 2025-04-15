@@ -1,6 +1,7 @@
 import express from 'express'
 import { setPassword,loginUser, validatetoken, refreshToken, logout,Profiledetails ,updateProfile } from '../../controller/v1/general/general.controller.js'
 import validateToken from '../../middleware/validateToken.js'
+import { loginSuperAdmin } from '../../controller/v2/superAdmin/superAdmin.controller.js'
 const router = express.Router()
 
 router.post("/set-password",setPassword)

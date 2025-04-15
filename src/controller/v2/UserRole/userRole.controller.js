@@ -24,11 +24,30 @@ export const getUserRoleById = async (req, res) => {
 export const createUserRole = async (req, res) => {
     const { userId, roleId } = req.body;
     try {
+        const roleName = await prisma.role.findUnique({ where: { id: roleId }, select: { name: true } });
+        if (!roleName) {
+            return res.status(404).json({ error: "Role not found" });
+        }
+        
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: {
+            orgId: true,
+        } });
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+        
+        if (roleName.name === "Org_Admin") {
+            await prisma.organization_admin.create({
+                data: { adminId: userId, orgId: user.orgId },
+            })
+        }
+        
         const newUserRole = await prisma.userRole.create({
             data: { userId, roleId },
         });
         res.status(201).json(newUserRole);
     } catch (error) {
+        console.error("Error creating user role:", error);
         res.status(500).json({ error: "Failed to create user role" });
     }
 };

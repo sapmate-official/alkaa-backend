@@ -38,6 +38,17 @@ model Organization {
   roles                 Role[]
   users                 User[]
   OrganizationSettings  OrganizationSettings[]
+  Organization_admin    Organization_admin[]
+}
+
+model Organization_admin {
+  id           String       @id @default(cuid())
+  orgId        String
+  adminId      String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  organization Organization @relation(fields: [orgId], references: [id])
+  admin_user   User         @relation(fields: [adminId], references: [id])
 }
 
 model Department {
@@ -125,45 +136,46 @@ model RolePermission {
 }
 
 model User {
-  id                   String             @id @default(cuid())
+  id                   String               @id @default(cuid())
   orgId                String
   departmentId         String?
   managerId            String?
-  email                String             @unique
+  email                String
   hashedPassword       String?
   refreshToken         String?
-  status               UserStatus         @default(active)
-  verificationToken    String?            @unique
-  annualPackage        Float?             @default(0.0)
-  monthlySalary        Float?             @default(0.0)
-  hiredDate            DateTime?          @default(now())
+  status               UserStatus           @default(active)
+  verificationToken    String?              @unique
+  annualPackage        Float?               @default(0.0)
+  monthlySalary        Float?               @default(0.0)
+  hiredDate            DateTime?            @default(now())
   dateOfBirth          DateTime?
   address              String?
   adharNumber          String?
   panNumber            String?
   mobileNumber         String?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
   employeeId           String?
   terminationDate      DateTime?
-  firstName            String?            @default("unknown")
-  lastName             String?            @default("unknown")
+  firstName            String?              @default("unknown")
+  lastName             String?              @default("unknown")
   attendanceRecords    AttendanceRecord[]
   bankDetails          BankDetails?
-  Department           Department[]       @relation("DepartmentHead")
+  Department           Department[]         @relation("DepartmentHead")
   leaveBalances        LeaveBalance[]
   leaveRequests        LeaveRequest[]
   notifications        Notification[]
   PushSubscription     PushSubscription[]
   salaryParameter      SalaryParameter?
   salaryRecords        SalaryRecord[]
-  receivedTransactions TransactionTable[] @relation("ReceiverTransaction")
-  sentTransactions     TransactionTable[] @relation("SenderTransaction")
-  department           Department?        @relation("UserDepartment", fields: [departmentId], references: [id])
-  manager              User?              @relation("UserManager", fields: [managerId], references: [id])
-  subordinates         User[]             @relation("UserManager")
-  organization         Organization       @relation(fields: [orgId], references: [id])
+  receivedTransactions TransactionTable[]   @relation("ReceiverTransaction")
+  sentTransactions     TransactionTable[]   @relation("SenderTransaction")
+  department           Department?          @relation("UserDepartment", fields: [departmentId], references: [id])
+  manager              User?                @relation("UserManager", fields: [managerId], references: [id])
+  subordinates         User[]               @relation("UserManager")
+  organization         Organization         @relation(fields: [orgId], references: [id])
   roles                UserRole[]
+  Organization_admin   Organization_admin[]
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])

@@ -66,7 +66,8 @@ export const getRoleById = async (req, res) => {
 export const createRole = async (req, res) => {
     try {
         const { orgId, name, description, permissions = [], isDefault = false } = req.body;
-
+         console.log(req.body);
+         
         if (!orgId || !name) {
             return res.status(400).json({ message: "Organization ID and role name are required" });
         }
@@ -133,56 +134,44 @@ export const updateRole = async (req, res) => {
             return res.status(404).json({ message: "Role not found" });
         }
 
-        // Get current permission IDs
-        const currentPermissionIds = existingRole.permissions.map(p => p.permissionId);
-        // Get new permission IDs
-        const newPermissionIds = permissions.map(p => p.permissionId);
-
-        // Find permissions to add and remove
-        const permissionsToAdd = newPermissionIds.filter(id => !currentPermissionIds.includes(id));
-        const permissionsToRemove = currentPermissionIds.filter(id => !newPermissionIds.includes(id));
-
-        // Update role and manage permissions in a transaction
-        const updatedRole = await prisma.$transaction(async (tx) => {
-            // Remove permissions that are no longer needed
-            if (permissionsToRemove.length > 0) {
-                await tx.rolePermission.deleteMany({
-                    where: {
-                        roleId,
-                        permissionId: { in: permissionsToRemove }
-                    }
-                });
+        // First, update the role basic information
+        const updatedRole = await prisma.role.update({
+            where: { id: roleId },
+            data: {
+                name: name !== undefined ? name : existingRole.name,
+                description: description !== undefined ? description : existingRole.description,
+                isDefault: isDefault !== undefined ? isDefault : existingRole.isDefault,
             }
-
-            // Add new permissions
-            for (const permissionId of permissionsToAdd) {
-                await tx.rolePermission.create({
-                    data: {
-                        roleId,
-                        permissionId
-                    }
-                });
-            }
-
-            // Update the role itself
-            return tx.role.update({
-                where: { id: roleId },
-                data: {
-                    name: name !== undefined ? name : existingRole.name,
-                    description: description !== undefined ? description : existingRole.description,
-                    isDefault: isDefault !== undefined ? isDefault : existingRole.isDefault,
-                },
-                include: {
-                    permissions: {
-                        include: {
-                            permission: true
-                        }
-                    }
-                }
-            });
         });
 
-        return res.status(200).json(updatedRole);
+        // Then, delete all current permissions
+        await prisma.rolePermission.deleteMany({
+            where: { roleId: roleId }
+        });
+
+        // Finally, add all new permissions
+        if (permissions.length > 0) {
+            await prisma.rolePermission.createMany({
+                data: permissions.map(p => ({
+                    roleId: roleId,
+                    permissionId: p.permissionId
+                }))
+            });
+        }
+
+        // Get the updated role with its permissions
+        const finalRole = await prisma.role.findFirst({
+            where: { id: roleId },
+            include: {
+                permissions: {
+                    include: {
+                        permission: true
+                    }
+                }
+            }
+        });
+
+        return res.status(200).json(finalRole);
     } catch (error) {
         console.error("Error updating role:", error);
         return res.status(500).json({ message: "Internal server error" });
