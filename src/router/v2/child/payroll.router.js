@@ -970,7 +970,7 @@ router.get('/admin/all-employees/:orgId', validateToken, async (req, res) => {
     
     const hasViewAllPermission = userWithRoles.roles.some(userRole => 
       userRole.role.permissions.some(perm => 
-        perm.permission?.name === "payroll.view_all"
+        perm.permission?.key === "view_salary_slip_of_all"
       )
     );
     
@@ -1088,7 +1088,7 @@ router.get('/employee/:employeeId', validateToken, async (req, res) => {
     const isManager = employee.managerId === req.user.id;
     const hasViewAllPermission = userWithRoles.roles.some(userRole => 
       userRole.role.permissions.some(perm => 
-        perm.permission?.name === "payroll.view_all"
+        perm.permission?.key === "view_salary_slip_of_all"
       )
     );
     

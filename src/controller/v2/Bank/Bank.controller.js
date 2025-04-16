@@ -47,19 +47,69 @@ export const createBank = async (req, res) => {
 };
 
 export const updateBank = async (req, res) => {
-    const { id, accountHolder, accountNumber, ifscCode, bankName } = req.body;
+    const { userId, accountHolder, accountNumber, ifscCode, bankName } = req.body;
+    
+    // Validation
+    if (!userId) {
+        return res.status(400).json({ error: 'User ID is required' });
+    }
+    
+    if (!accountHolder || accountHolder.trim() === '') {
+        return res.status(400).json({ error: 'Account holder name is required' });
+    }
+    
+    if (!accountNumber || !/^\d{9,18}$/.test(accountNumber)) {
+        return res.status(400).json({ error: 'Valid account number is required (9-18 digits)' });
+    }
+    
+    if (!ifscCode || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode)) {
+        return res.status(400).json({ error: 'Valid IFSC code is required (format: ABCD0XXXXXX)' });
+    }
+    
+    if (!bankName || bankName.trim() === '') {
+        return res.status(400).json({ error: 'Bank name is required' });
+    }
+    
     try {
-        const updatedBank = await prisma.bankDetails.update({
-            where: { id },
-            data: {
-                accountHolder,
-                accountNumber,
-                ifscCode,
-                bankName,
-            },
+        // First check if bank details exist for this user
+        const existingBank = await prisma.bankDetails.findUnique({
+            where: { userId }
         });
-        res.status(200).json(updatedBank);
+        
+        let result;
+        
+        if (existingBank) {
+            // Update if exists
+            result = await prisma.bankDetails.update({
+                where: { userId },
+                data: {
+                    accountHolder,
+                    accountNumber,
+                    ifscCode,
+                    bankName,
+                }
+            });
+        } else {
+            // Create if doesn't exist
+            result = await prisma.bankDetails.create({
+                data: {
+                    userId,
+                    accountHolder,
+                    accountNumber,
+                    ifscCode,
+                    bankName,
+                }
+            });
+        }
+        
+        res.status(200).json(result);
     } catch (error) {
+        console.log(error);
+        
+        if (error.code === 'P2025') {
+            return res.status(404).json({ error: 'Bank details not found for this user' });
+        }
+        
         res.status(500).json({ error: 'Failed to update bank details' });
     }
 };

@@ -47,7 +47,7 @@ const checkUserRoles = async (req, res, next) => {
         // Check if the user is an org admin based on role permissions
         const isOrgAdmin = userWithRoles.roles.some(userRole => 
             userRole.role.permissions.some(perm => 
-                perm.permission?.name === "payroll.view_all"
+                perm.permission?.key === "view_salary_slip_of_all"
             )
         );
         
