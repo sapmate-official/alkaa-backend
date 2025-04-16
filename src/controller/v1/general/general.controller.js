@@ -164,14 +164,16 @@ const loginUser = async (req, res) => {
             "2d",
             "7d"
         );
-        const puttoken = await prisma.user.update({
-            where: {
-                email: email
-            },
-            data: {
-                refreshToken: refreshToken,
-            }
-        })
+        if(user){
+            await prisma.user.update({
+                where: {
+                    id: user.id
+                },
+                data: {
+                    refreshToken: refreshToken,
+                }
+            })
+        }
 
         res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
@@ -209,31 +211,62 @@ const loginUser = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 }
+// Update the validatetoken function
 const validatetoken = async (req, res) => {
+    try {
+        // req.user should be available from the middleware
+        if (!req.user || !req.user.email) {
+            return res.status(401).json({ message: "Invalid user authentication" });
+        }
 
-    let data = await prisma.user.findUnique({
-        where: { email: req.user.email }, include: {
-            organization: {
-                select: {
-                    id: true,
-                    isActive: true
-                }
-            },
-            Department: {
-                select: {
-                    id: true
+        let data = await prisma.user.findFirst({
+            where: { email: req.user.email }, 
+            include: {
+                organization: {
+                    select: {
+                        id: true,
+                        isActive: true,
+                        name: true
+                    }
+                },
+                Department: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
                 }
             }
+        });
+        
+        if(data?.organization?.isActive === false){
+            return res.status(401).json({ message: "Organization is inactive" });
         }
-    });
-    console.log(data);
-    if(data?.organization?.isActive == false){
-        return res.status(401).json({ message: "Organization is inactive" });
+        
+        if (!data) {
+            data = await prisma.superAdmin.findUnique({ 
+                where: { email: req.user.email },
+                select: {
+                    id: true,
+                    email: true,
+                    name: true
+                }
+            });
+            
+            if (!data) {
+                return res.status(404).json({ message: "User not found" });
+            }
+        }
+        
+        // Return successful response with user data
+        res.status(200).json({ 
+            message: "Token is valid", 
+            user: data,
+            authenticated: true 
+        });
+    } catch (error) {
+        console.error("Validate token error:", error);
+        res.status(500).json({ message: "Error validating token", error: error.message });
     }
-    if (!data) {
-        data = await prisma.superAdmin.findUnique({ where: { email: req.user.email } });
-    }
-    res.status(200).json({ message: "Token is valid", user: data });
 }
 // Update the refreshToken function
 const refreshToken = async (req, res) => {

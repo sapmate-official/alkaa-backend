@@ -1,18 +1,26 @@
 import jwt from "jsonwebtoken";
 
 export default function validateToken(req, res, next) {
-    // Get token from Authorization header only
-    const authHeader = req.header("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({ 
-            message: "Access denied. No token provided.",
-            expired: false
-        });
-    }
-    
-    const token = authHeader.split(" ")[1];
-    
     try {
+        // Get token from multiple sources (header or cookie)
+        const authHeader = req.header("Authorization");
+        const cookieToken = req.cookies?.accessToken;
+        
+        let token;
+        
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+            token = authHeader.split(" ")[1];
+        } else if (cookieToken) {
+            token = cookieToken;
+        }
+        
+        if (!token) {
+            return res.status(401).json({ 
+                message: "Access denied. No token provided.",
+                expired: false
+            });
+        }
+        
         // Add clock tolerance to handle slight time differences
         const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, {
             clockTolerance: 60 // 60 seconds tolerance
@@ -42,12 +50,19 @@ export default function validateToken(req, res, next) {
     }
 }
 
-export const validateSuperAdminTokenMiddleware = (req,res,next)=>{
-    let token = req.cookies.accessToken || req.headers["authorization"]?.split(" ")[1]
-    if(!token) return res.status(401).json({message:"Token not found"})
-    jwt.verify(token,process.env.ACCESS_TOKEN_SECRET,(err,decoded)=>{
-        if(err) return res.status(403).json({message:"Invalid token"})
-        req.user = decoded
-        next()
-    })
+export const validateSuperAdminTokenMiddleware = (req, res, next) => {
+    try {
+        let token = req.cookies.accessToken || req.headers["authorization"]?.split(" ")[1];
+        
+        if(!token) return res.status(401).json({message: "Token not found"});
+        
+        jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+            if(err) return res.status(403).json({message: "Invalid token"});
+            req.user = decoded;
+            next();
+        });
+    } catch (error) {
+        console.error("Super admin token validation error:", error);
+        return res.status(500).json({message: "Token validation error"});
+    }
 }
