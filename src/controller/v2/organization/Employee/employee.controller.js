@@ -196,12 +196,12 @@ const createEmployee = async (req, res) => {
                 ...(annualPackage || monthlySalary ? {
                     salaryParameter: {
                         create: {
-                            hraPercentage: hraPercentage || 40,
-                            daPercentage: daPercentage || 10,
-                            taPercentage: taPercentage || 10,
-                            pfPercentage: pfPercentage || 12,
-                            taxPercentage: taxPercentage || 10,
-                            insuranceFixed: insuranceFixed || 1000
+                            hraPercentage: hraPercentage ?? 40,
+                            daPercentage: daPercentage ?? 10,
+                            taPercentage: taPercentage ?? 10,
+                            pfPercentage: pfPercentage ?? 12,
+                            taxPercentage: taxPercentage ?? 10,
+                            insuranceFixed: insuranceFixed ?? 1000
                         }
                     }
                 } : {})
