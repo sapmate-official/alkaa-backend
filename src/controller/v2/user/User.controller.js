@@ -292,6 +292,155 @@ export const deleteUser = async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+
+export const hardDeleteUser = async (req, res) => {
+    const { id } = req.body;
+    
+    if (!id) {
+        return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    try {
+        // Check if user exists
+        const userExists = await prisma.user.findUnique({
+            where: { id },
+            include: {
+                roles: true,
+                department: true,
+                organization: true
+            }
+        });
+
+        if (!userExists) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Use Prisma transaction to ensure all operations are atomic
+        const result = await prisma.$transaction(async (prismaClient) => {
+            console.log(`Starting hard delete for user ${id} (${userExists.firstName} ${userExists.lastName})`);
+            
+            // Delete Organization_admin records
+            await prismaClient.organization_admin.deleteMany({
+                where: { adminId: id }
+            });
+            
+            // Delete all UserRoles
+            await prismaClient.userRole.deleteMany({
+                where: { userId: id }
+            });
+
+            // Delete PushSubscriptions
+            await prismaClient.pushSubscription.deleteMany({
+                where: { userId: id }
+            });
+
+            // Delete all Notifications
+            await prismaClient.notification.deleteMany({
+                where: { userId: id }
+            });
+
+            // Delete all LeaveBalances
+            await prismaClient.leaveBalance.deleteMany({
+                where: { userId: id }
+            });
+
+            // Delete all LeaveRequests
+            await prismaClient.leaveRequest.deleteMany({
+                where: { userId: id }
+            });
+
+            // Delete BankDetails if exists
+            await prismaClient.bankDetails.deleteMany({
+                where: { userId: id }
+            });
+
+            // Delete SalaryParameter if exists
+            await prismaClient.salaryParameter.deleteMany({
+                where: { userId: id }
+            });
+
+            // Process SalaryRecords and their transactions
+            const salaryRecords = await prismaClient.salaryRecord.findMany({
+                where: { userId: id },
+                select: { id: true }
+            });
+
+            for (const record of salaryRecords) {
+                await prismaClient.salaryTransactionTable.deleteMany({
+                    where: { salaryRecordId: record.id }
+                });
+            }
+
+            await prismaClient.salaryRecord.deleteMany({
+                where: { userId: id }
+            });
+
+            // For UserDailyReports connected to attendances
+            const attendances = await prismaClient.attendanceRecord.findMany({
+                where: { userId: id },
+                select: { id: true }
+            });
+
+            for (const attendance of attendances) {
+                await prismaClient.userDailyReport.deleteMany({
+                    where: { attendanceId: attendance.id }
+                });
+            }
+
+            // Delete attendance records
+            await prismaClient.attendanceRecord.deleteMany({
+                where: { userId: id }
+            });
+
+            // Check and update departments where user is head
+            await prismaClient.department.updateMany({
+                where: { headId: id },
+                data: { headId: null }
+            });
+
+            // Update users who had this user as manager
+            await prismaClient.user.updateMany({
+                where: { managerId: id },
+                data: { managerId: null }
+            });
+
+            // Delete all transactions
+            await prismaClient.transactionTable.deleteMany({
+                where: {
+                    OR: [
+                        { senderUserId: id },
+                        { recieverUserId: id }
+                    ]
+                }
+            });
+
+            // Finally delete the user
+            const deletedUser = await prismaClient.user.delete({
+                where: { id }
+            });
+
+            return deletedUser;
+        });
+
+        console.log(`User ${id} successfully hard deleted`);
+        res.status(200).json({ 
+            message: 'User and all related data successfully deleted',
+            deletedUser: {
+                id: result.id,
+                email: result.email,
+                firstName: result.firstName,
+                lastName: result.lastName
+            }
+        });
+    } catch (error) {
+        console.error('Error during hard delete:', error);
+        res.status(500).json({ 
+            error: 'Internal Server Error during hard delete operation',
+            details: error.message 
+        });
+    }
+};
+
 export const updateUserRole = async (req, res) => {
     const { userId,prevRole, roleId } = req.params;
     try {
