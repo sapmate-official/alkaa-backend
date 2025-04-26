@@ -7,7 +7,7 @@
     "start": "node server.js",
     "dev": "nodemon server",
     "postinstall": "prisma generate",
-    "vercel-build": "prisma generate",
+    "vercel-build": "prisma generate && echo 'Build completed'",
     "build": "prisma generate"
   },
   "author": "",
