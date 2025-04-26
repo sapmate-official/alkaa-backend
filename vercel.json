@@ -1,21 +1,18 @@
 {
-    "version": 2,
-    "builds": [
-      {
-        "src": "server.js",
-        "use": "@vercel/node"
-      }
-    ],
-    "routes": [
-      {
-        "src": "/(.*)",
-        "dest": "server.js"
-      }
-    ],
-    "functions": {
-      "server.js": {
-        "memory": 1024,
-        "maxDuration": 10
-      }
-    }
+  "version": 2,
+
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "env": {
+    "DATABASE_URL": "postgresql://alkaa-prod_owner:npg_pctSUr5ObT1G@ep-wild-pond-a1rxcsqu-pooler.ap-southeast-1.aws.neon.tech/alkaa-prod?sslmode=require",
+    "RESEND_API_KEY": "re_acC12Uuj_M6oBLoEuaAC4i2nhz2mVNo5i", 
+    "FRONTEND_DOMAIN": "http://sapmate-employee-bucket.s3-website.ap-south-1.amazonaws.com/",
+    "SENDER_EMAIL": "parambrataghosh@sapmate.com",
+    "CLIENT_URL": "https://alkaa.online",
+    "REFRESH_TOKEN_SECRET": "7e7b1b1b-7b7b-4b7b-8b7b-7b7b7b7b7b7b",
+    "ACCESS_TOKEN_SECRET": "7e7b1b1b2n-7b7b-4b7b-8b7b-7b7b7b7b7b7b",
+    "PORT": "3000",
+    "VAPID_PUBLIC_KEY": "BDAtRb_FqCNC-tFemxcjRA1fBRvWl2eWB0Y-_8J4s30O-qeNk47XrhIiASjOrF5uB8T56Hff8tUnAVFpTCC-_UM",
+    "VAPID_PRIVATE_KEY": "Kw3HbLEW0N2Yc4U4w6sGYcVZ38ST3BrA9Jph64mXKHA",
+    "NODE_ENV": "production"
   }
+}

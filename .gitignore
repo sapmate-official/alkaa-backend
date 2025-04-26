@@ -7,3 +7,4 @@ localhost.pem
 # Local Netlify folder
 .netlify
 logs
+.vercel
