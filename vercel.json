@@ -1,7 +1,36 @@
 {
   "version": 2,
-
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/v1/(.*)",
+      "dest": "server.js"
+    },
+    {
+      "src": "/api/v2/(.*)",
+      "dest": "server.js"
+    },
+    {
+      "src": "/api/v3/(.*)",
+      "dest": "server.js"
+    },
+    {
+      "src": "/public/(.*)",
+      "dest": "public/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
+    }
+  ],
+  "buildCommand": "prisma generate",
+  "installCommand": "npm install",
+  "outputDirectory": ".",
   "env": {
     "DATABASE_URL": "postgresql://alkaa-prod_owner:npg_pctSUr5ObT1G@ep-wild-pond-a1rxcsqu-pooler.ap-southeast-1.aws.neon.tech/alkaa-prod?sslmode=require",
     "RESEND_API_KEY": "re_acC12Uuj_M6oBLoEuaAC4i2nhz2mVNo5i", 
