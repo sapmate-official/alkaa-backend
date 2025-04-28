@@ -12,6 +12,7 @@ export const allowedOrigins = [
     "https://www.alkaa.sapmate.com",
     "https://www.alkaa.online",
     "https://api.alkaa.online" ,
+    "https://alkaa.vercel.app/"
 ]
 
 export const corsOptions = {
