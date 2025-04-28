@@ -8,40 +8,10 @@
   ],
   "routes": [
     {
-      "src": "/api/v1/(.*)",
-      "dest": "server.js"
-    },
-    {
-      "src": "/api/v2/(.*)",
-      "dest": "server.js"
-    },
-    {
-      "src": "/api/v3/(.*)",
-      "dest": "server.js"
-    },
-    {
-      "src": "/public/(.*)",
-      "dest": "public/$1"
-    },
-    {
       "src": "/(.*)",
       "dest": "server.js"
     }
   ],
-  "buildCommand": "prisma generate",
-  "installCommand": "npm install",
-  "outputDirectory": ".",
-  "env": {
-    "DATABASE_URL": "postgresql://alkaa-prod_owner:npg_pctSUr5ObT1G@ep-wild-pond-a1rxcsqu-pooler.ap-southeast-1.aws.neon.tech/alkaa-prod?sslmode=require",
-    "RESEND_API_KEY": "re_acC12Uuj_M6oBLoEuaAC4i2nhz2mVNo5i", 
-    "FRONTEND_DOMAIN": "http://sapmate-employee-bucket.s3-website.ap-south-1.amazonaws.com/",
-    "SENDER_EMAIL": "parambrataghosh@sapmate.com",
-    "CLIENT_URL": "https://alkaa.online",
-    "REFRESH_TOKEN_SECRET": "7e7b1b1b-7b7b-4b7b-8b7b-7b7b7b7b7b7b",
-    "ACCESS_TOKEN_SECRET": "7e7b1b1b2n-7b7b-4b7b-8b7b-7b7b7b7b7b7b",
-    "PORT": "3000",
-    "VAPID_PUBLIC_KEY": "BDAtRb_FqCNC-tFemxcjRA1fBRvWl2eWB0Y-_8J4s30O-qeNk47XrhIiASjOrF5uB8T56Hff8tUnAVFpTCC-_UM",
-    "VAPID_PRIVATE_KEY": "Kw3HbLEW0N2Yc4U4w6sGYcVZ38ST3BrA9Jph64mXKHA",
-    "NODE_ENV": "production"
-  }
+  "buildCommand": "npm run build"
+  
 }
