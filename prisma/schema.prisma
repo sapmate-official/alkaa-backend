@@ -39,6 +39,7 @@ model Organization {
   users                 User[]
   OrganizationSettings  OrganizationSettings[]
   Organization_admin    Organization_admin[]
+  PermissionPreset      PermissionPreset[]
 }
 
 model Organization_admin {
@@ -557,4 +558,17 @@ enum AttendanceVerificationStatus {
   UNVERIFIED
   VERIFIED
   REJECTED
+}
+
+model PermissionPreset {
+  id           String       @id @default(cuid())
+  name         String
+  description  String?
+  orgId        String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  permissions  Json // Store array of permission IDs
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, name])
 }

@@ -1012,4 +1012,159 @@ export const getAllUserLiveAttendance = async (req, res) => {
             console.error('Error fetching attendance:', error);
             res.status(500).json({ error: 'Failed to fetch attendance records' });
     }
-}
+};
+
+export const getAdminVerificationRecords = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        if (!userId) {
+            return res.status(400).json({ error: "User ID is required" });
+        }
+        
+        // Check if user has permission to view all user attendance records
+        const userWithRoles = await prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                roles: {
+                    include: {
+                        role: {
+                            include: {
+                                permissions: {
+                                    include: {
+                                        permission: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Check for view_all_user_attendance permission
+        const hasViewAllPermission = userWithRoles?.roles.some(userRole => 
+            userRole.role.permissions.some(permission => 
+                permission.permission.key === 'view_all_user_attendance'
+            )
+        );
+
+        if (!hasViewAllPermission) {
+            return res.status(403).json({ 
+                error: "Access denied. You don't have permission to view all attendance records." 
+            });
+        }
+        
+        // Get all attendance records for all users in the organization
+        const records = await prisma.attendanceRecord.findMany({
+            where: {
+                user: {
+                    orgId: userWithRoles.orgId
+                }
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        firstName: true,  // Changed from name to firstName
+                        lastName: true,   // Added lastName
+                        email: true,
+                        department: {
+                            select: {
+                                name: true
+                            }
+                        },
+                        roles: {
+                            select: {
+                                role: {
+                                    select: {
+                                        name: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                UserDailyReport: true
+            },
+            orderBy: {
+                date: 'desc'
+            }
+        });
+
+        // Format the records as needed
+        const formattedRecords = records.map(record => ({
+            ...record,
+            user: {
+                id: record.user.id,
+                name: `${record.user.firstName || ''} ${record.user.lastName || ''}`.trim(),
+                email: record.user.email,
+                department: record.user.department?.name,
+                position: record.user.roles[0]?.role?.name
+            }
+        }));
+
+        res.status(200).json(formattedRecords);
+    } catch (error) {
+        console.error("Failed to fetch admin verification records:", error);
+        res.status(500).json({ 
+            error: "Failed to fetch attendance records",
+            details: error.message
+        });
+    }
+};
+
+export const adminVerifyAttendance = async (req, res) => {
+    try {
+        const { userId, attendanceId, verificationStatus } = req.body;
+        
+        // Check if user has permission to verify all attendances
+        const userWithRoles = await prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                roles: {
+                    include: {
+                        role: {
+                            include: {
+                                permissions: {
+                                    include: {
+                                        permission: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Check for view_all_user_attendance permission
+        const hasViewAllPermission = userWithRoles?.roles.some(userRole => 
+            userRole.role.permissions.some(permission => 
+                permission.permission.key === 'view_all_user_attendance'
+            )
+        );
+
+        if (!hasViewAllPermission) {
+            return res.status(403).json({ 
+                error: "Access denied. You don't have permission to verify all attendance records." 
+            });
+        }
+        
+        const attendance = await prisma.attendanceRecord.update({
+            where: {
+                id: attendanceId
+            },
+            data: {
+                verificationStatus
+            }
+        });
+        
+        res.status(200).json(attendance);
+    } catch (error) {
+        console.error("Failed to verify attendance:", error);
+        res.status(500).json({ 
+            error: "Failed to verify attendance", 
+            details: error.message 
+        });
+    }
+};
