@@ -34,9 +34,9 @@ export class PayrollService {
 
       // Calculate allowances (example: 40% of basic salary)
       const allowances = {
-        hra: basicSalary * 0.4,
-        da: basicSalary * 0.1,
-        ta: basicSalary * 0.1
+        hra: 0,
+        da: 0,
+        ta: 0
       };
 
       // Calculate deductions based on leaves and attendance
