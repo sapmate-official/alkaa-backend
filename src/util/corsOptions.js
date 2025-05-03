@@ -13,7 +13,8 @@ export const allowedOrigins = [
     "https://www.alkaa.online",
     "https://api.alkaa.online" ,
     "https://alkaa.vercel.app",
-    "https://alkaa-frontend-test.vercel.app"
+    "https://alkaa-frontend-test.vercel.app",
+    "https://alkaa-admin-test.vercel.app"
 ]
 
 export const corsOptions = {

@@ -31,7 +31,12 @@ router.get("/get-user-info",validateSuperAdminTokenMiddleware,getUserInfo)
 router.get("/validate-token",validateSuperAdminTokenMiddleware,validateSuperAdminToken)
 router.get("/", getSuperAdmins);
 router.get("/:id", getSuperAdminById);
-router.post("/", createSuperAdmin);
+router.post("/",(req,res,next)=>{
+    if(req.body.secretKey !== process.env.SUPER_ADMIN_SECRET_KEY){
+        return res.status(401).json({message:"Unauthorized"})
+    }
+    next()
+}, createSuperAdmin);
 router.put("/:id", updateSuperAdmin);
 router.patch("/:id", updateSuperAdmin);
 router.delete("/:id", deleteSuperAdmin);
