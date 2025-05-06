@@ -589,15 +589,7 @@ export const getOrganizationAdmins = async (req, res) => {
                 roles: {
                     some: {
                         role: {
-                            permissions: {
-                                some: {
-                                    permission: {
-                                        key: {
-                                            contains: "admin"
-                                        }
-                                    }
-                                }
-                            }
+                            name: 'Org_Admin'
                         }
                     }
                 }
