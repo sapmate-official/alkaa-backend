@@ -1,5 +1,6 @@
 import prisma from '../../../db/connectDb.js';
 import { body, validationResult } from 'express-validator';
+import { initializePresetsForOrg } from '../../../seed/PermissionPreset.js';
 
 // Get all organizations
 const getOrganization = async (req, res) => {
@@ -75,6 +76,8 @@ const createOrganization = [
                     }   
                 }
             });
+            initializePresetsForOrg(newOrganization.id);
+            console.log("New organization created with ID:", newOrganization.id);
             console.log(newSettings);
             console.log(newOrganization);
             

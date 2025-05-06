@@ -271,7 +271,7 @@ console.log('settings:', settings.organization.OrganizationSettings[0].settings)
 }
 
 
-const payrollService = new PayrollService();
+const payrollService = new  PayrollService()
 
 
 router.get('/user/:userId', async (req, res) => {

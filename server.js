@@ -43,11 +43,11 @@ app.use((req, res, next) => {
   next();
 });
 
-const tokenValidationMiddleware = (req, res, next) => {
+app.use((req, res, next) => {
+  console.log(`Request Method: ${req.method}, Request URL: ${req.url}`);
   next();
-};
-
-app.use('/api/v3', tokenValidationMiddleware);
+}
+)
 
 // Static files
 app.use('/', express.static(path.join(dirname, 'public')))
