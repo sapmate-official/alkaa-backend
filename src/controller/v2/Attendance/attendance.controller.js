@@ -917,6 +917,15 @@ export const getAllUserLiveAttendance = async (req, res) => {
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(today);
         endOfDay.setHours(23, 59, 59, 999);
+        const currentUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                orgId: true
+            }
+        });
+        if (!currentUser) {
+            return res.status(404).json({ error: "User not found" });
+        }
         
         // Get all active users
         const users = await prisma.user.findMany({
@@ -956,6 +965,9 @@ export const getAllUserLiveAttendance = async (req, res) => {
                 }
             }
         });
+        console.log(req.user.orgId);
+        
+        console.log("live panel : ", users)
         
         if (users.length === 0) {
             return res.status(200).json({ 

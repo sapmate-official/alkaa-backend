@@ -18,6 +18,7 @@ import holidayTypeRouter from "./child/holidayType.router.js";
 import payrollRouter from "./child/payroll.router.js"
 import notificationRouter from "./child/notification.router.js"
 import screenRouter from "./child/screen.router.js"
+import draftRouter from "./child/draft.router.js"; // Add this line
 
 const router = express.Router();
 
@@ -40,5 +41,6 @@ router.use("/holiday-type/",holidayTypeRouter)
 router.use("/payroll/",payrollRouter)
 router.use("/notification/",notificationRouter)
 router.use("/screen/",screenRouter)
+router.use("/drafts/", draftRouter); // Add this line
 
 export default router;
