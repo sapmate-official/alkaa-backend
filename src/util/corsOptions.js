@@ -22,7 +22,7 @@ export const corsOptions = {
         if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
             callback(null, true)
         } else {
-            console.log(`CORS blocked origin: ${origin}`); // Add logging for debugging
+            console.log(`CORS blocked origin: ${origin}`); // For debugging
             callback(new Error(`Not allowed by CORS: ${origin}`))
         }
     },

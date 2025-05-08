@@ -19,6 +19,9 @@ configDotenv()
 const app = express()
 const port = process.env.PORT || 3000
 
+app.use(cors(corsOptions))
+app.use(express.json())
+
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK' })
 })
@@ -28,6 +31,8 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 
+// Add before routes
+app.options('*', cors(corsOptions));
 
 // Add in your middleware or authentication-related code
 app.use((req, res, next) => {
