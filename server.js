@@ -36,8 +36,7 @@ app.use((req, res, next) => {
     res.cookie('accessToken', req.cookies.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      domain: process.env.NODE_ENV === 'production' ? '.alkaa.online' : 'localhost'
+      sameSite: 'none'  // Change this from 'strict' to 'none' for cross-domain
     });
   }
   next();

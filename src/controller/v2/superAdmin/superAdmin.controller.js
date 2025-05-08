@@ -214,7 +214,7 @@ export const loginSuperAdmin = async (req, res) => {
         
         console.log("[loginSuperAdmin] Setting cookies");
         res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
+            // httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
         });
