@@ -2,6 +2,28 @@ import prisma from "../../../db/connectDb.js";
 
 export const getBank = async (req, res) => {
     try {
+        // Check if user has permission to view all bank details
+        const currentUserId = req.user.id;
+        
+        const hasViewAllPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "view_bank_all_user"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!hasViewAllPermission) {
+            return res.status(403).json({ error: 'You do not have permission to view all bank details' });
+        }
+        
         const banks = await prisma.bankDetails.findMany();
         res.status(200).json(banks);
     } catch (error) {
@@ -12,9 +34,68 @@ export const getBank = async (req, res) => {
 export const getBankById = async (req, res) => {
     const { id } = req.params;
     try {
+        const currentUserId = req.user.id;
+        
+        // Check if the user is viewing their own bank details
+        const isSelf = id === currentUserId;
+        
+        if (!isSelf) {
+            // Check if user has permission to view all bank details
+            const hasViewAllPermission = await prisma.rolePermission.findFirst({
+                where: {
+                    permission: {
+                        key: "view_bank_all_user"
+                    },
+                    role: {
+                        users: {
+                            some: {
+                                userId: currentUserId
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Check if user has permission to view subordinates' bank details
+            const hasViewSubordinatesPermission = await prisma.rolePermission.findFirst({
+                where: {
+                    permission: {
+                        key: "view_bank_subordinates"
+                    },
+                    role: {
+                        users: {
+                            some: {
+                                userId: currentUserId
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // If they have subordinates permission, check if requested user is a subordinate
+            let isSubordinate = false;
+            if (hasViewSubordinatesPermission) {
+                const subordinate = await prisma.user.findFirst({
+                    where: {
+                        id: id,
+                        managerId: currentUserId
+                    }
+                });
+                isSubordinate = !!subordinate;
+            }
+            
+            // Deny if they don't have appropriate permissions
+            if (!hasViewAllPermission && !isSubordinate) {
+                return res.status(403).json({ 
+                    error: 'You do not have permission to view this user\'s bank details' 
+                });
+            }
+        }
+        
         const bank = await prisma.bankDetails.findUnique({
             where: { userId:id },
         });
+        
         if (bank) {
             res.status(200).json(bank);
         } else {
@@ -125,16 +206,75 @@ export const deleteBank = async (req, res) => {
         res.status(500).json({ error: 'Failed to delete bank details' });
     }
 };
+
 export const getBankByUserId = async (req, res) => {
     const { Userid } = req.params;
     try {
+        const currentUserId = req.user.id;
+        
+        // Check if the user is viewing their own bank details
+        const isSelf = Userid === currentUserId;
+        
+        if (!isSelf) {
+            // Check if user has permission to view all bank details
+            const hasViewAllPermission = await prisma.rolePermission.findFirst({
+                where: {
+                    permission: {
+                        key: "view_bank_all_user"
+                    },
+                    role: {
+                        users: {
+                            some: {
+                                userId: currentUserId
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Check if user has permission to view subordinates' bank details
+            const hasViewSubordinatesPermission = await prisma.rolePermission.findFirst({
+                where: {
+                    permission: {
+                        key: "view_bank_subordinates"
+                    },
+                    role: {
+                        users: {
+                            some: {
+                                userId: currentUserId
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // If they have subordinates permission, check if requested user is a subordinate
+            let isSubordinate = false;
+            if (hasViewSubordinatesPermission) {
+                const subordinate = await prisma.user.findFirst({
+                    where: {
+                        id: Userid,
+                        managerId: currentUserId
+                    }
+                });
+                isSubordinate = !!subordinate;
+            }
+            
+            // Deny if they don't have appropriate permissions
+            if (!hasViewAllPermission && !isSubordinate) {
+                return res.status(403).json({ 
+                    error: 'You do not have permission to view this user\'s bank details' 
+                });
+            }
+        }
+        
         const bank = await prisma.bankDetails.findFirst({
             where: { userId: Userid },
         });
         if (bank) {
             res.status(200).json(bank);
         } else {
-            res.status(404).json({ error: 'Bank not found' });
+            res.status(404).json({ error: 'Bank details not found' });
         }
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch bank details' });
