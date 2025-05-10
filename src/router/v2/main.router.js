@@ -20,6 +20,7 @@ import notificationRouter from "./child/notification.router.js";
 import screenRouter from "./child/screen.router.js";
 import draftRouter from "./child/draft.router.js";
 import billingRouter from "./child/billing.router.js";
+import eventsRouter from "./child/events.router.js";
 
 const router = express.Router();
 
@@ -44,5 +45,6 @@ router.use("/notification/",notificationRouter);
 router.use("/screen/",screenRouter);
 router.use("/drafts/", draftRouter);
 router.use("/billing", billingRouter);
+router.use("/events", eventsRouter);
 
 export default router;
