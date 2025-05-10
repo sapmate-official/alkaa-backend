@@ -15,10 +15,11 @@ import rolePermissionRouter from "./child/rolePermission.router.js";
 import userRoleRouter from "./child/userRole.router.js";
 import holidayRouter from "./child/holiday.router.js";
 import holidayTypeRouter from "./child/holidayType.router.js";
-import payrollRouter from "./child/payroll.router.js"
-import notificationRouter from "./child/notification.router.js"
-import screenRouter from "./child/screen.router.js"
-import draftRouter from "./child/draft.router.js"; // Add this line
+import payrollRouter from "./child/payroll.router.js";
+import notificationRouter from "./child/notification.router.js";
+import screenRouter from "./child/screen.router.js";
+import draftRouter from "./child/draft.router.js";
+import billingRouter from "./child/billing.router.js";
 
 const router = express.Router();
 
@@ -26,21 +27,22 @@ router.use("/organization/",organizationRouter);
 router.use("/department/",departmentRouter);
 router.use("/user/",userRouter);
 router.use("/bank-details/",bankRouter);
-router.use("/leave-type/",leaveTypeRouter)
-router.use("/leave-balance/",leaveBalanceRouter)
-router.use("/leave-request/",leaveRequestRouter)
-router.use("/attendance/",attendanceRouter)
-router.use("/salary/",salaryRouter)
-router.use("/super-admin/",superAdminRouter)
-router.use("/role/",roleRouter)
-router.use("/permission/",permissionRouter)
-router.use("role-permission/",rolePermissionRouter)
-router.use("/user-role/",userRoleRouter)
-router.use("/holiday/",holidayRouter)
-router.use("/holiday-type/",holidayTypeRouter)
-router.use("/payroll/",payrollRouter)
-router.use("/notification/",notificationRouter)
-router.use("/screen/",screenRouter)
-router.use("/drafts/", draftRouter); // Add this line
+router.use("/leave-type/",leaveTypeRouter);
+router.use("/leave-balance/",leaveBalanceRouter);
+router.use("/leave-request/",leaveRequestRouter);
+router.use("/attendance/",attendanceRouter);
+router.use("/salary/",salaryRouter);
+router.use("/super-admin/",superAdminRouter);
+router.use("/role/",roleRouter);
+router.use("/permission/",permissionRouter);
+router.use("role-permission/",rolePermissionRouter);
+router.use("/user-role/",userRoleRouter);
+router.use("/holiday/",holidayRouter);
+router.use("/holiday-type/",holidayTypeRouter);
+router.use("/payroll/",payrollRouter);
+router.use("/notification/",notificationRouter);
+router.use("/screen/",screenRouter);
+router.use("/drafts/", draftRouter);
+router.use("/billing", billingRouter);
 
 export default router;

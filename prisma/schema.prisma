@@ -40,6 +40,7 @@ model Organization {
   OrganizationSettings  OrganizationSettings[]
   Organization_admin    Organization_admin[]
   PermissionPreset      PermissionPreset[]
+  BillingRecords        BillingRecord[]
 }
 
 model Organization_admin {
@@ -512,6 +513,28 @@ model Draft {
   updatedAt DateTime @updatedAt
 }
 
+model BillingRecord {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  month            Int
+  year             Int
+  activeUserCount  Int
+  pricePerUser     Float
+  totalAmount      Float
+  status           BillingStatus @default(UNPAID)
+  billDate         DateTime      @default(now())
+  dueDate          DateTime
+  paidDate         DateTime?
+  paymentReference String?
+  notes            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  
+  @@unique([organizationId, month, year])
+  @@index([organizationId, year, month])
+}
+
 enum UserStatus {
   active
   inactive
@@ -568,6 +591,13 @@ enum AttendanceVerificationStatus {
   UNVERIFIED
   VERIFIED
   REJECTED
+}
+
+enum BillingStatus {
+  UNPAID
+  PAID
+  OVERDUE
+  CANCELLED
 }
 
 model PermissionPreset {

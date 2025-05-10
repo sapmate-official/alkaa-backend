@@ -83,6 +83,13 @@ import mainv3Router from './src/router/v3/main.router.js'
 app.use("/api/v2/", mainV2Router)
 app.use("/api/v3/", mainv3Router)
 
+// Import the bill controllers
+import { getBillById, processBillPayment } from './src/controller/v2/superAdmin/superAdmin.controller.js';
+
+// Public billing routes
+app.get("/api/public/billing/:id", getBillById);
+app.post("/api/public/billing/:id/payment", processBillPayment);
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(dirname, 'public', 'interface.html'))
 })
