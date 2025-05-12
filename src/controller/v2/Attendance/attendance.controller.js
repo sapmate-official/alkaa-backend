@@ -931,7 +931,7 @@ export const getAllUserLiveAttendance = async (req, res) => {
         const users = await prisma.user.findMany({
             where: {
                 status: 'active',
-                orgId: req.user.orgId
+                orgId: currentUser.orgId
             },
             select: {
                 id: true,
