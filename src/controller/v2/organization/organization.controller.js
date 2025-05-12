@@ -72,7 +72,7 @@ const createOrganization = [
                 data: {
                     orgId: newOrganization.id,
                     settings: {
-                        weekof: [0, 6]
+                        weekoff: [0, 6]
                     }   
                 }
             });

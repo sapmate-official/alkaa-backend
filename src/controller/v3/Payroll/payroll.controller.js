@@ -790,7 +790,7 @@ export const getSalaryStatisticsBasedOnId = async (req, res) => {
         });
 
         // Default weekend days (0 = Sunday, 6 = Saturday)
-        const weekendDays = orgSettings?.settings?.weekendDays || [0, 6];
+        const weekendDays = orgSettings?.settings?.weekoff || [0, 6];
 
         // Get holidays for the month
         const holidays = await prisma.holiday.findMany({
