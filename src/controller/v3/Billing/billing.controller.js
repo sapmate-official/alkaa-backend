@@ -52,7 +52,17 @@ export const getBillingDashboard = async (req, res) => {
             where: { id: user.orgId },
             select: {
                 name: true,
-                subscriptionPlan: true,
+                subscriptionPlanId: true,
+                subscriptionPlan: {
+                    select: {
+                        id: true,
+                        name: true,
+                        monthlyPrice: true,
+                        annualPrice: true,
+                        maxUsers: true,
+                        features: true
+                    }
+                },
                 subscriptionStart: true,
                 subscriptionEnd: true,
                 _count: {
@@ -76,7 +86,7 @@ export const getBillingDashboard = async (req, res) => {
         const response = {
             organization: {
                 name: organization.name,
-                subscriptionPlan: organization.subscriptionPlan,
+                subscriptionPlan: organization.subscriptionPlan?.name || 'No Plan',
                 activeUsers: organization._count.users,
                 subscriptionStart: organization.subscriptionStart,
                 subscriptionEnd: organization.subscriptionEnd,
@@ -214,8 +224,13 @@ export const getBillDetails = async (req, res) => {
                 organization: {
                     select: {
                         name: true,
-                        subscriptionPlan: true,
-                        logo: true
+                        logo: true,
+                        subscriptionPlanId: true,
+                        subscriptionPlan: {
+                            select: {
+                                name: true
+                            }
+                        }
                     }
                 }
             }
@@ -233,7 +248,7 @@ export const getBillDetails = async (req, res) => {
             ...bill,
             organizationName: bill.organization.name,
             organizationLogo: bill.organization.logo,
-            subscriptionPlan: bill.organization.subscriptionPlan,
+            subscriptionPlan: bill.organization.subscriptionPlan?.name || 'No Plan',
             monthName: new Date(bill.year, bill.month - 1).toLocaleString('default', { month: 'long' }),
             organization: undefined // Remove nested organization object
         };
@@ -367,8 +382,12 @@ export const downloadBillInvoice = async (req, res) => {
                 organization: {
                     select: {
                         name: true,
-                        subscriptionPlan: true,
-                        address: true
+                        address: true,
+                        subscriptionPlan: {
+                            select: {
+                                name: true
+                            }
+                        }
                     }
                 }
             }
@@ -475,7 +494,7 @@ export const downloadBillInvoice = async (req, res) => {
         
         doc.fillColor(themeColors.text)
            .fontSize(12)
-           .text(`Plan: ${bill.organization.subscriptionPlan}`, 60, doc.y + 10)
+           .text(`Plan: ${bill.organization.subscriptionPlan?.name || 'No Plan'}`, 60, doc.y + 10)
            .text(`Active Users: ${bill.activeUserCount}`, 200, doc.y)
            .text(`Price Per User: $${bill.pricePerUser.toFixed(2)}`, 340, doc.y);
         

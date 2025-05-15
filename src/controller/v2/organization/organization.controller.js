@@ -33,6 +33,7 @@ const getOrganizationById = async (req, res) => {
             include: {
                 users: true,
                 departments: true,
+                subscriptionPlan: true,
             }
         });
         res.status(200).json(organization);
@@ -45,7 +46,7 @@ const getOrganizationById = async (req, res) => {
 const createOrganization = [
     body('name').notEmpty().withMessage('Name is required'),
     body('industry').optional().notEmpty().withMessage('Industry is required'),
-    body('subscriptionPlan').notEmpty().withMessage('Subscription Plan is required'),
+    body('subscriptionPlanId').notEmpty().withMessage('Subscription Plan is required'),
     body('subscriptionEnd').optional().isISO8601().withMessage('Subscription End must be a valid date'),
     body('isActive').optional().isBoolean().withMessage('IsActive must be a boolean'),
     body('settings').optional().isJSON().withMessage('Settings must be a valid JSON'),
@@ -56,13 +57,13 @@ const createOrganization = [
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { name, industry, subscriptionPlan, subscriptionEnd, isActive, settings } = req.body;
+        const { name, industry, subscriptionPlanId, subscriptionEnd, isActive, settings } = req.body;
         try {
             const newOrganization = await prisma.organization.create({
                 data: {
                     name,
                     industry,
-                    subscriptionPlan,
+                    subscriptionPlanId,
                     subscriptionEnd,
                     isActive,
                     settings
@@ -95,7 +96,7 @@ const updateOrganization = [
     body('id').notEmpty().withMessage('ID is required'),
     body('name').optional().notEmpty().withMessage('Name is required'),
     body('industry').optional().notEmpty().withMessage('Industry is required'),
-    body('subscriptionPlan').optional().notEmpty().withMessage('Subscription Plan is required'),
+    body('subscriptionPlanId').optional().notEmpty().withMessage('Subscription Plan is required'),
     body('subscriptionEnd').optional().isISO8601().withMessage('Subscription End must be a valid date'),
     body('isActive').optional().isBoolean().withMessage('IsActive must be a boolean'),
 
@@ -107,14 +108,14 @@ const updateOrganization = [
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { id, name, industry, subscriptionPlan, subscriptionEnd, isActive, settings } = req.body;
+        const { id, name, industry, subscriptionPlanId, subscriptionEnd, isActive, settings } = req.body;
         try {
             const updatedOrganization = await prisma.organization.update({
                 where: { id },
                 data: {
                     ...(name && { name }),
                     ...(industry && { industry }),
-                    ...(subscriptionPlan && { subscriptionPlan }),
+                    ...(subscriptionPlanId && { subscriptionPlanId }),
                     ...(subscriptionEnd && { subscriptionEnd }),
                     ...(isActive !== undefined && { isActive }),
                     ...(settings && { settings })

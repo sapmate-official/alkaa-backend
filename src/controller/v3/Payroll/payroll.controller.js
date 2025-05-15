@@ -540,23 +540,74 @@ export const generateSalaryBasedOnParams = async (req, res) => {
 
         // Count days on paid leave
         let paidLeaveDays = 0;
+        console.log("[SALARY_GENERATE] Processing leave requests details:", {
+            leaveCount: leaveRequests.length,
+            leaveRequests,
+            leaveDates: leaveRequests.map(lr => ({
+                start: new Date(lr.startDate).toISOString(),
+                end: new Date(lr.endDate).toISOString()
+            }))
+        });
+
         leaveRequests.forEach(leave => {
             if (leave.leaveType.isPaid) {
                 const startDate = new Date(leave.startDate);
                 const endDate = new Date(leave.endDate);
-
-                // Count days in the current month
-                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                    if (d.getMonth() + 1 === parseInt(month) && d.getFullYear() === parseInt(year)) {
-                        const dayOfWeek = d.getDay();
-                        if (!weekendDays.includes(dayOfWeek) &&
-                            !holidays.some(h => new Date(h.date).toDateString() === d.toDateString())) {
+                
+                // Normalize dates to remove time component
+                startDate.setHours(0, 0, 0, 0);
+                endDate.setHours(0, 0, 0, 0);
+                
+                let daysCountedInThisLeave = 0;
+                const currentMonth = parseInt(month);
+                const currentYear = parseInt(year);
+                
+                // Use a separate date object for iteration
+                let currentDate = new Date(startDate);
+                
+                while (currentDate <= endDate) {
+                    // Check if this date is in the target month and year
+                    if (currentDate.getMonth() + 1 === currentMonth && 
+                        currentDate.getFullYear() === currentYear) {
+                        
+                        const dayOfWeek = currentDate.getDay();
+                        const isWeekend = weekendDays.includes(dayOfWeek);
+                        const isHoliday = holidays.some(h => 
+                            new Date(h.date).toDateString() === currentDate.toDateString()
+                        );
+                        
+                        // Only count working days
+                        if (!isWeekend && !isHoliday) {
                             paidLeaveDays++;
+                            daysCountedInThisLeave++;
                         }
                     }
+                    
+                    // Move to next day (create a new date object)
+                    const nextDay = new Date(currentDate);
+                    nextDay.setDate(nextDay.getDate() + 1);
+                    currentDate = nextDay;
                 }
+                
+                console.log("[SALARY_GENERATE] Leave request contribution:", {
+                    leaveId: leave.id,
+                    leaveType: leave.leaveType.name, 
+                    daysCountedFromThisRequest: daysCountedInThisLeave
+                });
             }
         });
+
+        // Important: Validate that paid leave days don't exceed the gap between working days and present days
+        const attendanceGap = workingDays - presentDays - (halfDays / 2);
+        if (paidLeaveDays > attendanceGap) {
+            console.warn("[SALARY_GENERATE] Warning: Calculated paid leave days exceed attendance gap", {
+                paidLeaveDays,
+                attendanceGap,
+                workingDays,
+                presentDays
+            });
+            paidLeaveDays = attendanceGap; // Cap at the actual gap in attendance
+        }
 
         console.log("[SALARY_GENERATE] Paid leave days calculated", { paidLeaveDays });
 

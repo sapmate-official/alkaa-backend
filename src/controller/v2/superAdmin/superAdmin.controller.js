@@ -369,10 +369,20 @@ export const getOrganizationsStats = async (req, res) => {
             select: {
                 id: true,
                 name: true,
-                subscriptionPlan: true,
                 subscriptionStart: true,
                 subscriptionEnd: true,
                 isActive: true,
+                subscriptionPlanId: true,
+                subscriptionPlan: {
+                    select: {
+                        id: true,
+                        name: true,
+                        monthlyPrice: true,
+                        annualPrice: true,
+                        maxUsers: true,
+                        features: true
+                    }
+                },
                 _count: {
                     select: {
                         users: true,
@@ -417,6 +427,7 @@ export const getOrganizationDetails = async (req, res) => {
         const organization = await prisma.organization.findUnique({
             where: { id },
             include: {
+                subscriptionPlan: true,
                 _count: {
                     select: {
                         users: true,
@@ -644,6 +655,7 @@ export const generateOrganizationBill = async (req, res) => {
         const organization = await prisma.organization.findUnique({
             where: { id },
             include: {
+                subscriptionPlan: true,
                 _count: {
                     select: {
                         users: {
@@ -664,18 +676,13 @@ export const generateOrganizationBill = async (req, res) => {
         const activeUserCount = organization._count.users;
         let pricePerUser;
         
-        switch(organization.subscriptionPlan) {
-            case 'BASIC':
-                pricePerUser = 5; // $5 per user
-                break;
-            case 'STANDARD':
-                pricePerUser = 10; // $10 per user
-                break;
-            case 'PREMIUM':
-                pricePerUser = 15; // $15 per user
-                break;
-            default:
-                pricePerUser = 5; // Default price
+        // Use pricing from subscription plan if available
+        if (organization.subscriptionPlan) {
+            // Using monthly price as the per-user price
+            pricePerUser = organization.subscriptionPlan.monthlyPrice;
+        } else {
+            // Fallback pricing if no plan is associated
+            pricePerUser = 5; // Default price
         }
         
         const totalAmount = activeUserCount * pricePerUser;
@@ -728,7 +735,7 @@ export const generateOrganizationBill = async (req, res) => {
         const billWithOrgName = {
             ...bill,
             organizationName: organization.name,
-            subscriptionPlan: organization.subscriptionPlan
+            subscriptionPlan: organization.subscriptionPlan?.name || 'No Plan'
         };
         
         res.status(200).json({ 
@@ -812,7 +819,10 @@ export const sendBillEmail = async (req, res) => {
         
         // Get organization
         const organization = await prisma.organization.findUnique({
-            where: { id }
+            where: { id },
+            include: {
+                subscriptionPlan: true
+            }
         });
         
         if (!organization) {
@@ -876,7 +886,7 @@ export const sendBillEmail = async (req, res) => {
         for (const email of adminEmails) {
             const emailData = {
                 ...bill,
-                subscriptionPlan: organization.subscriptionPlan
+                subscriptionPlan: organization.subscriptionPlan?.name || 'No Plan'
             };
             
             emailPromises.push(sendBillingEmail(email, emailData, organization.name));
@@ -912,7 +922,10 @@ export const sendBillsToAllOrganizations = async (req, res) => {
         
         // Get all active organizations
         const organizations = await prisma.organization.findMany({
-            where: { isActive: true }
+            where: { isActive: true },
+            include: {
+                subscriptionPlan: true
+            }
         });
         
         if (organizations.length === 0) {
@@ -950,7 +963,7 @@ export const sendBillsToAllOrganizations = async (req, res) => {
                     for (const email of adminEmails) {
                         const emailData = {
                             ...bill,
-                            subscriptionPlan: organization.subscriptionPlan
+                            subscriptionPlan: organization.subscriptionPlan?.name || 'No Plan'
                         };
                         
                         emailPromises.push(sendBillingEmail(email, emailData, organization.name));
@@ -1007,6 +1020,7 @@ const generateBill = async (organizationId, month, year) => {
     const organization = await prisma.organization.findUnique({
         where: { id: organizationId },
         include: {
+            subscriptionPlan: true,
             _count: {
                 select: {
                     users: {
@@ -1027,18 +1041,13 @@ const generateBill = async (organizationId, month, year) => {
     const activeUserCount = organization._count.users;
     let pricePerUser;
     
-    switch(organization.subscriptionPlan) {
-        case 'BASIC':
-            pricePerUser = 5;
-            break;
-        case 'STANDARD':
-            pricePerUser = 10;
-            break;
-        case 'PREMIUM':
-            pricePerUser = 15;
-            break;
-        default:
-            pricePerUser = 5;
+    // Use pricing from subscription plan if available
+    if (organization.subscriptionPlan) {
+        // Using monthly price as the per-user price
+        pricePerUser = organization.subscriptionPlan.monthlyPrice;
+    } else {
+        // Fallback pricing if no plan is associated
+        pricePerUser = 5; // Default price
     }
     
     const totalAmount = activeUserCount * pricePerUser;
@@ -1230,8 +1239,9 @@ export const getBillById = async (req, res) => {
                 organization: {
                     select: {
                         name: true,
-                        subscriptionPlan: true,
-                        logo: true
+                        logo: true,
+                        subscriptionPlanId: true,
+                        subscriptionPlan: true
                     }
                 }
             }
@@ -1242,11 +1252,13 @@ export const getBillById = async (req, res) => {
         }
         
         // Format the bill for the frontend
+        const subscriptionPlanName = bill.organization.subscriptionPlan?.name || 'No Plan';
+        
         const formattedBill = {
             ...bill,
             organizationName: bill.organization.name,
             organizationLogo: bill.organization.logo,
-            subscriptionPlan: bill.organization.subscriptionPlan,
+            subscriptionPlan: subscriptionPlanName,
             monthName: new Date(bill.year, bill.month - 1).toLocaleString('default', { month: 'long' }),
         };
         

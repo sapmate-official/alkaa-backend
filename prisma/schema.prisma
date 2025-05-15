@@ -23,7 +23,7 @@ model Organization {
   industry              String?
   logo                  String?
   address               String?
-  subscriptionPlan      String
+  subscriptionPlanId    String?
   subscriptionStart     DateTime               @default(now())
   subscriptionEnd       DateTime?
   isActive              Boolean                @default(true)
@@ -40,7 +40,8 @@ model Organization {
   OrganizationSettings  OrganizationSettings[]
   Organization_admin    Organization_admin[]
   PermissionPreset      PermissionPreset[]
-  BillingRecords        BillingRecord[]
+  subscriptionPlan      SubscriptionPlan?      @relation(fields: [subscriptionPlanId], references: [id])
+  billingRecords        BillingRecord[]
 }
 
 model Organization_admin {
@@ -503,36 +504,48 @@ model OrganizationSettings {
   organization Organization @relation(fields: [orgId], references: [id])
 }
 
-model Draft {
-  id        String   @id @default(cuid())
-  formData  Json
-  step      Int
-  userId    String
-  orgId     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model SubscriptionPlan {
+  id               String         @id @default(cuid())
+  name             String         @unique
+  description      String?
+  monthlyPrice     Float
+  annualPrice      Float
+  maxUsers         Int            // Maximum number of users allowed (null for unlimited)
+  features         Json?          // Store features as a JSON array
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  organizations    Organization[]
 }
 
 model BillingRecord {
   id               String       @id @default(cuid())
   organizationId   String
-  organization     Organization @relation(fields: [organizationId], references: [id])
   month            Int
   year             Int
   activeUserCount  Int
   pricePerUser     Float
   totalAmount      Float
-  status           BillingStatus @default(UNPAID)
-  billDate         DateTime      @default(now())
+  status           BillingStatus       // Could be PAID, UNPAID, OVERDUE, CANCELLED
+  billDate         DateTime
   dueDate          DateTime
   paidDate         DateTime?
   paymentReference String?
   notes            String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  organization     Organization @relation(fields: [organizationId], references: [id])
+
   @@unique([organizationId, month, year])
-  @@index([organizationId, year, month])
+  @@index([organizationId, status])
+  @@index([dueDate])
+}
+
+enum BillingStatus {
+  PAID
+  UNPAID
+  OVERDUE
+  CANCELLED
 }
 
 enum UserStatus {
@@ -591,13 +604,6 @@ enum AttendanceVerificationStatus {
   UNVERIFIED
   VERIFIED
   REJECTED
-}
-
-enum BillingStatus {
-  UNPAID
-  PAID
-  OVERDUE
-  CANCELLED
 }
 
 model PermissionPreset {

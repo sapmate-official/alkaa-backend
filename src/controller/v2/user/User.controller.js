@@ -1,6 +1,7 @@
 import prisma from '../../../db/connectDb.js';
 import { validationResult } from 'express-validator';
 import { sendPasswordResetEmail } from '../../../util/sendEmail.js';
+import bcrypt from 'bcrypt';
 
 export const getUser = async (req, res) => {
     try {

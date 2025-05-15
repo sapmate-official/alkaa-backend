@@ -149,14 +149,40 @@ export const updateRole = async (req, res) => {
             where: { roleId: roleId }
         });
 
-        // Finally, add all new permissions
+        // Finally, add all new permissions (ensuring no duplicates)
         if (permissions.length > 0) {
-            await prisma.rolePermission.createMany({
-                data: permissions.map(p => ({
-                    roleId: roleId,
-                    permissionId: p.permissionId
-                }))
-            });
+            // Extract unique permission IDs based on the input format
+            let uniquePermissionIds = [];
+            
+            if (typeof permissions[0] === 'object') {
+                // If permissions is a collection of objects with permissionId
+                uniquePermissionIds = [...new Set(permissions.map(p => p.permissionId))];
+                
+                // Create permissions one by one to avoid constraint errors
+                for (const permissionId of uniquePermissionIds) {
+                    await prisma.rolePermission.create({
+                        data: {
+                            roleId: roleId,
+                            permissionId: permissionId
+                        }
+                    });
+                }
+            } else if (typeof permissions[0] === 'string') {
+                // If permissions is a collection of strings (direct permissionIds)
+                uniquePermissionIds = [...new Set(permissions)];
+                
+                // Create permissions one by one to avoid constraint errors
+                for (const permissionId of uniquePermissionIds) {
+                    await prisma.rolePermission.create({
+                        data: {
+                            roleId: roleId,
+                            permissionId: permissionId
+                        }
+                    });
+                }
+            } else {
+                throw new Error("Invalid permissions format");
+            }
         }
 
         // Get the updated role with its permissions
@@ -174,7 +200,7 @@ export const updateRole = async (req, res) => {
         return res.status(200).json(finalRole);
     } catch (error) {
         console.error("Error updating role:", error);
-        return res.status(500).json({ message: "Internal server error" });
+        return res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
 
@@ -184,7 +210,7 @@ export const deleteRole = async (req, res) => {
         const { roleId } = req.params;
         const id = roleId;
 
-        if (!id ) {
+        if (!id) {
             return res.status(400).json({ message: "Role ID is required" });
         }
 
@@ -197,12 +223,28 @@ export const deleteRole = async (req, res) => {
             return res.status(404).json({ message: "Role not found" });
         }
 
-        // Delete role permissions first
+        // Check if any users are using this role
+        const usersWithRole = await prisma.userRole.findMany({
+            where: { roleId: id },
+        });
+
+        // If users have this role, we need to handle it
+        if (usersWithRole.length > 0) {
+            // Option 1: Delete all user role assignments first
+            await prisma.userRole.deleteMany({
+                where: { roleId: id },
+            });
+            
+            // Log that we're removing the role from users
+            console.log(`Removed role ${id} from ${usersWithRole.length} users`);
+        }
+
+        // Delete role permissions
         await prisma.rolePermission.deleteMany({
             where: { roleId: id },
         });
 
-        // Delete role
+        // Finally delete the role
         await prisma.role.delete({
             where: { id },
         });
@@ -210,6 +252,6 @@ export const deleteRole = async (req, res) => {
         return res.status(200).json({ message: "Role deleted successfully" });
     } catch (error) {
         console.error("Error deleting role:", error);
-        return res.status(500).json({ message: "Internal server error" });
+        return res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };

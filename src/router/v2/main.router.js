@@ -21,6 +21,7 @@ import screenRouter from "./child/screen.router.js";
 import draftRouter from "./child/draft.router.js";
 import billingRouter from "./child/billing.router.js";
 import eventsRouter from "./child/events.router.js";
+import subscriptionPlanRouter from "./child/subscriptionPlan.router.js";
 
 const router = express.Router();
 
@@ -36,7 +37,7 @@ router.use("/salary/",salaryRouter);
 router.use("/super-admin/",superAdminRouter);
 router.use("/role/",roleRouter);
 router.use("/permission/",permissionRouter);
-router.use("role-permission/",rolePermissionRouter);
+router.use("/role-permission/",rolePermissionRouter); // Fixed missing slash
 router.use("/user-role/",userRoleRouter);
 router.use("/holiday/",holidayRouter);
 router.use("/holiday-type/",holidayTypeRouter);
@@ -46,5 +47,6 @@ router.use("/screen/",screenRouter);
 router.use("/drafts/", draftRouter);
 router.use("/billing", billingRouter);
 router.use("/events", eventsRouter);
+router.use("/subscription-plans", subscriptionPlanRouter);
 
 export default router;
