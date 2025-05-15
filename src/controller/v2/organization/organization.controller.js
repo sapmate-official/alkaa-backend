@@ -12,7 +12,8 @@ const getOrganization = async (req, res) => {
                         firstName: true,
                         lastName: true,
                     }
-                }
+                },
+                subscriptionPlan: true,
             }
         });
         res.status(200).json(organizations);
