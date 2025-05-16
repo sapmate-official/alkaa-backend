@@ -7,6 +7,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export const sendDemoRequestEmail = async (req, res) => {
     try {
         const { name, company, phoneNumber, email } = req.body;
+        console.log(req.body)
 
         // Validate input
         if (!name || !company || !phoneNumber || !email) {
@@ -24,9 +25,9 @@ export const sendDemoRequestEmail = async (req, res) => {
 
         // Recipients list
         const recipients = [
-            "parambrataghosh26@google.com",
-            "kabir.khan@sapmate.com",
-            "sadaf.salam@sapmate.com"
+            "parambrataghosh@Sapmate.com",
+            "kabir.khan@Sapmate.com",
+            "Sadaf.salam@Sapmate.com"
         ];
 
         // Send email to all recipients
