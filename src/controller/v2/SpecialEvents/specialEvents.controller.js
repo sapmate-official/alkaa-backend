@@ -158,7 +158,7 @@ export const getSpecialEvents = async (req, res) => {
         }
 
         // 3. Check for pending leave requests
-        if (isManager || hasViewAllPermission) {
+        if (isManager ) {
             // Filter based on role
             const leaveFilter = hasViewAllPermission 
                 ? { user: { orgId } } 
