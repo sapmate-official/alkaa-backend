@@ -106,6 +106,7 @@ const loginUser = async (req, res) => {
                 email,
             },
         });
+        console.log(user);
         if (!user) {
             // Use a generic message to prevent user enumeration
             return res.status(401).send({
