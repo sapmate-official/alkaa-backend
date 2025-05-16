@@ -145,8 +145,31 @@ export const getLeaveRequestByManagerId = async (req, res) => {
     try {
         if(!id){
             return res.status(400).json({ error: "Manager id is required" });
+
         }
-        const leaveRequests = await prisma.leaveRequest.findMany({
+
+    // Check if user is org_admin
+    const user = await prisma.user.findUnique({
+        where: { id },
+        select: { roles: {
+            select:{
+                role:{
+                    select:{
+                        name:true
+                    }
+                }
+            }
+        } }
+    });
+
+    if (!user) {
+        return res.status(404).json({ error: "User not found" });
+    }
+    let leaveRequests;
+    console.log(user.roles);
+    
+    if (user?.roles[0]?.role?.name !== 'Org_Admin') {
+         leaveRequests = await prisma.leaveRequest.findMany({
             where: {
                 user: {
                     managerId: id
@@ -157,6 +180,19 @@ export const getLeaveRequestByManagerId = async (req, res) => {
                 leaveType: true
             }
         });
+    }else{
+        leaveRequests = await prisma.leaveRequest.findMany({
+            where: {
+                user: {
+                    orgId:user.orgId
+                }
+            },
+            include: {
+                user: true,
+                leaveType: true
+            }
+        });
+    }
         res.status(200).json(leaveRequests);
     } catch (error) {
         console.log(error)
