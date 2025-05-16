@@ -1,5 +1,6 @@
 import prisma from '../../../db/connectDb.js';
 import { body, validationResult } from 'express-validator';
+import { initializePresetsForOrg } from '../../../seed/PermissionPreset.js';
 
 // Get all organizations
 const getOrganization = async (req, res) => {
@@ -11,7 +12,8 @@ const getOrganization = async (req, res) => {
                         firstName: true,
                         lastName: true,
                     }
-                }
+                },
+                subscriptionPlan: true,
             }
         });
         res.status(200).json(organizations);
@@ -32,6 +34,7 @@ const getOrganizationById = async (req, res) => {
             include: {
                 users: true,
                 departments: true,
+                subscriptionPlan: true,
             }
         });
         res.status(200).json(organization);
@@ -44,7 +47,7 @@ const getOrganizationById = async (req, res) => {
 const createOrganization = [
     body('name').notEmpty().withMessage('Name is required'),
     body('industry').optional().notEmpty().withMessage('Industry is required'),
-    body('subscriptionPlan').notEmpty().withMessage('Subscription Plan is required'),
+    body('subscriptionPlanId').notEmpty().withMessage('Subscription Plan is required'),
     body('subscriptionEnd').optional().isISO8601().withMessage('Subscription End must be a valid date'),
     body('isActive').optional().isBoolean().withMessage('IsActive must be a boolean'),
     body('settings').optional().isJSON().withMessage('Settings must be a valid JSON'),
@@ -55,13 +58,13 @@ const createOrganization = [
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { name, industry, subscriptionPlan, subscriptionEnd, isActive, settings } = req.body;
+        const { name, industry, subscriptionPlanId, subscriptionEnd, isActive, settings } = req.body;
         try {
             const newOrganization = await prisma.organization.create({
                 data: {
                     name,
                     industry,
-                    subscriptionPlan,
+                    subscriptionPlanId,
                     subscriptionEnd,
                     isActive,
                     settings
@@ -71,10 +74,12 @@ const createOrganization = [
                 data: {
                     orgId: newOrganization.id,
                     settings: {
-                        weekof: [0, 6]
+                        weekoff: [0, 6]
                     }   
                 }
             });
+            initializePresetsForOrg(newOrganization.id);
+            console.log("New organization created with ID:", newOrganization.id);
             console.log(newSettings);
             console.log(newOrganization);
             
@@ -92,7 +97,7 @@ const updateOrganization = [
     body('id').notEmpty().withMessage('ID is required'),
     body('name').optional().notEmpty().withMessage('Name is required'),
     body('industry').optional().notEmpty().withMessage('Industry is required'),
-    body('subscriptionPlan').optional().notEmpty().withMessage('Subscription Plan is required'),
+    body('subscriptionPlanId').optional(),  // Remove notEmpty() validation to allow null
     body('subscriptionEnd').optional().isISO8601().withMessage('Subscription End must be a valid date'),
     body('isActive').optional().isBoolean().withMessage('IsActive must be a boolean'),
 
@@ -104,17 +109,17 @@ const updateOrganization = [
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { id, name, industry, subscriptionPlan, subscriptionEnd, isActive, settings } = req.body;
+        const { id, name, industry, subscriptionPlanId, subscriptionEnd, isActive, settings } = req.body;
         try {
             const updatedOrganization = await prisma.organization.update({
                 where: { id },
                 data: {
-                    ...(name && { name }),
-                    ...(industry && { industry }),
-                    ...(subscriptionPlan && { subscriptionPlan }),
-                    ...(subscriptionEnd && { subscriptionEnd }),
+                    ...(name !== undefined && { name }),
+                    ...(industry !== undefined && { industry }),
+                    ...(subscriptionPlanId !== undefined && { subscriptionPlanId }),  // Changed from truthy check to undefined check
+                    ...(subscriptionEnd !== undefined && { subscriptionEnd }),
                     ...(isActive !== undefined && { isActive }),
-                    ...(settings && { settings })
+                    ...(settings !== undefined && { settings })
                 }
             });
             res.status(200).json(updatedOrganization);
@@ -276,6 +281,11 @@ const deleteOrganization = [
                 
                 // 18. Delete users
                 await tx.user.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                // Delete permission presets before deleting the organization
+                await tx.permissionPreset.deleteMany({
                     where: { orgId: id }
                 });
                 

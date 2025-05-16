@@ -15,7 +15,12 @@ import { getSuperAdmins ,
     getOrganizationAdmins,
     generateOrganizationBill,
     sendBillEmail,
-    sendBillsToAllOrganizations
+    sendBillsToAllOrganizations,
+    getOrganizationBills,
+    updateBillStatus,
+    getBillingStatistics,
+    getBillById,
+    processBillPayment
 
 } from "../../../controller/v2/superAdmin/superAdmin.controller.js";
 import { validateSuperAdminTokenMiddleware } from "../../../middleware/validateToken.js";
@@ -31,7 +36,12 @@ router.get("/get-user-info",validateSuperAdminTokenMiddleware,getUserInfo)
 router.get("/validate-token",validateSuperAdminTokenMiddleware,validateSuperAdminToken)
 router.get("/", getSuperAdmins);
 router.get("/:id", getSuperAdminById);
-router.post("/", createSuperAdmin);
+router.post("/",(req,res,next)=>{
+    if(req.body.secretKey !== process.env.SUPER_ADMIN_SECRET_KEY){
+        return res.status(401).json({message:"Unauthorized"})
+    }
+    next()
+}, createSuperAdmin);
 router.put("/:id", updateSuperAdmin);
 router.patch("/:id", updateSuperAdmin);
 router.delete("/:id", deleteSuperAdmin);
@@ -41,8 +51,18 @@ router.get("/organizations/stats", validateSuperAdminTokenMiddleware, getOrganiz
 router.get("/organization/:id/details", validateSuperAdminTokenMiddleware, getOrganizationDetails);
 router.get("/organization/:id/users", validateSuperAdminTokenMiddleware, getOrganizationUsers);
 router.get("/organization/:id/admins", validateSuperAdminTokenMiddleware, getOrganizationAdmins);
+router.get("/organization/:id/bills", validateSuperAdminTokenMiddleware, getOrganizationBills);
 router.post("/organization/:id/bill", validateSuperAdminTokenMiddleware, generateOrganizationBill);
 router.post("/organization/:id/send-bill", validateSuperAdminTokenMiddleware, sendBillEmail);
 router.post("/organizations/send-bills", validateSuperAdminTokenMiddleware, sendBillsToAllOrganizations);
+router.patch("/bill/:id/status", validateSuperAdminTokenMiddleware, updateBillStatus);
+router.get("/billing/statistics", validateSuperAdminTokenMiddleware, getBillingStatistics);
+
+// Bill management routes
+router.get("/bill/:id", getBillById);
+router.post("/bill/:id/payment", processBillPayment);
+
+
+
 
 export default router;

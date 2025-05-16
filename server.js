@@ -19,6 +19,9 @@ configDotenv()
 const app = express()
 const port = process.env.PORT || 3000
 
+app.use(cors(corsOptions))
+app.use(express.json())
+
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK' })
 })
@@ -28,6 +31,8 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 
+// Add before routes
+app.options('*', cors(corsOptions));
 
 // Add in your middleware or authentication-related code
 app.use((req, res, next) => {
@@ -36,18 +41,17 @@ app.use((req, res, next) => {
     res.cookie('accessToken', req.cookies.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      domain: process.env.NODE_ENV === 'production' ? '.alkaa.online' : 'localhost'
+      sameSite: 'none'  // Change this from 'strict' to 'none' for cross-domain
     });
   }
   next();
 });
 
-const tokenValidationMiddleware = (req, res, next) => {
+app.use((req, res, next) => {
+  console.log(`Request Method: ${req.method}, Request URL: ${req.url}`);
   next();
-};
-
-app.use('/api/v3', tokenValidationMiddleware);
+}
+)
 
 // Static files
 app.use('/', express.static(path.join(dirname, 'public')))
@@ -78,6 +82,18 @@ import mainV2Router from './src/router/v2/main.router.js'
 import mainv3Router from './src/router/v3/main.router.js'
 app.use("/api/v2/", mainV2Router)
 app.use("/api/v3/", mainv3Router)
+
+// Import the bill controllers
+import { getBillById, processBillPayment } from './src/controller/v2/superAdmin/superAdmin.controller.js';
+// Import the demo request controller
+import { sendDemoRequestEmail } from './src/controller/v2/public/public.controller.js';
+
+// Public billing routes
+app.get("/api/public/billing/:id", getBillById);
+app.post("/api/public/billing/:id/payment", processBillPayment);
+
+// Public demo request route
+app.post("/api/public/demo-request", sendDemoRequestEmail);
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(dirname, 'public', 'interface.html'))

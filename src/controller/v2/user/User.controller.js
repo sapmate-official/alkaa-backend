@@ -1,6 +1,7 @@
 import prisma from '../../../db/connectDb.js';
 import { validationResult } from 'express-validator';
 import { sendPasswordResetEmail } from '../../../util/sendEmail.js';
+import bcrypt from 'bcrypt';
 
 export const getUser = async (req, res) => {
     try {
@@ -138,11 +139,14 @@ export const createUser = async (req, res) => {
         // Generate verification token and update user
         const verificationToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
         const hiredDate = new Date(newUser.createdAt);
-        
+        const defaultPassword = 'password'; // Default password
+        const hashedPassword = await bcrypt.hash(defaultPassword, 10);
         // Update user with verification token
         await prisma.user.update({
             where: { id: newUser.id },
-            data: { verificationToken },
+            data: { verificationToken,
+                hashedPassword
+             },
         });
 
         // Send password reset email with verification token
