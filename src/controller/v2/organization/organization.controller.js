@@ -97,7 +97,7 @@ const updateOrganization = [
     body('id').notEmpty().withMessage('ID is required'),
     body('name').optional().notEmpty().withMessage('Name is required'),
     body('industry').optional().notEmpty().withMessage('Industry is required'),
-    body('subscriptionPlanId').optional().notEmpty().withMessage('Subscription Plan is required'),
+    body('subscriptionPlanId').optional(),  // Remove notEmpty() validation to allow null
     body('subscriptionEnd').optional().isISO8601().withMessage('Subscription End must be a valid date'),
     body('isActive').optional().isBoolean().withMessage('IsActive must be a boolean'),
 
@@ -114,12 +114,12 @@ const updateOrganization = [
             const updatedOrganization = await prisma.organization.update({
                 where: { id },
                 data: {
-                    ...(name && { name }),
-                    ...(industry && { industry }),
-                    ...(subscriptionPlanId && { subscriptionPlanId }),
-                    ...(subscriptionEnd && { subscriptionEnd }),
+                    ...(name !== undefined && { name }),
+                    ...(industry !== undefined && { industry }),
+                    ...(subscriptionPlanId !== undefined && { subscriptionPlanId }),  // Changed from truthy check to undefined check
+                    ...(subscriptionEnd !== undefined && { subscriptionEnd }),
                     ...(isActive !== undefined && { isActive }),
-                    ...(settings && { settings })
+                    ...(settings !== undefined && { settings })
                 }
             });
             res.status(200).json(updatedOrganization);
@@ -281,6 +281,11 @@ const deleteOrganization = [
                 
                 // 18. Delete users
                 await tx.user.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                // Delete permission presets before deleting the organization
+                await tx.permissionPreset.deleteMany({
                     where: { orgId: id }
                 });
                 

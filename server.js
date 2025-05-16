@@ -85,10 +85,15 @@ app.use("/api/v3/", mainv3Router)
 
 // Import the bill controllers
 import { getBillById, processBillPayment } from './src/controller/v2/superAdmin/superAdmin.controller.js';
+// Import the demo request controller
+import { sendDemoRequestEmail } from './src/controller/v2/public/public.controller.js';
 
 // Public billing routes
 app.get("/api/public/billing/:id", getBillById);
 app.post("/api/public/billing/:id/payment", processBillPayment);
+
+// Public demo request route
+app.post("/api/public/demo-request", sendDemoRequestEmail);
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(dirname, 'public', 'interface.html'))
