@@ -1,5 +1,6 @@
 import express from "express";
 import { createEmployee, deleteEmployee, getEmployeeById, listOfEmployees,checkEmployeeId, updateEmployee,generateEmployeeId } from "../../../controller/v2/organization/Employee/employee.controller.js";
+import draftRouter from "./draft.router.js";
 
 const router = express.Router();
  router.get('/:orgId',listOfEmployees);
@@ -12,5 +13,7 @@ router.delete('/',deleteEmployee);
 //extra routes
 router.get("/employee-id/:orgId",generateEmployeeId);
 router.get("/employee-id/:orgId/check/:employeeId",checkEmployeeId);
+router.use("/draft/", draftRouter);
+
 
 export default router;
