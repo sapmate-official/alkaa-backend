@@ -129,8 +129,8 @@ const createEmployee = async (req, res) => {
 
         // Basic validation
         console.log('Validating required fields...');
-        if (!firstName || !lastName || !email || !mobileNumber || !employeeId  || !roleIds.length>0 || !orgId || !hiredDate  ) {
-            console.log(firstName, lastName, email, mobileNumber, employeeId, departmentId,roleIds,orgId);
+        if (!firstName || !lastName || !email || !mobileNumber || !employeeId  || !roleIds.length>0 || !orgId || !hiredDate || !emergencyContact ) {
+            console.log(firstName, lastName, email, mobileNumber, employeeId, departmentId,roleIds,orgId,emergencyContact);
             console.log('Validation failed: Missing required fields', firstName?true:false, lastName?true:false, email?true:false, mobileNumber?true:false, employeeId?true:false, departmentId?true:false,roleIds?true:false,orgId?true:false);
             return res.status(400).json({ error: 'Required fields are missing' });
         }
