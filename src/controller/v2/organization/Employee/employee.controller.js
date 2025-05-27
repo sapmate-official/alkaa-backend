@@ -69,6 +69,7 @@ const createEmployee = async (req, res) => {
             lastName,
             email,
             mobileNumber,
+            emergencyContact,
             dateOfBirth,
             hiredDate,
             address,
@@ -174,6 +175,7 @@ const createEmployee = async (req, res) => {
                 dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
                 address,
                 adharNumber,
+                emergencyContact,
                 panNumber,
                 status:'inactive',
                 annualPackage: annualPackage || 0,
@@ -262,6 +264,7 @@ const updateEmployee = async (req, res) => {
             lastName,
             employeeId,
             mobileNumber,
+            emergencyContact,
             status,
             bankDetails,
             salaryDetails
@@ -276,6 +279,7 @@ const updateEmployee = async (req, res) => {
                 lastName,
                 employeeId,
                 mobileNumber,
+                emergencyContact,
                 status,
                 bankDetails: bankDetails ? {
                     upsert: {
