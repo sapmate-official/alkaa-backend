@@ -81,6 +81,7 @@ export const createUser = async (req, res) => {
         dateOfBirth,
         address,
         mobileNumber,
+        emergencyContact,
         adharNumber,
         panNumber
     } = req.body;
@@ -128,6 +129,7 @@ export const createUser = async (req, res) => {
         if (dateOfBirth) userData.dateOfBirth = new Date(dateOfBirth);
         if (address) userData.address = address;
         if (mobileNumber) userData.mobileNumber = mobileNumber;
+        if (emergencyContact) userData.emergencyContact = emergencyContact;
         if (adharNumber) userData.adharNumber = adharNumber;
         if (panNumber) userData.panNumber = panNumber;
 
@@ -206,6 +208,7 @@ export const updateUser = async (req, res) => {
     if (req.body.verificationToken !== undefined) updateData.verificationToken = req.body.verificationToken || null;
     if (req.body.address !== undefined) updateData.address = req.body.address || null;
     if (req.body.mobileNumber !== undefined) updateData.mobileNumber = req.body.mobileNumber || null;
+    if (req.body.emergencyContact !== undefined) updateData.emergencyContact = req.body.emergencyContact || null;
     if (req.body.adharNumber !== undefined) updateData.adharNumber = req.body.adharNumber || null;
     if (req.body.panNumber !== undefined) updateData.panNumber = req.body.panNumber || null;
     if (req.body.employeeId !== undefined) updateData.employeeId = req.body.employeeId || null;
