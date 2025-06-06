@@ -1,5 +1,9 @@
 import prisma from "../../../db/connectDb.js";
 
+
+
+
+
 /**
  * Get payslip based on provided parameters
  */
@@ -331,6 +335,322 @@ export const generateSalaryBasedOnParams = async (req, res) => {
             });
         }
 
+        // 1. CHECK FOR PENDING ADJUSTMENTS
+        console.log("[SALARY_GENERATE] Checking for pending adjustments");
+        
+        const currentSalaryKey = `${year}-${month.toString().padStart(2, '0')}`;
+        let adjustmentAmount = 0;
+        let pendingLeaveAdjustments = [];
+        let pendingAttendanceAdjustments = [];
+
+        console.log("[SALARY_GENERATE] Current salary key for tracking:", currentSalaryKey);
+        
+        // Check for late leave approvals that need compensation
+        pendingLeaveAdjustments = await prisma.leaveRequest.findMany({
+            where: {
+                userId: targetUserId,
+                status: "APPROVED",
+                approvedAt: {
+                    gte: new Date(parseInt(year), parseInt(month) - 2, 1), // Check from previous month
+                },
+                OR: [
+                    { contributedToSalary: { equals: null } },
+                    { contributedToSalary: { not: { path: [currentSalaryKey], equals: "adjustment" } } }
+                ]
+            },
+            include: {
+                leaveType: true
+            }
+        });
+
+        console.log("[SALARY_GENERATE] Raw leave adjustments query result:", {
+            count: pendingLeaveAdjustments.length,
+            leaves: pendingLeaveAdjustments.map(leave => ({
+                id: leave.id,
+                startDate: leave.startDate,
+                endDate: leave.endDate,
+                approvedAt: leave.approvedAt,
+                contributedToSalary: leave.contributedToSalary,
+                leaveType: leave.leaveType.name,
+                isPaid: leave.leaveType.isPaid
+            }))
+        });
+
+        // Check for late attendance verifications that need compensation  
+        pendingAttendanceAdjustments = await prisma.attendanceRecord.findMany({
+            where: {
+                userId: targetUserId,
+                verificationStatus: "VERIFIED",
+                verifiedAt: {
+                    gte: new Date(parseInt(year), parseInt(month) - 2, 1), // Check from previous month
+                },
+                OR: [
+                    { contributedToSalary: { equals: null } },
+                    { contributedToSalary: { not: { path: [currentSalaryKey], equals: "adjustment" } } }
+                ]
+            }
+        });
+
+        console.log("[SALARY_GENERATE] Raw attendance adjustments query result:", {
+            count: pendingAttendanceAdjustments.length,
+            attendances: pendingAttendanceAdjustments.map(att => ({
+                id: att.id,
+                date: att.date,
+                verifiedAt: att.verifiedAt,
+                status: att.status,
+                contributedToSalary: att.contributedToSalary
+            }))
+        });
+
+        console.log("[SALARY_GENERATE] Found pending adjustments", {
+            leaveAdjustments: pendingLeaveAdjustments.length,
+            attendanceAdjustments: pendingAttendanceAdjustments.length
+        });
+
+        // Process leave adjustments
+        for (const leave of pendingLeaveAdjustments) {
+            console.log("[SALARY_GENERATE] Processing leave adjustment:", {
+                leaveId: leave.id,
+                startDate: leave.startDate,
+                endDate: leave.endDate,
+                approvedAt: leave.approvedAt
+            });
+
+            const leaveStartDate = new Date(leave.startDate);
+            const leaveEndDate = new Date(leave.endDate);
+            const approvedDate = new Date(leave.approvedAt);
+            
+            // Check if this leave was approved after any salary was generated
+            const affectedSalaryRecords = await prisma.salaryRecord.findMany({
+                where: {
+                    userId: targetUserId,
+                    createdAt: { lt: approvedDate },
+                    OR: [
+                        {
+                            year: leaveStartDate.getFullYear(),
+                            month: { gte: leaveStartDate.getMonth() + 1, lte: leaveEndDate.getMonth() + 1 }
+                        }
+                    ]
+                }
+            });
+
+            console.log("[SALARY_GENERATE] Affected salary records for leave:", {
+                leaveId: leave.id,
+                affectedRecordsCount: affectedSalaryRecords.length,
+                affectedRecords: affectedSalaryRecords.map(sr => ({
+                    id: sr.id,
+                    month: sr.month,
+                    year: sr.year,
+                    createdAt: sr.createdAt
+                }))
+            });
+
+            // Calculate compensation for each affected salary record
+            for (const salaryRecord of affectedSalaryRecords) {
+                const salaryMonthKey = `${salaryRecord.year}-${salaryRecord.month.toString().padStart(2, '0')}`;
+                const contributedToSalary = leave.contributedToSalary || {};
+                
+                console.log("[SALARY_GENERATE] Checking contribution status:", {
+                    leaveId: leave.id,
+                    salaryRecordId: salaryRecord.id,
+                    salaryMonthKey,
+                    existingContributions: contributedToSalary,
+                    alreadyProcessed: contributedToSalary[salaryMonthKey] === "adjustment"
+                });
+
+                // Skip if already processed for this month
+                if (contributedToSalary[salaryMonthKey] === "adjustment") {
+                    console.log("[SALARY_GENERATE] Skipping already processed leave adjustment");
+                    continue;
+                }
+
+                // Calculate working days for affected salary month (you'll need this data)
+                const salaryMonthStart = new Date(salaryRecord.year, salaryRecord.month - 1, 1);
+                const salaryMonthEnd = new Date(salaryRecord.year, salaryRecord.month, 0);
+                const salaryMonthDays = salaryMonthEnd.getDate();
+                
+                // Get holidays for that month
+                const salaryMonthHolidays = await prisma.holiday.findMany({
+                    where: {
+                        orgId: (await prisma.user.findUnique({ where: { id: targetUserId }, select: { orgId: true } }))?.orgId,
+                        date: {
+                            gte: salaryMonthStart,
+                            lt: new Date(salaryRecord.year, salaryRecord.month, 1)
+                        }
+                    }
+                });
+
+                // Get org settings for weekend days
+                const orgSettings = await prisma.organizationSettings.findFirst({
+                    where: {
+                        orgId: (await prisma.user.findUnique({ where: { id: targetUserId }, select: { orgId: true } }))?.orgId
+                    }
+                });
+
+                const weekendDays = orgSettings?.settings?.weekoff || [0, 6];
+
+                // Calculate working days for that month
+                let salaryMonthWorkingDays = 0;
+                for (let day = 1; day <= salaryMonthDays; day++) {
+                    const date = new Date(salaryRecord.year, salaryRecord.month - 1, day);
+                    const dayOfWeek = date.getDay();
+
+                    if (!weekendDays.includes(dayOfWeek) &&
+                        !salaryMonthHolidays.some(h => new Date(h.date).getDate() === day)) {
+                        salaryMonthWorkingDays++;
+                    }
+                }
+
+                // Calculate days that need compensation in this salary month
+                let compensationDays = 0;
+                
+                for (let d = new Date(Math.max(leaveStartDate, salaryMonthStart)); 
+                     d <= new Date(Math.min(leaveEndDate, salaryMonthEnd)); 
+                     d.setDate(d.getDate() + 1)) {
+                    
+                    const dayOfWeek = d.getDay();
+                    if (!weekendDays.includes(dayOfWeek) && 
+                        !salaryMonthHolidays.some(h => new Date(h.date).toDateString() === d.toDateString())) {
+                        compensationDays++;
+                    }
+                }
+
+                console.log("[SALARY_GENERATE] Compensation calculation for leave:", {
+                    leaveId: leave.id,
+                    salaryRecordId: salaryRecord.id,
+                    salaryMonthWorkingDays,
+                    compensationDays,
+                    isPaidLeave: leave.leaveType.isPaid,
+                    basicSalary: salaryRecord.basicSalary
+                });
+
+                if (compensationDays > 0 && leave.leaveType.isPaid) {
+                    const perDaySalary = salaryRecord.basicSalary / salaryMonthWorkingDays;
+                    const compensationForThisLeave = compensationDays * perDaySalary;
+                    adjustmentAmount += compensationForThisLeave;
+                    
+                    console.log("[SALARY_GENERATE] Leave compensation calculated", {
+                        leaveId: leave.id,
+                        affectedMonth: salaryMonthKey,
+                        compensationDays,
+                        perDaySalary,
+                        compensationAmount: compensationForThisLeave,
+                        totalAdjustmentSoFar: adjustmentAmount
+                    });
+                }
+            }
+        }
+
+        // Process attendance adjustments (similar logic with detailed logging)
+        for (const attendance of pendingAttendanceAdjustments) {
+            console.log("[SALARY_GENERATE] Processing attendance adjustment:", {
+                attendanceId: attendance.id,
+                date: attendance.date,
+                verifiedAt: attendance.verifiedAt,
+                status: attendance.status
+            });
+
+            const attendanceDate = new Date(attendance.date);
+            const verifiedDate = new Date(attendance.verifiedAt);
+            
+            // Check if this attendance was verified after salary for that month was generated
+            const affectedSalaryRecord = await prisma.salaryRecord.findUnique({
+                where: {
+                    userId_month_year: {
+                        userId: targetUserId,
+                        month: attendanceDate.getMonth() + 1,
+                        year: attendanceDate.getFullYear()
+                    }
+                }
+            });
+
+            console.log("[SALARY_GENERATE] Affected salary record for attendance:", {
+                attendanceId: attendance.id,
+                attendanceMonth: attendanceDate.getMonth() + 1,
+                attendanceYear: attendanceDate.getFullYear(),
+                affectedRecord: affectedSalaryRecord ? {
+                    id: affectedSalaryRecord.id,
+                    createdAt: affectedSalaryRecord.createdAt,
+                    verifiedAfter: affectedSalaryRecord.createdAt < verifiedDate
+                } : null
+            });
+
+            if (affectedSalaryRecord && affectedSalaryRecord.createdAt < verifiedDate) {
+                const salaryMonthKey = `${affectedSalaryRecord.year}-${affectedSalaryRecord.month.toString().padStart(2, '0')}`;
+                const contributedToSalary = attendance.contributedToSalary || {};
+                
+                console.log("[SALARY_GENERATE] Attendance contribution check:", {
+                    attendanceId: attendance.id,
+                    salaryMonthKey,
+                    existingContributions: contributedToSalary,
+                    alreadyProcessed: contributedToSalary[salaryMonthKey] === "adjustment"
+                });
+
+                // Skip if already processed
+                if (contributedToSalary[salaryMonthKey] === "adjustment") {
+                    console.log("[SALARY_GENERATE] Skipping already processed attendance adjustment");
+                    continue;
+                }
+
+                // Get working days for affected salary month
+                const salaryMonthStart = new Date(affectedSalaryRecord.year, affectedSalaryRecord.month - 1, 1);
+                const salaryMonthEnd = new Date(affectedSalaryRecord.year, affectedSalaryRecord.month, 0);
+                const salaryMonthDays = salaryMonthEnd.getDate();
+                
+                // Get holidays and weekend settings for that month
+                const salaryMonthHolidays = await prisma.holiday.findMany({
+                    where: {
+                        orgId: (await prisma.user.findUnique({ where: { id: targetUserId }, select: { orgId: true } }))?.orgId,
+                        date: {
+                            gte: salaryMonthStart,
+                            lt: new Date(affectedSalaryRecord.year, affectedSalaryRecord.month, 1)
+                        }
+                    }
+                });
+
+                const orgSettings = await prisma.organizationSettings.findFirst({
+                    where: {
+                        orgId: (await prisma.user.findUnique({ where: { id: targetUserId }, select: { orgId: true } }))?.orgId
+                    }
+                });
+
+                const weekendDays = orgSettings?.settings?.weekoff || [0, 6];
+
+                // Calculate working days for that month
+                let salaryMonthWorkingDays = 0;
+                for (let day = 1; day <= salaryMonthDays; day++) {
+                    const date = new Date(affectedSalaryRecord.year, affectedSalaryRecord.month - 1, day);
+                    const dayOfWeek = date.getDay();
+
+                    if (!weekendDays.includes(dayOfWeek) &&
+                        !salaryMonthHolidays.some(h => new Date(h.date).getDate() === day)) {
+                        salaryMonthWorkingDays++;
+                    }
+                }
+
+                // Calculate compensation (1 day or 0.5 day)
+                const compensationDays = attendance.status === "HALF_DAY" ? 0.5 : 1;
+                const perDaySalary = affectedSalaryRecord.basicSalary / salaryMonthWorkingDays;
+                const compensationForThisAttendance = compensationDays * perDaySalary;
+                adjustmentAmount += compensationForThisAttendance;
+                
+                console.log("[SALARY_GENERATE] Attendance compensation calculated", {
+                    attendanceId: attendance.id,
+                    affectedMonth: salaryMonthKey,
+                    salaryMonthWorkingDays,
+                    compensationDays,
+                    perDaySalary,
+                    compensationAmount: compensationForThisAttendance,
+                    totalAdjustmentSoFar: adjustmentAmount
+                });
+            }
+        }
+
+        console.log("[SALARY_GENERATE] Final adjustment calculation:", {
+            totalAdjustmentAmount: adjustmentAmount,
+            hasAdjustments: adjustmentAmount > 0
+        });
+
         // 1. DATA COLLECTION
         console.log("[SALARY_GENERATE] Starting data collection phase");
 
@@ -393,11 +713,11 @@ export const generateSalaryBasedOnParams = async (req, res) => {
             orgId: user.orgId
         });
 
-        // Get attendance records
+        // Get attendance records with detailed logging
         const attendanceRecords = await prisma.attendanceRecord.findMany({
             where: {
                 userId: targetUserId,
-                verificationStatus : 'VERIFIED',
+                verificationStatus: 'VERIFIED',
                 date: {
                     gte: new Date(parseInt(year), parseInt(month) - 1, 1),
                     lt: new Date(parseInt(year), parseInt(month), 1)
@@ -405,14 +725,22 @@ export const generateSalaryBasedOnParams = async (req, res) => {
             }
         });
 
-        console.log("[SALARY_GENERATE] Attendance records fetched", {
+        console.log("[SALARY_GENERATE] Attendance records detailed:", {
             count: attendanceRecords.length,
             month,
             year,
-            userId: targetUserId
+            userId: targetUserId,
+            records: attendanceRecords.map(record => ({
+                id: record.id,
+                date: record.date,
+                status: record.status,
+                verificationStatus: record.verificationStatus,
+                verifiedAt: record.verifiedAt,
+                contributedToSalary: record.contributedToSalary
+            }))
         });
 
-        // Get approved leave requests
+        // Get approved leave requests with detailed logging
         const leaveRequests = await prisma.leaveRequest.findMany({
             where: {
                 userId: targetUserId,
@@ -437,11 +765,21 @@ export const generateSalaryBasedOnParams = async (req, res) => {
             }
         });
 
-        console.log("[SALARY_GENERATE] Leave requests fetched", {
+        console.log("[SALARY_GENERATE] Leave requests detailed:", {
             count: leaveRequests.length,
             month,
             year,
-            userId: targetUserId
+            userId: targetUserId,
+            requests: leaveRequests.map(leave => ({
+                id: leave.id,
+                startDate: leave.startDate,
+                endDate: leave.endDate,
+                status: leave.status,
+                approvedAt: leave.approvedAt,
+                leaveType: leave.leaveType.name,
+                isPaid: leave.leaveType.isPaid,
+                contributedToSalary: leave.contributedToSalary
+            }))
         });
 
         // Get weekoff settings
@@ -667,6 +1005,22 @@ export const generateSalaryBasedOnParams = async (req, res) => {
         });
 
         // 7. FINAL CALCULATION
+        console.log("[SALARY_GENERATE] Starting final calculation");
+        
+        // Define monthName for use in remarks
+        const monthName = new Date(parseInt(year), parseInt(month) - 1, 1).toLocaleString('default', { month: 'long' });
+        
+        // Add adjustment amount to allowances if there are any adjustments
+        if (adjustmentAmount > 0) {
+            allowances.salaryAdjustment = adjustmentAmount;
+            totalAllowances += adjustmentAmount;
+            
+            console.log("[SALARY_GENERATE] Salary adjustment added", {
+                adjustmentAmount,
+                newTotalAllowances: totalAllowances
+            });
+        }
+
         const netSalary = Math.max(0, baseSalary + totalAllowances - totalDeductions);
 
         console.log("[SALARY_GENERATE] Final salary calculated", {
@@ -676,20 +1030,61 @@ export const generateSalaryBasedOnParams = async (req, res) => {
             netSalary
         });
 
-        // 8. RECORD CREATION
-        const salaryRecord = await prisma.salaryRecord.create({
-            data: {
-                userId: targetUserId,
-                month: parseInt(month),
-                year: parseInt(year),
-                basicSalary: baseSalary,
-                netSalary: netSalary,
-                tax: taxAmount,
-                allowances: allowances,
-                deductions: deductions,
-                status: "PENDING",
-                remarks: `Salary for ${new Date(parseInt(year), parseInt(month) - 1, 1).toLocaleString('default', { month: 'long' })} ${year}`
+        // 8. RECORD CREATION WITH CONTRIBUTION TRACKING
+        const salaryRecord = await prisma.$transaction(async (tx) => {
+            console.log("[SALARY_GENERATE] Creating salary record in transaction");
+
+            // Create salary record
+            const record = await tx.salaryRecord.create({
+                data: {
+                    userId: targetUserId,
+                    month: parseInt(month),
+                    year: parseInt(year),
+                    basicSalary: baseSalary,
+                    netSalary: netSalary,
+                    tax: taxAmount,
+                    allowances: allowances,
+                    deductions: deductions,
+                    status: "PENDING",
+                    remarks: `Salary for ${monthName} ${year}${adjustmentAmount > 0 ? ` (includes adjustment of ${adjustmentAmount.toFixed(2)})` : ''}`
+                }
+            });
+
+            console.log("[SALARY_GENERATE] Salary record created, updating contribution tracking");
+
+            // Update contribution tracking for processed leaves
+            for (const leave of pendingLeaveAdjustments) {
+                const updatedContribution = leave.contributedToSalary || {};
+                updatedContribution[currentSalaryKey] = "adjustment";
+                
+                await tx.leaveRequest.update({
+                    where: { id: leave.id },
+                    data: { contributedToSalary: updatedContribution }
+                });
+
+                console.log("[SALARY_GENERATE] Updated leave contribution tracking:", {
+                    leaveId: leave.id,
+                    updatedContribution
+                });
             }
+
+            // Update contribution tracking for processed attendance
+            for (const attendance of pendingAttendanceAdjustments) {
+                const updatedContribution = attendance.contributedToSalary || {};
+                updatedContribution[currentSalaryKey] = "adjustment";
+                
+                await tx.attendanceRecord.update({
+                    where: { id: attendance.id },
+                    data: { contributedToSalary: updatedContribution }
+                });
+
+                console.log("[SALARY_GENERATE] Updated attendance contribution tracking:", {
+                    attendanceId: attendance.id,
+                    updatedContribution
+                });
+            }
+
+            return record;
         });
 
         console.log("[SALARY_GENERATE] Salary record created successfully", {
@@ -697,13 +1092,22 @@ export const generateSalaryBasedOnParams = async (req, res) => {
             userId: targetUserId,
             month,
             year,
-            status: salaryRecord.status
+            status: salaryRecord.status,
+            finalAdjustmentAmount: adjustmentAmount,
+            netSalary: salaryRecord.netSalary
         });
 
         return res.status(201).json({
             success: true,
             message: "Salary generated successfully",
-            data: salaryRecord
+            data: {
+                ...salaryRecord,
+                adjustmentAmount: adjustmentAmount,
+                adjustmentDetails: {
+                    leaveAdjustments: pendingLeaveAdjustments.length,
+                    attendanceAdjustments: pendingAttendanceAdjustments.length
+                }
+            }
         });
 
     } catch (error) {

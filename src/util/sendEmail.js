@@ -1,15 +1,48 @@
-import { Resend } from "resend";
 import { configDotenv } from "dotenv";
 configDotenv()
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+
+const sendBrevoEmail = async (emailData) => {
+    try {
+        const response = await fetch(BREVO_API_URL, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Api-Key': BREVO_API_KEY,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(emailData)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Brevo API error: ${response.status} - ${JSON.stringify(errorData)}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        throw error;
+    }
+};
+
 export const sendPasswordResetEmail = async (email, verificationToken, companyName, hiredDate) => {
     try {
-        const { data, error } = await resend.emails.send({
-            from: process.env.SENDER_EMAIL,
-            to: [email],
+        const emailData = {
+            sender: {
+                name: companyName,
+                // email: "noreply@alkaa.online"
+                email: process.env.SENDER_EMAIL
+            },
+            to: [
+                {
+                    email: email,
+                    name: "Customer"
+                }
+            ],
             subject: "Set Your Password",
-            html: `
+            htmlContent: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                     <h2 style="color: #2c3e50; text-align: center;">Welcome to ${companyName}</h2>
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
@@ -30,12 +63,10 @@ export const sendPasswordResetEmail = async (email, verificationToken, companyNa
                         </p>
                     </div>
                 </div>
-            `,
-        });
-        if (error) {
-            return error;
-        }
-        return data;
+            `
+        };
+
+        return await sendBrevoEmail(emailData);
     } catch (error) {
         return error;
     }
@@ -43,11 +74,19 @@ export const sendPasswordResetEmail = async (email, verificationToken, companyNa
 
 export const sendBillingEmail = async (email, billData, organizationName) => {
     try {
-        const { data, error } = await resend.emails.send({
-            from: process.env.SENDER_EMAIL,
-            to: [email],
+        const emailData = {
+            sender: {
+                name: organizationName,
+                email: process.env.SENDER_EMAIL
+            },
+            to: [
+                {
+                    email: email,
+                    name: ""
+                }
+            ],
             subject: `${organizationName} - Billing Statement for ${billData.month}/${billData.year}`,
-            html: `
+            htmlContent: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                     <h2 style="color: #2c3e50; text-align: center;">Billing Statement</h2>
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
@@ -87,13 +126,15 @@ export const sendBillingEmail = async (email, billData, organizationName) => {
                         </p>
                     </div>
                 </div>
-            `,
-        });
-        if (error) {
-            return error;
-        }
-        return data;
+            `
+        };
+
+        return await sendBrevoEmail(emailData);
     } catch (error) {
         return error;
     }
 };
+
+sendPasswordResetEmail('projectxplore5@gmail.com', 'verificationToken123', 'Project Xplore', '2023-10-01')
+    .then(response => console.log('Password reset email sent:', response))
+    .catch(error => console.error('Error sending password reset email:', error));
