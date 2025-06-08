@@ -135,6 +135,3 @@ export const sendBillingEmail = async (email, billData, organizationName) => {
     }
 };
 
-sendPasswordResetEmail('projectxplore5@gmail.com', 'verificationToken123', 'Project Xplore', '2023-10-01')
-    .then(response => console.log('Password reset email sent:', response))
-    .catch(error => console.error('Error sending password reset email:', error));
