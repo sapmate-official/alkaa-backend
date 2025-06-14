@@ -48,10 +48,9 @@ export const sendDemoRequestEmail = async (req, res) => {
 
         // Recipients list
         const recipients = [
-            "parambrataghosh@Sapmate.com",
-            "kabir.khan@Sapmate.com",
-            "Sadaf.salam@Sapmate.com"
-        ];        // Send email via Brevo
+            "support@alkaa.online",
+            "shramana.show@alkaa.online",
+        ];        
         const emailData = {
             sender: {
                 name: "Sapmate Demo Requests",

@@ -8,3 +8,4 @@ localhost.pem
 .netlify
 logs
 .vercel
+/src/seed/data

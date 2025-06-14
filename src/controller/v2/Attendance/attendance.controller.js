@@ -1,4 +1,5 @@
 import prisma from "../../../db/connectDb.js";
+import { sendAttendanceVerificationEmail } from "../../../util/sendEmail.js";
 const WORKING_HOURS = {
     FULL_DAY: 8,
     HALF_DAY: 4,
@@ -253,6 +254,59 @@ export const checkOut = async (req, res) => {
             console.error('Error creating daily report:', reportError);
             // Continue even if report creation fails
         }
+        let userData = await prisma.user.findUnique({
+            where: {
+                id: user.id
+            },
+            select: {
+                firstName: true,
+                lastName: true,
+                managerId: true,
+                manager:{
+                    select:{
+                        email:true
+                    }
+                },
+                email: true,
+                organization:{
+                    select:{
+                        name:true,
+                        Organization_admin:{
+                            select:{
+                                admin_user:{
+                                    select:{
+                                        email:true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        const employeename = `${userData.firstName} ${userData.lastName}`;
+        console.log( userData.manager.email,
+            userData.organization.Organization_admin[0].admin_user.email,
+            employeename,
+            userData.email,
+            updatedSession,
+            userData.organization.name);
+        
+        await sendAttendanceVerificationEmail(
+            userData.manager.email,
+            userData.organization.Organization_admin[0].admin_user.email,
+            employeename,
+            userData.email,
+            {
+                id: updatedSession.id,
+                date: updatedSession.date,
+                checkInTime: updatedSession.checkInTime,
+                checkOutTime: updatedSession.checkOutTime,
+                sessionNumber: updatedSession.sessionNumber,
+                status: updatedSession.status
+            },
+            userData.organization.name
+        )
 
         console.log('Checkout process completed successfully');
         res.status(200).json({

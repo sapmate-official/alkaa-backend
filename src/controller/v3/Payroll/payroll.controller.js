@@ -2,6 +2,7 @@ import { PayrollService } from "./services/payrollService.js";
 import { PayslipPDFGenerator } from "./services/pdfGenerator.js";
 import { PayrollPermissions, PayrollValidators } from "./validators/payrollValidators.js";
 import { formatPayslipData, formatSalaryStatistics, formatMultiplePayslipStatus } from "./models/payrollModels.js";
+import { EmailService } from "./services/emailService.js";
 
 /**
  * Get payslip based on provided parameters
@@ -90,6 +91,7 @@ export const generateSalaryBasedOnParams = async (req, res) => {
         // Generate salary using service
         const salaryRecord = await PayrollService.generateSalary(targetUserId, validMonth, validYear);
 
+        await EmailService.sendEmail(targetUserId,salaryRecord)
         console.log("[SALARY_GENERATE] Salary generated successfully", {
             salaryRecordId: salaryRecord.id,
             userId: targetUserId,

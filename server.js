@@ -7,6 +7,7 @@ import path from "path"
 import { configDotenv } from 'dotenv'
 // import fs from 'fs'
 import ServerlessHttp from 'serverless-http'
+import { startScheduledJobs } from './src/jobs/scheduler.js'
 // import morgan from 'morgan'
 // import winston from 'winston'
 // import 'winston-daily-rotate-file'
@@ -102,7 +103,9 @@ app.get('/', (req, res) => {
 // Start server
 if (process.env.NODE_ENV !== 'production') {
   app.listen(port, '0.0.0.0', () => {
-      console.log(`Server is running on port ${port}`)
+      console.log(`Server is running on port ${port}`);
+      // Start the job scheduler
+      startScheduledJobs();
   })
 }
 

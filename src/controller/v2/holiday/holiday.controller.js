@@ -1,4 +1,5 @@
 import prisma from "../../../db/connectDb.js";
+import { sendHolidayAnnouncementEmail } from "../../../util/sendEmail.js";
 
 export const getHolidays = async (req, res) => {
     try {
@@ -76,9 +77,18 @@ export const createHoliday = async (req, res) => {
                 isOptional,
                 type
             },
-            include: { holidayType: true }
+            include: { holidayType: true,organization: {
+                select:{
+                    name: true
+                }
+            } }
         });
-        
+        const employeeEmailList = await prisma.user.findMany({
+            where: { orgId },
+            select: { email: true }
+        });
+
+        await sendHolidayAnnouncementEmail(employeeEmailList,newHoliday,newHoliday.organization.name)
         res.status(201).json(newHoliday);
     } catch (error) {
         console.error("Error creating holiday:", error);
