@@ -1,5 +1,6 @@
 import express from "express";
 import { getOrganization, getOrganizationById, createOrganization, updateOrganization, deleteOrganization, setOrgAdmin, getOrganizationAdmins, removeOrganizationAdmin } from "../../../controller/v2/organization/organization.controller.js";
+import { getOrganizationChart } from "../../../controller/v2/organization/organization.chart.controller.js";
 import employeeRouter from "./employee.router.js";
 import { validateSuperAdminTokenMiddleware } from "../../../middleware/validateToken.js";
 
@@ -8,6 +9,7 @@ router.get("/subordinate-list/",(req,res)=>{res.send("this is the subordinate li
 
 router.get("/",getOrganization);
 router.get("/:id",getOrganizationById);
+router.get("/:orgId/chart",getOrganizationChart);
 router.post("/",createOrganization);
 router.put("/",updateOrganization);
 router.patch("/",updateOrganization);

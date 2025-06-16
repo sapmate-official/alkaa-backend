@@ -1,6 +1,6 @@
 import prisma from '../../../db/connectDb.js';
 import { validationResult } from 'express-validator';
-import { sendPasswordResetEmail } from '../../../util/sendEmail.js';
+import { sendPasswordResetEmail, sendNewEmployeeWelcomeEmail } from '../../../util/sendEmail.js';
 import bcrypt from 'bcrypt';
 
 export const getUser = async (req, res) => {
@@ -124,18 +124,46 @@ export const createUser = async (req, res) => {
         };
 
         // Add optional fields if provided
-        if (departmentId) userData.departmentId = departmentId;
-        if (managerId) userData.managerId = managerId;
-        if (dateOfBirth) userData.dateOfBirth = new Date(dateOfBirth);
-        if (address) userData.address = address;
-        if (mobileNumber) userData.mobileNumber = mobileNumber;
-        if (emergencyContact) userData.emergencyContact = emergencyContact;
-        if (adharNumber) userData.adharNumber = adharNumber;
-        if (panNumber) userData.panNumber = panNumber;
+        if (departmentId)
+            userData.departmentId = departmentId;
+        if (managerId)
+            userData.managerId = managerId;
+        if (dateOfBirth)
+            userData.dateOfBirth = new Date(dateOfBirth);
+        if (address)
+            userData.address = address;
+        if (mobileNumber)
+            userData.mobileNumber = mobileNumber;
+        if (emergencyContact)
+            userData.emergencyContact = emergencyContact;
+        if (adharNumber)
+            userData.adharNumber = adharNumber;
+        if (panNumber)
+            userData.panNumber = panNumber;
 
         // Create user
         const newUser = await prisma.user.create({
             data: userData,
+            include: {
+                department: {
+                    include:{
+                        departmentHead:{
+                            select:{
+                                firstName:true,
+                                lastName:true,
+                                email:true
+                            }
+                        }
+                    }
+                },
+                manager: {
+                    select:{
+                        firstName:true,
+                        lastName:true,
+                        email:true
+                    }
+                }
+            }
         });
 
         // Generate verification token and update user
@@ -143,25 +171,84 @@ export const createUser = async (req, res) => {
         const hiredDate = new Date(newUser.createdAt);
         const defaultPassword = 'password'; // Default password
         const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+        
         // Update user with verification token
         await prisma.user.update({
             where: { id: newUser.id },
-            data: { verificationToken,
+            data: { 
+                verificationToken,
                 hashedPassword
-             },
+            },
         });
 
-        // Send password reset email with verification token
-        await sendPasswordResetEmail(
-            newUser.email,
-            verificationToken,
-            organization,
-            hiredDate.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            })
-        );
+        // Fetch team members from the same department (if department is provided)
+        let formattedTeamMembers = [];
+        if (newUser.departmentId) {
+            const teamMembers = await prisma.user.findMany({
+                where: {
+                    departmentId: newUser.departmentId,
+                    id: { not: newUser.id }
+                },
+                take: 5,
+                select: {
+                    firstName: true,
+                    lastName: true,
+                    roles: {
+                        include: {
+                            role: true
+                        }
+                    }
+                }
+            });
+            
+            // Format team members array
+            formattedTeamMembers = teamMembers.map(member => ({
+                name: `${member.firstName} ${member.lastName}`,
+                role: member.roles.length > 0 ? member.roles[0].role.name : 'Team Member'
+            }));
+        }
+        
+        // Prepare manager and department head information
+        const managerInfo = newUser.manager ? {
+            email: newUser.manager.email,
+            name: `${newUser.manager.firstName} ${newUser.manager.lastName}`
+        } : null;
+        
+        const departmentHeadInfo = newUser.department?.departmentHead ? {
+            email: newUser.department.departmentHead.email,
+            name: `${newUser.department.departmentHead.firstName} ${newUser.department.departmentHead.lastName}`
+        } : null;
+        
+        // Send welcome email if we have manager info
+        if (managerInfo) {
+            await sendNewEmployeeWelcomeEmail(
+                newUser.email,
+                `${newUser.firstName} ${newUser.lastName}`,
+                managerInfo.email,
+                managerInfo.name,
+                departmentHeadInfo || { email: '', name: 'Not Assigned' },
+                formattedTeamMembers,
+                {
+                    employeeId: newUser.employeeId,
+                    department: newUser.department?.name || 'Not Assigned',
+                    hiredDate: newUser.hiredDate,
+                    verificationToken: verificationToken
+                },
+                organization.name
+            );
+        } else {
+            // Fall back to password reset email if no manager is assigned
+            await sendPasswordResetEmail(
+                newUser.email,
+                verificationToken,
+                organization,
+                hiredDate.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                })
+            );
+        }
         
         // Return success response
         res.status(201).json({

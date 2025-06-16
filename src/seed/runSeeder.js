@@ -1,11 +1,17 @@
 import { seedOrganization } from './OrganizationSeeder.js';
+import { seedSubscriptionPlans } from './SubscriptionPlanSeeder.js';
 
 async function main() {
-  console.log('🚀 Starting organization seeding process using APIs...');
+  console.log('🚀 Starting seeding process using APIs...');
   
   try {
+    // Seed subscription plans first
+    await seedSubscriptionPlans();
+    console.log('');
+    
+    // Then seed organization
     await seedOrganization();
-    console.log('🎉 Organization seeding completed successfully!');
+    console.log('🎉 Seeding completed successfully!');
     console.log('📧 Admin login credentials:');
     console.log('   Email: admin@techvantage.com');
     console.log('   Password: password');

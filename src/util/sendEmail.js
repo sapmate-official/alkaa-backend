@@ -35,7 +35,7 @@ export const sendPasswordResetEmail = async (email, verificationToken, companyNa
     try {
         const emailData = {
             sender: {
-                name: companyName,
+                name: companyName.name,
                 // email: "noreply@alkaa.online"
                 email: process.env.SENDER_EMAIL
             },
@@ -48,7 +48,7 @@ export const sendPasswordResetEmail = async (email, verificationToken, companyNa
             subject: "Set Your Password",
             htmlContent: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #2c3e50; text-align: center;">Welcome to ${companyName}</h2>
+                    <h2 style="color: #2c3e50; text-align: center;">Welcome to ${companyName.name}</h2>
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
                         <p style="color: #636363; margin-bottom: 15px;">
                             We're excited to have you join us starting from ${new Date(hiredDate).toLocaleDateString()}!
@@ -506,7 +506,7 @@ export const sendNewEmployeeWelcomeEmail = async (employeeEmail, employeeName, m
     try {
         const emailData = {
             sender: {
-                name: companyName,
+                name: companyName.name,
                 email: process.env.SENDER_EMAIL
             },
             to: [
