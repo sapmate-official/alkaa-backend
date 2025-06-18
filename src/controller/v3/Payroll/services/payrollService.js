@@ -1,6 +1,6 @@
 import prisma from "../../../../db/connectDb.js";
 import { calculateAllowances, calculateDeductions, calculateNetSalary } from "../utils/salaryCalculations.js";
-import { calculateWorkingDays, calculateAttendanceStats } from "../utils/attendanceUtils.js";
+import { calculateAttendanceStats } from "../utils/attendanceUtils.js";
 import { processLeaveAdjustments, processAttendanceAdjustments } from "../utils/adjustmentUtils.js";
 
 export class PayrollService {
@@ -113,15 +113,15 @@ export class PayrollService {
 
     /**
      * Get salary statistics
-     */
-    static async getSalaryStatistics(salaryRecordId) {
+     */    static async getSalaryStatistics(salaryRecordId) {
         const salaryRecord = await prisma.salaryRecord.findUnique({
             where: { id: salaryRecordId },
             include: {
                 user: {
                     include: {
                         department: true,
-                        bankDetails: true
+                        bankDetails: true,
+                        organization: true
                     }
                 }
             }
@@ -218,26 +218,30 @@ export class PayrollService {
             additionalAllowances: {},
             additionalDeductions: {}
         };
-    }
-
-    static async createSalaryRecord(salaryData) {
+    }    static async createSalaryRecord(salaryData) {
         const monthName = new Date(salaryData.year, salaryData.month - 1, 1).toLocaleString('default', { month: 'long' });
+        
+        // Remove adjustmentAmount from salaryData as it's not a valid field in SalaryRecord
+        const { adjustmentAmount, ...validSalaryData } = salaryData;
         
         return await prisma.salaryRecord.create({
             data: {
-                ...salaryData,
+                ...validSalaryData,
                 tax: salaryData.deductions.tax || 0,
                 status: "PENDING",
-                remarks: `Salary for ${monthName} ${salaryData.year}${salaryData.adjustmentAmount > 0 ? ` (includes adjustment of ${salaryData.adjustmentAmount.toFixed(2)})` : ''}`
+                remarks: `Salary for ${monthName} ${salaryData.year}${adjustmentAmount > 0 ? ` (includes adjustment of ${adjustmentAmount.toFixed(2)})` : ''}`
             }
         });
-    }
-
-    static async getAdditionalStatisticsData(salaryRecord) {
+    }    static async getAdditionalStatisticsData(salaryRecord) {
         const { month, year, userId } = salaryRecord;
 
         // Get working days calculation
-        const { workingDays, attendanceStats } = await calculateAttendanceStats(userId, month, year, salaryRecord.user.organization.id);
+        const orgId = salaryRecord.user?.organization?.id || salaryRecord.user?.orgId;
+        if (!orgId) {
+            throw new Error("Organization information not found for salary record");
+        }
+        
+        const { workingDays, attendanceStats } = await calculateAttendanceStats(userId, month, year, orgId);
 
         // Get YTD earnings
         const ytdEarnings = await prisma.salaryRecord.findMany({

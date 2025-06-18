@@ -1324,3 +1324,5 @@ export const sendAttendanceAnomalyEmail = async (employeeEmail, employeeName, ma
         return error;
     }
 };
+
+// neither check out nor check in
