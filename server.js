@@ -81,8 +81,9 @@ app.use("/api/v1/salary/", salary)
 
 import mainV2Router from './src/router/v2/main.router.js'
 import mainv3Router from './src/router/v3/main.router.js'
-app.use("/api/v2/", mainV2Router)
-app.use("/api/v3/", mainv3Router)
+import validateTokenMiddlewear from './src/middleware/validateToken.js'
+app.use("/api/v2/",validateTokenMiddlewear, mainV2Router)
+app.use("/api/v3/",validateTokenMiddlewear, mainv3Router)
 
 // Import the bill controllers
 import { getBillById, processBillPayment } from './src/controller/v2/superAdmin/superAdmin.controller.js';

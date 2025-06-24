@@ -1,6 +1,7 @@
 import prisma from '../../../db/connectDb.js';
 import { validationResult } from 'express-validator';
-import { sendPasswordResetEmail, sendNewEmployeeWelcomeEmail } from '../../../util/sendEmail.js';
+import { sendPasswordResetEmail, sendNewEmployeeWelcomeEmail, sendDepartmentChangeEmail } from '../../../util/sendEmail.js';
+import { logProfileChange, logUserCreation, logUserStatusChange, logAuthActivity, logRoleChange, logUserDeletion, logDepartmentChange } from '../../../util/activityLogger.js';
 import bcrypt from 'bcrypt';
 
 export const getUser = async (req, res) => {
@@ -250,6 +251,19 @@ export const createUser = async (req, res) => {
             );
         }
         
+        // Log user creation activity
+
+            await logUserCreation(
+                req.user.id, // Actor (the user who created this user)
+                newUser.id,  // Target user
+                {
+                    employeeId: newUser.employeeId,
+                    department: newUser.department?.name || 'Not Assigned',
+                    manager: managerInfo?.name || 'Not Assigned',
+                    status: newUser.status
+                }
+            );
+    
         // Return success response
         res.status(201).json({
             message: 'User created successfully',
@@ -350,10 +364,195 @@ export const updateUser = async (req, res) => {
     try {
         console.log('Updating user with data:', updateData);
         
+        // Get original user data for comparison
+        const originalUser = await prisma.user.findUnique({
+            where: { id },
+            include: {
+                department: { 
+                    select: { 
+                        id: true, 
+                        name: true 
+                    } 
+                },
+                manager: { 
+                    select: { 
+                        id: true, 
+                        firstName: true, 
+                        lastName: true, 
+                        email: true 
+                    } 
+                },
+                organization: {
+                    select: {
+                        id: true,
+                        name: true,
+                        Organization_admin: {
+                            select: {
+                                admin_user: {
+                                    select: {
+                                        email: true,
+                                        firstName: true,
+                                        lastName: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!originalUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
         const updatedUser = await prisma.user.update({
             where: { id },
-            data: updateData
+            data: updateData,
+            include: {
+                department: { 
+                    select: { 
+                        id: true, 
+                        name: true 
+                    } 
+                },
+                manager: { 
+                    select: { 
+                        id: true, 
+                        firstName: true, 
+                        lastName: true, 
+                        email: true 
+                    } 
+                },
+                organization: {
+                    select: {
+                        name: true
+                    }
+                }
+            }
         });
+        
+        // Log activity changes
+        const actorId = req.user?.id || id; // Use the authenticated user ID if available
+        const changes = {};
+        
+        // Track department change separately for email notification
+        let departmentChanged = false;
+        let oldDepartment = null;
+        let newDepartment = null;
+        
+        // Check for profile changes
+        const fieldsToCheck = ['firstName', 'lastName', 'email', 'mobileNumber', 'address', 'emergencyContact', 'employeeId','departmentId', 'managerId', 'status', 'dateOfBirth', 'adharNumber', 'panNumber', 'annualPackage', 'monthlySalary'];
+        fieldsToCheck.forEach(field => {
+            if (updateData[field] !== undefined && originalUser[field] !== updateData[field]) {
+                if(field === 'managerId'){
+                    let oldManagerName = 'Not Assigned';
+                    let newManagerName = 'Not Assigned';
+                    if(originalUser.manager){
+                        oldManagerName = `${originalUser.manager.firstName} ${originalUser.manager.lastName}`;
+                    }
+                    if(updatedUser.manager){
+                        newManagerName = `${updatedUser.manager.firstName} ${updatedUser.manager.lastName}`;
+                    }
+                    changes[field] = {
+                        old: oldManagerName,
+                        new: newManagerName
+                    };
+                    return;
+                }
+                if( field === 'departmentId' ) {
+                    let oldDepartmentName = 'Not Assigned';
+                    let newDepartmentName = 'Not Assigned';
+                    
+                    if(originalUser.department){
+                        oldDepartmentName = originalUser.department.name;
+                        oldDepartment = {
+                            id: originalUser.department.id,
+                            name: originalUser.department.name
+                        };
+                    }
+                    if(updatedUser.department){
+                        newDepartmentName = updatedUser.department.name;
+                        newDepartment = {
+                            id: updatedUser.department.id,
+                            name: updatedUser.department.name
+                        };
+                    }
+                    
+                    changes[field] = {
+                        old: oldDepartmentName,
+                        new: newDepartmentName
+                    };
+                    
+                    // Mark department as changed for email notification
+                    departmentChanged = true;
+                    return;
+                }
+                changes[field] = {
+                    old: originalUser[field] || '',
+                    new: updateData[field] || ''
+                };
+            }
+        });
+
+        // Log profile changes if any
+        if (Object.keys(changes).length > 0) {
+            await logProfileChange(actorId, id, originalUser.orgId, changes, req);
+        }
+
+        // Send department change email notification
+        if (departmentChanged && oldDepartment && newDepartment) {
+            try {
+                // Get HR admin email
+                const hrAdmin = originalUser.organization.Organization_admin?.[0]?.admin_user ? {
+                    email: originalUser.organization.Organization_admin[0].admin_user.email,
+                    name: `${originalUser.organization.Organization_admin[0].admin_user.firstName} ${originalUser.organization.Organization_admin[0].admin_user.lastName}`
+                } : null;
+
+                // Prepare old and new manager information
+                const oldManager = originalUser.manager ? {
+                    name: `${originalUser.manager.firstName} ${originalUser.manager.lastName}`,
+                    email: originalUser.manager.email
+                } : null;
+
+                const newManager = updatedUser.manager ? {
+                    name: `${updatedUser.manager.firstName} ${updatedUser.manager.lastName}`,
+                    email: updatedUser.manager.email
+                } : null;
+
+                await sendDepartmentChangeEmail(
+                    updatedUser.email,
+                    `${updatedUser.firstName} ${updatedUser.lastName}`,
+                    oldDepartment,
+                    newDepartment,
+                    oldManager,
+                    newManager,
+                    hrAdmin,
+                    new Date(), // Effective date (current date)
+                    originalUser.organization.name
+                );
+
+                // Log department change activity
+                await logDepartmentChange(
+                    actorId,
+                    id,
+                    originalUser.orgId,
+                    oldDepartment.name,
+                    newDepartment.name,
+                    req
+                );
+
+                console.log(`Department change email sent to ${updatedUser.email}`);
+            } catch (emailError) {
+                console.error('Error sending department change email:', emailError);
+                // Don't fail the request if email fails
+            }
+        }
+
+        // Log status changes
+        if (updateData.status && originalUser.status !== updateData.status) {
+            await logUserStatusChange(actorId, id, originalUser.orgId, originalUser.status, updateData.status, req);
+        }
         
         console.log('User updated successfully:', updatedUser);
         res.status(200).json(updatedUser);
@@ -379,10 +578,37 @@ export const updateUser = async (req, res) => {
 export const deleteUser = async (req, res) => {
     const { id } = req.body;
     try {
+        // Get user information before deletion for logging
+        const userToDelete = await prisma.user.findUnique({
+            where: { id },
+            include: {
+                roles: {
+                    include: {
+                        role: true
+                    }
+                },
+                department: true
+            }
+        });
+        
+        if (!userToDelete) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
         await prisma.user.delete({ where: { id } });
+        
+        // Log user deletion
+        await logUserDeletion(
+            req.user.id,
+            id,
+            userToDelete.orgId,
+            userToDelete,
+            req
+        );
+        
         res.status(204).send();
     } catch (error) {
-        console.log(error)
+        console.log(error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 };
@@ -516,6 +742,15 @@ export const hardDeleteUser = async (req, res) => {
             return deletedUser;
         });
 
+        // Log user hard deletion
+        await logUserDeletion(
+            req.user.id,
+            id,
+            userExists.orgId,
+            userExists,
+            req
+        );
+
         console.log(`User ${id} successfully hard deleted`);
         res.status(200).json({ 
             message: 'User and all related data successfully deleted',
@@ -536,12 +771,44 @@ export const hardDeleteUser = async (req, res) => {
 };
 
 export const updateUserRole = async (req, res) => {
-    const { userId,prevRole, roleId } = req.params;
+    const { userId, prevRole, roleId } = req.params;
     try {
-        console.log(userId,prevRole,roleId);
-        let user
-        if(roleId=='null'){
-             user = await prisma.userRole.delete({
+        console.log(userId, prevRole, roleId);
+        
+        // Get user and org information for logging
+        const targetUser = await prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                roles: {
+                    include: {
+                        role: true
+                    }
+                }
+            }
+        });
+        
+        if (!targetUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        let user;
+        let oldRoleName = null;
+        let newRoleName = null;
+        
+        // Get role names for logging
+        if (prevRole && prevRole !== 'null') {
+            const oldRole = await prisma.role.findUnique({ where: { id: prevRole } });
+            oldRoleName = oldRole?.name || 'Unknown Role';
+        }
+        
+        if (roleId && roleId !== 'null') {
+            const newRole = await prisma.role.findUnique({ where: { id: roleId } });
+            newRoleName = newRole?.name || 'Unknown Role';
+        }
+        
+        if (roleId == 'null') {
+            // Removing a role
+            user = await prisma.userRole.delete({
                 where: {
                     userId_roleId: {
                         userId: userId,
@@ -549,17 +816,38 @@ export const updateUserRole = async (req, res) => {
                     }
                 }
             });
+            
+            // Log role removal
+            await logRoleChange(
+                req.user.id,
+                userId,
+                targetUser.orgId,
+                oldRoleName,
+                'None',
+                req
+            );
         }
-        else if(prevRole=='null'){
-             user = await prisma.userRole.create({
+        else if (prevRole == 'null') {
+            // Adding a new role
+            user = await prisma.userRole.create({
                 data: {
                     userId: userId,
                     roleId: roleId
                 }
             });
-        }else{
-
-             user = await prisma.userRole.update({
+            
+            // Log role assignment
+            await logRoleChange(
+                req.user.id,
+                userId,
+                targetUser.orgId,
+                'None',
+                newRoleName,
+                req
+            );
+        } else {
+            // Updating existing role
+            user = await prisma.userRole.update({
                 where: {
                     userId_roleId: {
                         userId: userId,
@@ -570,10 +858,21 @@ export const updateUserRole = async (req, res) => {
                     roleId: roleId,
                 },
             });
+            
+            // Log role change
+            await logRoleChange(
+                req.user.id,
+                userId,
+                targetUser.orgId,
+                oldRoleName,
+                newRoleName,
+                req
+            );
         }
+        
         res.status(200).json(user);
     } catch (error) {
-        console.log(error)
+        console.log(error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 }
@@ -754,17 +1053,164 @@ export const updateUserDepartment = async (req, res) => {
     const { userId, departmentId } = req.params;
     
     try {
-        const updatedUser = await prisma.user.update({
+        // Get original user data for comparison
+        const originalUser = await prisma.user.findUnique({
             where: { id: userId },
-            data: { departmentId },
             include: {
-                department: true
+                department: { 
+                    select: { 
+                        id: true, 
+                        name: true 
+                    } 
+                },
+                manager: { 
+                    select: { 
+                        id: true, 
+                        firstName: true, 
+                        lastName: true, 
+                        email: true 
+                    } 
+                },
+                organization: {
+                    select: {
+                        id: true,
+                        name: true,
+                        Organization_admin: {
+                            select: {
+                                admin_user: {
+                                    select: {
+                                        email: true,
+                                        firstName: true,
+                                        lastName: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         });
+
+        if (!originalUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Get new department info
+        const newDepartmentInfo = await prisma.department.findUnique({
+            where: { id: departmentId },
+            select: { 
+                id: true, 
+                name: true,
+                departmentHead: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true
+                    }
+                }
+            }
+        });
+
+        if (!newDepartmentInfo) {
+            return res.status(404).json({ error: 'Department not found' });
+        }
+
+        // Update user department
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: { 
+                departmentId,
+                // Optionally update manager to department head if no manager is assigned
+                ...((!originalUser.managerId && newDepartmentInfo.departmentHead) && {
+                    managerId: newDepartmentInfo.departmentHead.id
+                })
+            },
+            include: {
+                department: { 
+                    select: { 
+                        id: true, 
+                        name: true 
+                    } 
+                },
+                manager: { 
+                    select: { 
+                        id: true, 
+                        firstName: true, 
+                        lastName: true, 
+                        email: true 
+                    } 
+                }
+            }
+        });
+
+        // Prepare department change data
+        const oldDepartment = originalUser.department ? {
+            id: originalUser.department.id,
+            name: originalUser.department.name
+        } : null;
+
+        const newDepartment = {
+            id: newDepartmentInfo.id,
+            name: newDepartmentInfo.name
+        };
+
+        // Send department change email notification
+        try {
+            // Get HR admin email
+            const hrAdmin = originalUser.organization.Organization_admin?.[0]?.admin_user ? {
+                email: originalUser.organization.Organization_admin[0].admin_user.email,
+                name: `${originalUser.organization.Organization_admin[0].admin_user.firstName} ${originalUser.organization.Organization_admin[0].admin_user.lastName}`
+            } : null;
+
+            // Prepare old and new manager information
+            const oldManager = originalUser.manager ? {
+                name: `${originalUser.manager.firstName} ${originalUser.manager.lastName}`,
+                email: originalUser.manager.email
+            } : null;
+
+            const newManager = updatedUser.manager ? {
+                name: `${updatedUser.manager.firstName} ${updatedUser.manager.lastName}`,
+                email: updatedUser.manager.email
+            } : null;
+
+            await sendDepartmentChangeEmail(
+                updatedUser.email,
+                `${updatedUser.firstName} ${updatedUser.lastName}`,
+                oldDepartment,
+                newDepartment,
+                oldManager,
+                newManager,
+                hrAdmin,
+                new Date(), // Effective date (current date)
+                originalUser.organization.name
+            );
+
+            // Log department change activity
+            const actorId = req.user?.id || userId;
+            await logDepartmentChange(
+                actorId,
+                userId,
+                originalUser.orgId,
+                oldDepartment?.name || 'Not Assigned',
+                newDepartment.name,
+                req
+            );
+
+            console.log(`Department change email sent to ${updatedUser.email}`);
+        } catch (emailError) {
+            console.error('Error sending department change email:', emailError);
+            // Don't fail the request if email fails
+        }
         
         res.status(200).json({
             message: "User department updated successfully",
-            user: updatedUser
+            user: updatedUser,
+            departmentChange: {
+                from: oldDepartment?.name || 'Not Assigned',
+                to: newDepartment.name,
+                effectiveDate: new Date()
+            }
         });
     } catch (error) {
         console.error("Error updating user department:", error);

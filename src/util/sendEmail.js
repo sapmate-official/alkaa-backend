@@ -1326,3 +1326,21 @@ export const sendAttendanceAnomalyEmail = async (employeeEmail, employeeName, ma
 };
 
 // neither check out nor check in
+
+export const sendEmailWithCustomContent = async (to, subject, htmlContent, companyName) => {
+    try {
+        const emailData = {
+            sender: {
+                name: companyName,
+                email: process.env.SENDER_EMAIL
+            },
+            to: to,
+            subject: subject,
+            htmlContent: htmlContent
+        };
+
+        return await sendBrevoEmail(emailData);
+    } catch (error) {
+        return error;
+    }
+}

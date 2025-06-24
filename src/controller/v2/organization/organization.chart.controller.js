@@ -245,3 +245,250 @@ function buildHierarchicalStructure(organization) {
     
     return rootDepartments;
 }
+
+// Get organization chart hierarchy focused on manager-subordinate relationships
+export const getManagerSubordinateChart = async (req, res) => {
+    try {
+        const { orgId } = req.params;
+        const { userId } = req.query; // Optional: center on specific user
+
+        // Fetch organization with user data
+        const organization = await prisma.organization.findUnique({
+            where: { id: orgId },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        employeeId: true,
+                        departmentId: true,
+                        managerId: true,
+                        department: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        },
+                        manager: {
+                            select: {
+                                id: true,
+                                firstName: true,
+                                lastName: true
+                            }
+                        },
+                        subordinates: {
+                            select: {
+                                id: true,
+                                firstName: true,
+                                lastName: true
+                            }
+                        },
+                        roles: {
+                            include: {
+                                role: {
+                                    select: {
+                                        id: true,
+                                        name: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                departments: {
+                    select: {
+                        id: true,
+                        name: true,
+                        headId: true
+                    }
+                },
+                Organization_admin: {
+                    select: {
+                        adminId: true
+                    }
+                }
+            }
+        });
+
+        if (!organization) {
+            return res.status(404).json({ error: 'Organization not found' });
+        }
+
+        // Check if the requesting user is an organization admin
+        const isOrgAdmin = organization.Organization_admin.some(admin => admin.adminId === userId);
+
+        // Build manager-subordinate focused structure based on user role
+        const managerChart = buildManagerSubordinateStructure(organization, userId, isOrgAdmin);
+        
+        res.status(200).json({
+            organization: {
+                id: organization.id,
+                name: organization.name
+            },
+            chart: managerChart,
+            focusUserId: userId,
+            isOrgAdmin: isOrgAdmin
+        });
+
+    } catch (error) {
+        console.error('Error fetching manager-subordinate chart:', error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// Helper function to build manager-subordinate structure
+function buildManagerSubordinateStructure(organization, focusUserId = null, isOrgAdmin = false) {
+    const { users, departments } = organization;
+    
+    // Create user map for quick lookup
+    const userMap = new Map();
+    users.forEach(user => {
+        userMap.set(user.id, {
+            id: user.id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            employeeId: user.employeeId,
+            type: 'user',
+            departmentId: user.departmentId,
+            departmentName: user.department?.name,
+            managerId: user.managerId,
+            manager: user.manager,
+            subordinates: user.subordinates || [],
+            isHead: departments.some(dept => dept.headId === user.id),
+            isManager: user.subordinates && user.subordinates.length > 0,
+            roles: user.roles || [],
+            children: []
+        });
+    });
+
+    // Build manager-subordinate relationships
+    users.forEach(user => {
+        if (user.managerId && userMap.has(user.managerId)) {
+            const manager = userMap.get(user.managerId);
+            const subordinate = userMap.get(user.id);
+            manager.children.push(subordinate);
+        }
+    });
+
+    // If user is organization admin, return full hierarchy
+    if (isOrgAdmin) {
+        const rootUsers = users
+            .filter(user => !user.managerId)
+            .map(user => userMap.get(user.id));
+
+        // Sort root users by hierarchy importance
+        rootUsers.sort((a, b) => {
+            if (a.isHead && !b.isHead) return -1;
+            if (!a.isHead && b.isHead) return 1;
+            if (a.isManager && !b.isManager) return -1;
+            if (!a.isManager && b.isManager) return 1;
+            return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+        });
+
+        return rootUsers;
+    }
+
+    // For regular users, implement restricted view
+    if (focusUserId && userMap.has(focusUserId)) {
+        const focusUser = userMap.get(focusUserId);
+        
+        // Function to get all subordinates recursively
+        const getAllSubordinates = (userId, visited = new Set()) => {
+            if (visited.has(userId)) return [];
+            visited.add(userId);
+            
+            const user = userMap.get(userId);
+            if (!user) return [];
+            
+            const result = [user];
+            user.children.forEach(child => {
+                result.push(...getAllSubordinates(child.id, visited));
+            });
+            
+            return result;
+        };
+
+        // Function to get siblings (other direct reports of the same manager)
+        const getSiblings = (userId) => {
+            const user = userMap.get(userId);
+            if (!user || !user.managerId) return [];
+            
+            const manager = userMap.get(user.managerId);
+            if (!manager) return [];
+            
+            return manager.children.filter(child => child.id !== userId);
+        };
+
+        // Build the hierarchy for focus user
+        const visibleUsers = new Set();
+        
+        // 1. Add focus user and all their subordinates
+        const subordinateHierarchy = getAllSubordinates(focusUserId);
+        subordinateHierarchy.forEach(user => visibleUsers.add(user.id));
+
+        // 2. Add manager and siblings if they exist
+        if (focusUser.managerId) {
+            const manager = userMap.get(focusUser.managerId);
+            if (manager) {
+                visibleUsers.add(manager.id);
+                
+                // Add siblings
+                const siblings = getSiblings(focusUserId);
+                siblings.forEach(sibling => visibleUsers.add(sibling.id));
+                
+                // Add manager's manager (grandparent) if exists
+                if (manager.managerId) {
+                    const grandManager = userMap.get(manager.managerId);
+                    if (grandManager) {
+                        visibleUsers.add(grandManager.id);
+                    }
+                }
+            }
+        }
+
+        // Rebuild the hierarchy with only visible users
+        const filteredUserMap = new Map();
+        visibleUsers.forEach(userId => {
+            const user = userMap.get(userId);
+            if (user) {
+                filteredUserMap.set(userId, {
+                    ...user,
+                    children: []
+                });
+            }
+        });
+
+        // Rebuild relationships for visible users only
+        filteredUserMap.forEach((user, userId) => {
+            if (user.managerId && filteredUserMap.has(user.managerId)) {
+                const manager = filteredUserMap.get(user.managerId);
+                const subordinate = filteredUserMap.get(userId);
+                manager.children.push(subordinate);
+            }
+        });
+
+        // Find the root of this filtered hierarchy
+        const filteredRootUsers = Array.from(filteredUserMap.values())
+            .filter(user => !user.managerId || !filteredUserMap.has(user.managerId));
+
+        // If focus user has a manager, start from the highest visible manager
+        if (focusUser.managerId && filteredUserMap.has(focusUser.managerId)) {
+            const manager = filteredUserMap.get(focusUser.managerId);
+            if (manager.managerId && filteredUserMap.has(manager.managerId)) {
+                const grandManager = filteredUserMap.get(manager.managerId);
+                return [grandManager];
+            } else {
+                return [manager];
+            }
+        } else {
+            // If no manager, start from focus user
+            return [filteredUserMap.get(focusUserId)];
+        }
+    }
+
+    // Fallback: return empty if no valid user
+    return [];
+}

@@ -30,6 +30,7 @@ model Organization {
   updatedAt             DateTime               @updatedAt
   settings              Json?
   subscriptionPlanId    String?
+  activityLogs          ActivityLog[]
   billingRecords        BillingRecord[]
   departments           Department[]
   holidays              Holiday[]
@@ -163,6 +164,8 @@ model User {
   firstName            String?              @default("unknown")
   lastName             String?              @default("unknown")
   emergencyContact     String?
+  activityLogs         ActivityLog[]        @relation("ActivityActor")
+  targetedActivities   ActivityLog[]        @relation("ActivityTarget")
   attendanceRecords    AttendanceRecord[]
   bankDetails          BankDetails?
   Department           Department[]         @relation("DepartmentHead")
@@ -514,6 +517,30 @@ model PermissionPreset {
   @@unique([orgId, name])
 }
 
+model ActivityLog {
+  id           String         @id @default(cuid())
+  orgId        String
+  actorId      String
+  targetId     String?
+  action       ActivityAction
+  entity       ActivityEntity
+  entityId     String
+  description  String
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime       @default(now())
+  actor        User           @relation("ActivityActor", fields: [actorId], references: [id])
+  organization Organization   @relation(fields: [orgId], references: [id])
+  target       User?          @relation("ActivityTarget", fields: [targetId], references: [id])
+
+  @@index([orgId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([targetId, createdAt])
+  @@index([action, createdAt])
+  @@index([entity, createdAt])
+}
+
 enum BillingStatus {
   UNPAID
   PAID
@@ -577,4 +604,47 @@ enum AttendanceVerificationStatus {
   UNVERIFIED
   VERIFIED
   REJECTED
+}
+
+enum ActivityAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ASSIGN
+  UNASSIGN
+  APPROVE
+  REJECT
+  ACTIVATE
+  DEACTIVATE
+  RESET_PASSWORD
+  CHANGE_ROLE
+  CHANGE_DEPARTMENT
+  CHANGE_MANAGER
+  CHECK_IN
+  CHECK_OUT
+  APPLY_LEAVE
+  CANCEL_LEAVE
+  GENERATE_SALARY
+  PROCESS_PAYMENT
+  VERIFY_ATTENDANCE
+  SEND_NOTIFICATION
+  UPLOAD_DOCUMENT
+  VIEW_SENSITIVE_DATA
+}
+
+enum ActivityEntity {
+  USER
+  ORGANIZATION
+  DEPARTMENT
+  ROLE
+  PERMISSION
+  ATTENDANCE
+  LEAVE_REQUEST
+  SALARY_RECORD
+  BANK_DETAILS
+  NOTIFICATION
+  DOCUMENT
+  SETTINGS
 }
