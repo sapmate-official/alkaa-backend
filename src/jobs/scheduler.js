@@ -1,5 +1,5 @@
 import { scheduleJob } from 'node-schedule';
-import { runNotificationProcessor } from './notificationProcessor.js';
+// import { runNotificationProcessor } from './notificationProcessor.js';
 import { checkMissingCheckouts } from './attendanceProcessor.js';
 
 /**
