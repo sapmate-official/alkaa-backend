@@ -1334,7 +1334,12 @@ export const sendEmailWithCustomContent = async (to, subject, htmlContent, compa
                 name: companyName,
                 email: process.env.SENDER_EMAIL
             },
-            to: to,
+            to: [
+                {
+                    email: to,
+                    name: "User"
+                }
+            ],
             subject: subject,
             htmlContent: htmlContent
         };

@@ -1,7 +1,7 @@
 import prisma from '../../../db/connectDb.js';
 import { body, validationResult } from 'express-validator';
 import { initializePresetsForOrg } from '../../../seed/PermissionPreset.js';
-import { sendPasswordResetEmail } from '../../../util/sendEmail.js';
+import { sendEmailWithCustomContent, sendPasswordResetEmail } from '../../../util/sendEmail.js';
 
 // Get all organizations
 const getOrganization = async (req, res) => {
@@ -290,7 +290,17 @@ const deleteOrganization = [
                     where: { orgId: id }
                 });
                 
-                // 19. Finally delete the organization itself
+                // 19. Delete billing records
+                await tx.billingRecord.deleteMany({
+                    where: { organizationId: id }
+                });
+                
+                // 20. Delete activity logs
+                await tx.activityLog.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                // 21. Finally delete the organization itself
                 await tx.organization.delete({
                     where: { id }
                 });
@@ -571,12 +581,55 @@ const createCompleteOrganization = [
 
             // Step 8: Send welcome email to admin
             try {
-                await sendPasswordResetEmail(
-                    result.adminUser.email,
-                    result.verificationToken,
-                    { name: result.organization.name },
-                    result.adminUser.hiredDate
-                );
+                // Send welcome email to admin with password reset link
+                const resetToken = result.verificationToken;
+                const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+
+                const emailSubject = "Welcome to Alkaa - Your Organization Setup is Complete";
+
+                const emailContent = `
+                <div style="font-family: 'Helvetica', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333333;">
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <img src="${process.env.VITE_ALKAA_LOGO || 'https://alkaa.io/logo.png'}" alt="Alkaa Logo" style="max-width: 150px;">
+                    </div>
+                    
+                    <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
+                        <h1 style="color: #3f51b5; font-size: 24px; margin-bottom: 20px; text-align: center;">Welcome to Alkaa!</h1>
+                        
+                        <p style="margin-bottom: 15px; line-height: 1.6;">Dear ${admin.firstName} ${admin.lastName},</p>
+                        
+                        <p style="margin-bottom: 15px; line-height: 1.6;">Congratulations! Your organization <strong>${organization.name}</strong> has been successfully set up on the Alkaa platform. We're excited to have you onboard.</p>
+                        
+                        <p style="margin-bottom: 15px; line-height: 1.6;">As the administrator, you now have access to powerful tools to manage your workforce, streamline processes, and boost productivity.</p>
+                        
+                        <h2 style="color: #3f51b5; font-size: 18px; margin: 25px 0 15px;">Get Started in 3 Simple Steps:</h2>
+                        
+                        <ol style="margin-bottom: 25px; padding-left: 20px; line-height: 1.6;">
+                            <li style="margin-bottom: 10px;"><strong>Set your password</strong> using the button below</li>
+                            <li style="margin-bottom: 10px;"><strong>Complete your profile</strong> and organization details</li>
+                            <li style="margin-bottom: 10px;"><strong>Invite team members</strong> to join your organization</li>
+                        </ol>
+                        
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="${resetUrl}" style="background-color: #3f51b5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Set Your Password</a>
+                        </div>
+                        
+                        <p style="margin-bottom: 15px; line-height: 1.6;">This link will expire in 24 hours for security reasons. If you need assistance, our support team is available at <a href="mailto:support@alkaa.io" style="color: #3f51b5; text-decoration: none;">support@alkaa.io</a>.</p>
+                        
+                        <p style="margin-bottom: 25px; line-height: 1.6;">We look forward to seeing how ${organization.name} grows with Alkaa!</p>
+                        
+                        <p style="line-height: 1.6;">Best regards,<br>The Alkaa Team</p>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: #666666;">
+                        <p>© ${new Date().getFullYear()} Alkaa. All rights reserved.</p>
+                        <p>If you didn't create an account with us, please ignore this email.</p>
+                    </div>
+                </div>
+                `;
+                console.log('Sending welcome email to admin:', admin.email);
+                
+                await sendEmailWithCustomContent(admin.email, emailSubject, emailContent);
                 console.log('Welcome email sent to admin');
             } catch (emailError) {
                 console.warn('Failed to send welcome email:', emailError.message);
