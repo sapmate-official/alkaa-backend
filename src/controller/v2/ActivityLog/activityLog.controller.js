@@ -7,15 +7,15 @@ import prisma from '../../../db/connectDb.js';
 export const getActivityLogs = async (req, res) => {
     try {
         const { user } = req;
-        const { 
-            page = 1, 
-            limit = 50, 
-            userId, 
-            action, 
-            entity, 
-            startDate, 
+        const {
+            page = 1,
+            limit = 50,
+            userId,
+            action,
+            entity,
+            startDate,
             endDate,
-            targetUserId 
+            targetUserId
         } = req.query;
 
         if (!user) {
@@ -51,74 +51,84 @@ export const getActivityLogs = async (req, res) => {
         }
 
         // Check for view all activities permission (for admins)
-        const hasViewAllPermission = userWithRoles.roles.some(userRole => 
-            userRole.role.permissions.some(permission => 
+        const hasViewAllPermission = userWithRoles.roles.some(userRole =>
+            userRole.role.permissions.some(permission =>
                 permission.permission.key === 'view_all_activities'
             )
         );
 
         // Check for view subordinate activities permission (for managers)
-        const hasViewSubordinatePermission = userWithRoles.roles.some(userRole => 
-            userRole.role.permissions.some(permission => 
+        const hasViewSubordinatePermission = userWithRoles.roles.some(userRole =>
+            userRole.role.permissions.some(permission =>
                 permission.permission.key === 'view_subordinate_activities'
             )
         );
 
+        // Base condition - ALWAYS filter by organization first
         let whereCondition = {
-            orgId: user.orgId
+            orgId: user.orgId,
+            AND: []
         };
 
-        // Apply access control based on permissions
+        // Apply access control based on permissions within the organization
         if (hasViewAllPermission) {
             // Admin can see all activities in the organization
-            // whereCondition already set to orgId only
+            // No additional user filtering needed
         } else if (hasViewSubordinatePermission) {
-            // Manager can see activities of their subordinates
+            // Manager can see activities of their subordinates within the same org
             const subordinateIds = await prisma.user.findMany({
-                where: { managerId: user.id },
+                where: {
+                    managerId: user.id,
+                    orgId: user.orgId  // Ensure subordinates are from same org
+                },
                 select: { id: true }
             });
 
             const subordinateUserIds = subordinateIds.map(sub => sub.id);
-            
+
             // Include activities where the actor or target is a subordinate
-            whereCondition.OR = [
-                { actorId: { in: subordinateUserIds } },
-                { targetId: { in: subordinateUserIds } }
-            ];
+            whereCondition.AND.push({
+                OR: [
+                    { actorId: { in: subordinateUserIds } },
+                    { targetId: { in: subordinateUserIds } }
+                ]
+            });
         } else {
             // Regular user can only see their own activities
-            whereCondition.OR = [
-                { actorId: user.id },
-                { targetId: user.id }
-            ];
+            whereCondition.AND.push({
+                OR: [
+                    { actorId: user.id },
+                    { targetId: user.id }
+                ]
+            });
         }
 
-        // Apply filters
+        // Apply additional filters
         if (userId) {
-            whereCondition.actorId = userId;
+            whereCondition.AND.push({ actorId: userId });
         }
 
         if (targetUserId) {
-            whereCondition.targetId = targetUserId;
+            whereCondition.AND.push({ targetId: targetUserId });
         }
 
         if (action) {
-            whereCondition.action = action;
+            whereCondition.AND.push({ action: action });
         }
 
         if (entity) {
-            whereCondition.entity = entity;
+            whereCondition.AND.push({ entity: entity });
         }
 
         if (startDate || endDate) {
-            whereCondition.createdAt = {};
+            const dateCondition = {};
             if (startDate) {
-                whereCondition.createdAt.gte = new Date(startDate);
+                dateCondition.gte = new Date(startDate);
             }
             if (endDate) {
-                whereCondition.createdAt.lte = new Date(endDate);
+                dateCondition.lte = new Date(endDate);
             }
+            whereCondition.AND.push({ createdAt: dateCondition });
         }
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -228,10 +238,10 @@ export const getActivityLogs = async (req, res) => {
         console.error('Error fetching activity logs:', error);
         console.error('Error stack:', error.stack);
         console.error('Prisma client at error:', !!prisma);
-        res.status(500).json({ 
-            success: false, 
+        res.status(500).json({
+            success: false,
             error: 'Failed to fetch activity logs',
-            message: error.message 
+            message: error.message
         });
     }
 };
@@ -255,7 +265,7 @@ export const getActivityStats = async (req, res) => {
         // Calculate date range based on period
         const now = new Date();
         let startDate;
-        
+
         switch (period) {
             case '30d':
                 startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -287,44 +297,53 @@ export const getActivityStats = async (req, res) => {
             }
         });
 
-        const hasViewAllPermission = userWithRoles?.roles.some(userRole => 
-            userRole.role.permissions.some(permission => 
+        const hasViewAllPermission = userWithRoles?.roles.some(userRole =>
+            userRole.role.permissions.some(permission =>
                 permission.permission.key === 'view_all_activities'
             )
         );
 
-        const hasViewSubordinatePermission = userWithRoles?.roles.some(userRole => 
-            userRole.role.permissions.some(permission => 
+        const hasViewSubordinatePermission = userWithRoles?.roles.some(userRole =>
+            userRole.role.permissions.some(permission =>
                 permission.permission.key === 'view_subordinate_activities'
             )
         );
 
+        // Base condition - ALWAYS filter by organization first
         let whereCondition = {
             orgId: user.orgId,
             createdAt: {
                 gte: startDate
-            }
+            },
+            AND: []
         };
 
-        // Apply access control
+        // Apply access control within the organization
         if (hasViewAllPermission) {
-            // Admin can see all activities
+            // Admin can see all activities within the org
         } else if (hasViewSubordinatePermission) {
             const subordinateIds = await prisma.user.findMany({
-                where: { managerId: user.id },
+                where: {
+                    managerId: user.id,
+                    orgId: user.orgId  // Ensure subordinates are from same org
+                },
                 select: { id: true }
             });
 
             const subordinateUserIds = subordinateIds.map(sub => sub.id);
-            whereCondition.OR = [
-                { actorId: { in: subordinateUserIds } },
-                { targetId: { in: subordinateUserIds } }
-            ];
+            whereCondition.AND.push({
+                OR: [
+                    { actorId: { in: subordinateUserIds } },
+                    { targetId: { in: subordinateUserIds } }
+                ]
+            });
         } else {
-            whereCondition.OR = [
-                { actorId: user.id },
-                { targetId: user.id }
-            ];
+            whereCondition.AND.push({
+                OR: [
+                    { actorId: user.id },
+                    { targetId: user.id }
+                ]
+            });
         }
 
         console.log('About to call prisma.activityLog.groupBy for action stats');
@@ -392,11 +411,12 @@ export const getActivityStats = async (req, res) => {
             console.error('Error getting user stats:', userError);
         }
 
-        // Get user details for the most active users
+        // Get user details for the most active users - ensure same org
         const userIds = userStats.map(stat => stat.actorId);
         const users = await prisma.user.findMany({
             where: {
-                id: { in: userIds }
+                id: { in: userIds },
+                orgId: user.orgId  // Ensure users are from same org
             },
             select: {
                 id: true,
@@ -408,12 +428,12 @@ export const getActivityStats = async (req, res) => {
         });
 
         const userStatsWithDetails = userStats.map(stat => {
-            const user = users.find(u => u.id === stat.actorId);
+            const userDetail = users.find(u => u.id === stat.actorId);
             return {
                 userId: stat.actorId,
-                name: user ? `${user.firstName} ${user.lastName}`.trim() : 'Unknown',
-                email: user?.email,
-                employeeId: user?.employeeId,
+                name: userDetail ? `${userDetail.firstName} ${userDetail.lastName}`.trim() : 'Unknown',
+                email: userDetail?.email,
+                employeeId: userDetail?.employeeId,
                 activityCount: stat._count.actorId
             };
         });
@@ -444,10 +464,10 @@ export const getActivityStats = async (req, res) => {
         console.error('Error fetching activity statistics:', error);
         console.error('Error stack:', error.stack);
         console.error('Prisma client at error:', !!prisma);
-        res.status(500).json({ 
-            success: false, 
+        res.status(500).json({
+            success: false,
             error: 'Failed to fetch activity statistics',
-            message: error.message 
+            message: error.message
         });
     }
 };
@@ -465,15 +485,30 @@ export const getUserRecentActivities = async (req, res) => {
             return res.status(401).json({ error: 'Unauthorized' });
         }
 
+        // Check if target user exists and is in the same organization
+        const targetUser = await prisma.user.findFirst({
+            where: {
+                id: targetUserId,
+                orgId: user.orgId  // Ensure target user is from same org
+            }
+        });
+
+        if (!targetUser) {
+            return res.status(404).json({
+                error: 'User not found or not in your organization'
+            });
+        }
+
         // Check if user has permission to view target user's activities
         const isOwnActivities = targetUserId === user.id;
-        
+
         if (!isOwnActivities) {
             // Check if target user is a subordinate
             const isSubordinate = await prisma.user.findFirst({
                 where: {
                     id: targetUserId,
-                    managerId: user.id
+                    managerId: user.id,
+                    orgId: user.orgId  // Ensure subordinate is from same org
                 }
             });
 
@@ -497,22 +532,22 @@ export const getUserRecentActivities = async (req, res) => {
                 }
             });
 
-            const hasViewAllPermission = userWithRoles?.roles.some(userRole => 
-                userRole.role.permissions.some(permission => 
+            const hasViewAllPermission = userWithRoles?.roles.some(userRole =>
+                userRole.role.permissions.some(permission =>
                     permission.permission.key === 'view_all_activities'
                 )
             );
 
             if (!isSubordinate && !hasViewAllPermission) {
-                return res.status(403).json({ 
-                    error: 'Access denied. You can only view activities of your subordinates.' 
+                return res.status(403).json({
+                    error: 'Access denied. You can only view activities of your subordinates.'
                 });
             }
         }
 
         const activities = await prisma.activityLog.findMany({
             where: {
-                orgId: user.orgId,
+                orgId: user.orgId,  // Always filter by organization
                 OR: [
                     { actorId: targetUserId },
                     { targetId: targetUserId }
@@ -567,10 +602,10 @@ export const getUserRecentActivities = async (req, res) => {
 
     } catch (error) {
         console.error('Error fetching user recent activities:', error);
-        res.status(500).json({ 
-            success: false, 
+        res.status(500).json({
+            success: false,
             error: 'Failed to fetch user activities',
-            message: error.message 
+            message: error.message
         });
     }
 };
