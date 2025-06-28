@@ -225,14 +225,14 @@ export const loginSuperAdmin = async (req, res) => {
             secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
         });
-
+        
         console.log("[loginSuperAdmin] Login successful");
         return res.status(200).send({
             message: "Super Admin logged in successfully",
             userData: {
-                id: superAdmin.id,  // Fixed: changed user.id to superAdmin.id
-                email: superAdmin.email,  // Fixed: changed user.email to superAdmin.email
-                name: superAdmin.name,  // Fixed: changed user.name to superAdmin.name
+                id: superAdmin.id,  
+                email: superAdmin.email, 
+                name: superAdmin.name, 
             },
             refreshToken,
             accessToken,

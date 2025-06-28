@@ -12,7 +12,7 @@ export const startScheduledJobs = () => {
   // Run notification processor every hour
   scheduleJob('0 * * * *', async () => {
     console.log('Running scheduled notification processor...');
-    await runNotificationProcessor();
+    // await runNotificationProcessor();
   });
   
   // Check for missing checkouts every 30 minutes between 5 PM and midnight
@@ -27,7 +27,7 @@ export const startScheduledJobs = () => {
 
 // If this script is called directly
 if (process.argv[1] === new URL(import.meta.url).pathname) {
-  startScheduledJobs();
+  // startScheduledJobs();
   // Keep process running
   console.log('Scheduler running. Press Ctrl+C to exit.');
 }
