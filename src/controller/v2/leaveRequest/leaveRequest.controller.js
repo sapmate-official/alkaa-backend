@@ -211,6 +211,8 @@ export const createLeaveRequest = async (req, res) => {
                 return res.status(404).json({ error: "Organization not found" });
             }
             const employeeName = `${user.firstName} ${user.lastName}`;
+            console.log(organization);
+            
             try {
                 await sendLeaveRequestEmail(
                     manager.email,

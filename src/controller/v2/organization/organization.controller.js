@@ -493,7 +493,7 @@ const createCompleteOrganization = [
                 const adminRole = await tx.role.create({
                     data: {
                         orgId: newOrganization.id,
-                        name: 'Administrator',
+                        name: 'Org_Admin',
                         description: 'Full administrative access to organization',
                         isDefault: true,
                         permissions: {
@@ -525,7 +525,7 @@ const createCompleteOrganization = [
                         email: admin.email,
                         firstName: admin.firstName,
                         lastName: admin.lastName,
-                        status: 'inactive', // Will be activated when password is set
+                        status: 'inactive', 
                         verificationToken: verificationToken,
                         hiredDate: new Date(),
                         roles: {
@@ -552,7 +552,16 @@ const createCompleteOrganization = [
                         }
                     }
                 });
+                
+
                 console.log('Admin user created with ID:', adminUser.id);
+                const organization_admin = await tx.organization_admin.create({
+                    data:{
+                        adminId:adminUser.id,
+                        orgId:newOrganization.id
+                    }
+                })
+                console.log('Admin user assigned to organization admin role');
 
                 // Step 6: Initialize permission presets for organization
                 console.log('Initializing permission presets...');
@@ -584,13 +593,14 @@ const createCompleteOrganization = [
                 // Send welcome email to admin with password reset link
                 const resetToken = result.verificationToken;
                 const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
-
+cmcaoet8t0001tg1cz9asq6go
+cmcaof3i1002ttg1c5qfvpjzv
                 const emailSubject = "Welcome to Alkaa - Your Organization Setup is Complete";
 
                 const emailContent = `
                 <div style="font-family: 'Helvetica', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333333;">
                     <div style="text-align: center; margin-bottom: 30px;">
-                        <img src="${process.env.VITE_ALKAA_LOGO || 'https://alkaa.io/logo.png'}" alt="Alkaa Logo" style="max-width: 150px;">
+                        <img src="${process.env.VITE_ALKAA_LOGO || 'https://alkaa.online/logo.svg'}" alt="Alkaa Logo" style="max-width: 150px;">
                     </div>
                     
                     <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
