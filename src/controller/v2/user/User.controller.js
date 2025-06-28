@@ -770,6 +770,282 @@ export const hardDeleteUser = async (req, res) => {
     }
 };
 
+/**
+ * Hard delete a user from a specific organization
+ * This will permanently remove the user and all associated data from the system
+ * 
+ * @route DELETE /api/v2/user/org/:orgId/user/:userId
+ * @access Private (requires authentication)
+ * @param {string} orgId - Organization ID
+ * @param {string} userId - User ID to be deleted
+ * @returns {Object} Success message with deleted user details
+ */
+export const hardDeleteUserFromOrg = async (req, res) => {
+    const { orgId, userId } = req.params;
+    
+    // Validate required parameters
+    if (!orgId || !userId) {
+        return res.status(400).json({ 
+            error: 'Bad Request',
+            message: 'Organization ID and User ID are required',
+            required: ['orgId', 'userId']
+        });
+    }
+
+    // Validate UUID format (assuming UUIDs are used)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(orgId) || !uuidRegex.test(userId)) {
+        return res.status(400).json({ 
+            error: 'Bad Request',
+            message: 'Invalid UUID format for orgId or userId'
+        });
+    }
+
+    try {
+        // Check if user exists and belongs to the specified organization
+        const userExists = await prisma.user.findFirst({
+            where: { 
+                id: userId,
+                orgId: orgId 
+            },
+            include: {
+                roles: {
+                    include: {
+                        role: true
+                    }
+                },
+                department: true,
+                organization: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            }
+        });
+
+        if (!userExists) {
+            return res.status(404).json({ 
+                error: 'Not Found',
+                message: 'User not found in the specified organization',
+                orgId: orgId,
+                userId: userId
+            });
+        }
+
+        // Additional security check: Prevent deletion of the last admin
+        const adminRoles = userExists.roles.filter(userRole => 
+            userRole.role.name.toLowerCase().includes('admin') || 
+            userRole.role.isDefault === true
+        );
+
+        if (adminRoles.length > 0) {
+            // Check if this is the last admin in the organization
+            const totalAdmins = await prisma.user.count({
+                where: {
+                    orgId: orgId,
+                    roles: {
+                        some: {
+                            role: {
+                                OR: [
+                                    { name: { contains: 'admin', mode: 'insensitive' } },
+                                    { isDefault: true }
+                                ]
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (totalAdmins <= 1) {
+                return res.status(403).json({
+                    error: 'Forbidden',
+                    message: 'Cannot delete the last administrator of the organization',
+                    userId: userId,
+                    orgId: orgId
+                });
+            }
+        }
+
+        // Use Prisma transaction to ensure all operations are atomic
+        const result = await prisma.$transaction(async (prismaClient) => {
+            console.log(`Starting hard delete for user ${userId} from organization ${orgId} (${userExists.firstName} ${userExists.lastName})`);
+            
+            // Delete Organization_admin records
+            await prismaClient.organization_admin.deleteMany({
+                where: { adminId: userId }
+            });
+            
+            // Delete all UserRoles
+            await prismaClient.userRole.deleteMany({
+                where: { userId: userId }
+            });
+
+            // Delete PushSubscriptions
+            await prismaClient.pushSubscription.deleteMany({
+                where: { userId: userId }
+            });
+
+            // Delete all Notifications
+            await prismaClient.notification.deleteMany({
+                where: { userId: userId }
+            });
+
+            // Delete all LeaveBalances
+            await prismaClient.leaveBalance.deleteMany({
+                where: { userId: userId }
+            });
+
+            // Delete all LeaveRequests
+            await prismaClient.leaveRequest.deleteMany({
+                where: { userId: userId }
+            });
+
+            // Delete BankDetails if exists
+            await prismaClient.bankDetails.deleteMany({
+                where: { userId: userId }
+            });
+
+            // Delete SalaryParameter if exists
+            await prismaClient.salaryParameter.deleteMany({
+                where: { userId: userId }
+            });
+
+            // Process SalaryRecords and their transactions
+            const salaryRecords = await prismaClient.salaryRecord.findMany({
+                where: { userId: userId },
+                select: { id: true }
+            });
+
+            for (const record of salaryRecords) {
+                await prismaClient.salaryTransactionTable.deleteMany({
+                    where: { salaryRecordId: record.id }
+                });
+            }
+
+            await prismaClient.salaryRecord.deleteMany({
+                where: { userId: userId }
+            });
+
+            // For UserDailyReports connected to attendances
+            const attendances = await prismaClient.attendanceRecord.findMany({
+                where: { userId: userId },
+                select: { id: true }
+            });
+
+            for (const attendance of attendances) {
+                await prismaClient.userDailyReport.deleteMany({
+                    where: { attendanceId: attendance.id }
+                });
+            }
+
+            // Delete attendance records
+            await prismaClient.attendanceRecord.deleteMany({
+                where: { userId: userId }
+            });
+
+            // Check and update departments where user is head
+            const departmentsAffected = await prismaClient.department.updateMany({
+                where: { 
+                    headId: userId,
+                    orgId: orgId 
+                },
+                data: { headId: null }
+            });
+
+            // Update users who had this user as manager (only within the same organization)
+            const subordinatesAffected = await prismaClient.user.updateMany({
+                where: { 
+                    managerId: userId,
+                    orgId: orgId 
+                },
+                data: { managerId: null }
+            });
+
+            // Delete all transactions
+            await prismaClient.transactionTable.deleteMany({
+                where: {
+                    OR: [
+                        { senderUserId: userId },
+                        { recieverUserId: userId }
+                    ]
+                }
+            });
+
+            // Finally delete the user
+            const deletedUser = await prismaClient.user.delete({
+                where: { id: userId }
+            });
+
+            return {
+                deletedUser,
+                departmentsAffected: departmentsAffected.count,
+                subordinatesAffected: subordinatesAffected.count
+            };
+        });
+
+        // Log user hard deletion
+        if (req.user && req.user.id) {
+            try {
+                await logUserDeletion(
+                    req.user.id,
+                    userId,
+                    orgId,
+                    userExists,
+                    req
+                );
+            } catch (logError) {
+                console.warn('Failed to log user deletion:', logError.message);
+                // Don't fail the entire operation for logging issues
+            }
+        }
+
+        console.log(`User ${userId} successfully hard deleted from organization ${orgId}`);
+        res.status(200).json({ 
+            success: true,
+            message: 'User and all related data successfully deleted from organization',
+            data: {
+                deletedUser: {
+                    id: result.deletedUser.id,
+                    email: result.deletedUser.email,
+                    firstName: result.deletedUser.firstName,
+                    lastName: result.deletedUser.lastName,
+                    organizationId: orgId,
+                    organizationName: userExists.organization.name
+                },
+                impact: {
+                    departmentsAffected: result.departmentsAffected,
+                    subordinatesAffected: result.subordinatesAffected
+                }
+            },
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Error during organization user hard delete:', error);
+        
+        // Handle specific Prisma errors
+        if (error.code === 'P2025') {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'User not found or already deleted'
+            });
+        }
+        
+        if (error.code === 'P2003') {
+            return res.status(409).json({
+                error: 'Conflict',
+                message: 'Cannot delete user due to foreign key constraints'
+            });
+        }
+        
+        res.status(500).json({ 
+            error: 'Internal Server Error',
+            message: 'An error occurred during the hard delete operation',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 export const updateUserRole = async (req, res) => {
     const { userId, prevRole, roleId } = req.params;
     try {

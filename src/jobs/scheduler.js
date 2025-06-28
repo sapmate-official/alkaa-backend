@@ -12,7 +12,7 @@ export const startScheduledJobs = () => {
   // Run notification processor every hour
   scheduleJob('0 * * * *', async () => {
     console.log('Running scheduled notification processor...');
-    await runNotificationProcessor();
+    // await runNotificationProcessor();
   });
   
   // Check for missing checkouts every 30 minutes between 5 PM and midnight
