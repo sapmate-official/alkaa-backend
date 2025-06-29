@@ -82,6 +82,7 @@ export const generateSalaryBasedOnParams = async (req, res) => {
         // Check permissions
         const canGenerate = await PayrollPermissions.canGenerateSalary(currentUserId, targetUserId);
         if (!canGenerate) {
+            console.log(canGenerate)
             return res.status(403).json({
                 success: false,
                 message: "You don't have permission to generate salary for this user"
@@ -225,3 +226,49 @@ export const checkMultiplePayslipStatus = async (req, res) => {
         });
     }
 };
+
+export const preStatsSalaryGeneration = async (req,res )=>{
+    try {
+        const { month, year, userId } = req.params;
+        const currentUserId = req.user.id;
+
+        console.log("[PRE_STATS_SALARY_GENERATION] Starting pre-stats salary generation process", {
+            requestParams: req.params,
+            requestUser: req.user.id
+        });
+
+        // Validate parameters
+        const { month: validMonth, year: validYear } = PayrollValidators.validateMonthYear(month, year);
+
+        // Determine target user ID
+        const targetUserId = userId && userId !== 'undefined' ? userId : currentUserId;
+
+        // Check permissions
+        const canGenerate = await PayrollPermissions.canGenerateSalary(currentUserId, targetUserId);
+        if (!canGenerate) {
+            return res.status(403).json({
+                success: false,
+                message: "You don't have permission to generate salary for this user"
+            });
+        }
+
+        // Generate salary using service
+        const salaryRecord = await PayrollService.preStatsSalaryGeneration(targetUserId, validMonth, validYear);
+
+        console.log("[PRE_STATS_SALARY_GENERATION] Pre-stats salary generated successfully", {
+            salaryRecordId: salaryRecord.id,
+            userId: targetUserId,
+            month: validMonth,
+            year: validYear,
+            netSalary: salaryRecord.netSalary
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "Pre-stats salary generated successfully",
+            data: salaryRecord
+        });
+    }catch (e) {
+        console.log ("[PRE_STATS_SALARY_GENERATION] Error in pre-stats salary generation:", e);
+    }
+}

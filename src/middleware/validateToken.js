@@ -2,7 +2,8 @@ import jwt from "jsonwebtoken";
 
 export default function validateToken(req, res, next) {
     try {
-        if (req.path === "/api/v2/super-admin") {
+
+        if (req.path === "/super-admin") {
             return next();
         }
         // Get token from multiple sources (header or cookie)

@@ -19,8 +19,21 @@ export class PayrollPermissions {
      */
     static async canGenerateSalary(currentUserId, targetUserId) {
         if (currentUserId === targetUserId) {
-            // Users typically cannot generate their own salary
-            return false;
+            const hasSelfPermission = await prisma.rolePermission.findFirst({
+                where: {
+                    permission: {
+                        key: "generate_salary_to_myself"
+                    },
+                    role: {
+                        users: {
+                            some: {
+                                userId: currentUserId
+                            }
+                        }
+                    }
+                }
+            })
+            return hasSelfPermission;
         }
 
         // Check manager permission
@@ -30,12 +43,10 @@ export class PayrollPermissions {
                 managerId: currentUserId
             }
         });
-
-        // Check role-based permission
-        const hasGeneratePermission = await prisma.rolePermission.findFirst({
+        const hasAdminPermission = await prisma.rolePermission.findFirst({
             where: {
                 permission: {
-                    key: "generate_salary"
+                    key: "generate_salary_of_all"
                 },
                 role: {
                     users: {
@@ -47,7 +58,11 @@ export class PayrollPermissions {
             }
         });
 
-        return !!(hasManagerPermission || hasGeneratePermission);
+
+        // Check role-based permission
+
+
+        return !!(hasManagerPermission || hasAdminPermission);
     }
 
     /**

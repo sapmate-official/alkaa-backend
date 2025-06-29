@@ -269,11 +269,76 @@ export class PayrollService {
             }
         });
 
+
         return {
             workingDays,
             attendanceStats,
             ytdTotal,
             previousSalaryRecord
         };
+    }
+    static async preStatsSalaryGeneration(targetUserId, validMonth, validYear){
+        try {
+            const user = await this.fetchUserData(targetUserId);
+            // Calculate working days and attendance statistics using attendanceUtils function
+            const { workingDays, attendanceStats } = await calculateAttendanceStats(targetUserId, validMonth, validYear, user.orgId);
+            // Fetch verified attendance, unverified attendance, and leave stats for this month
+            const verifiedAttendance = await prisma.attendanceRecord.count({
+                where: {
+                    userId: targetUserId,
+                    date: {
+                        gte: new Date(validYear, validMonth - 1, 1),
+                        lt: new Date(validYear, validMonth, 1)
+                    },
+                    verificationStatus: 'VERIFIED'
+                }
+            });
+
+            const unverifiedAttendance = await prisma.attendanceRecord.count({
+                where: {
+                    userId: targetUserId,
+                    date: {
+                        gte: new Date(validYear, validMonth - 1, 1),
+                        lt: new Date(validYear, validMonth, 1)
+                    },
+                    verificationStatus: 'UNVERIFIED'
+                }
+            });
+
+            const leaveStats = await prisma.leaveRequest.findMany({
+                where: {
+                    userId: targetUserId,
+                    startDate: {
+                        gte: new Date(validYear, validMonth - 1, 1),
+                        lt: new Date(validYear, validMonth, 1)
+                    },
+                    status: 'APPROVED'
+                },
+                select: {
+                    leaveType: true,
+                    numberOfDays: true,
+                    startDate: true,
+                    endDate: true
+                }
+            });
+
+            return {
+                userId: targetUserId,
+                month: validMonth,
+                year: validYear,
+                workingDays: workingDays,
+                attendanceStats: attendanceStats,
+                verifiedAttendance: verifiedAttendance,
+                unverifiedAttendance: unverifiedAttendance,
+                leaveStats: leaveStats,
+                userName: `${user.firstName} ${user.lastName}`,
+                department: user.department ? user.department.name : "N/A",
+                organization: user.organization ? user.organization.name : "N/A"
+            }
+        }catch (e) {
+            console.error(e);
+            throw new Error("Failed to pre-generate salary statistics");
+
+        }
     }
 }
