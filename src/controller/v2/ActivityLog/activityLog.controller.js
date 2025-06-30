@@ -26,10 +26,27 @@ export const getActivityLogs = async (req, res) => {
         console.log('Prisma client status:', !!prisma);
         console.log('User object:', user);
 
-        // Check user permissions
+        // Check user permissions and get orgId
         const userWithRoles = await prisma.user.findUnique({
             where: { id: user.id },
             include: {
+                roles: {
+                    include: {
+                        role: {
+                            include: {
+                                permissions: {
+                                    include: {
+                                        permission: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            select: {
+                id: true,
+                orgId: true,
                 roles: {
                     include: {
                         role: {
@@ -66,7 +83,7 @@ export const getActivityLogs = async (req, res) => {
 
         // Base condition - ALWAYS filter by organization first
         let whereCondition = {
-            orgId: user.orgId,
+            orgId: userWithRoles.orgId,
             AND: []
         };
 
@@ -79,7 +96,7 @@ export const getActivityLogs = async (req, res) => {
             const subordinateIds = await prisma.user.findMany({
                 where: {
                     managerId: user.id,
-                    orgId: user.orgId  // Ensure subordinates are from same org
+                    orgId: userWithRoles.orgId  // Ensure subordinates are from same org
                 },
                 select: { id: true }
             });
@@ -277,7 +294,7 @@ export const getActivityStats = async (req, res) => {
                 startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         }
 
-        // Check permissions (same logic as getActivityLogs)
+        // Check permissions (same logic as getActivityLogs) and get orgId
         const userWithRoles = await prisma.user.findUnique({
             where: { id: user.id },
             include: {
@@ -294,8 +311,29 @@ export const getActivityStats = async (req, res) => {
                         }
                     }
                 }
+            },
+            select: {
+                id: true,
+                orgId: true,
+                roles: {
+                    include: {
+                        role: {
+                            include: {
+                                permissions: {
+                                    include: {
+                                        permission: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         });
+
+        if (!userWithRoles) {
+            return res.status(404).json({ error: 'User not found' });
+        }
 
         const hasViewAllPermission = userWithRoles?.roles.some(userRole =>
             userRole.role.permissions.some(permission =>
@@ -311,7 +349,7 @@ export const getActivityStats = async (req, res) => {
 
         // Base condition - ALWAYS filter by organization first
         let whereCondition = {
-            orgId: user.orgId,
+            orgId: userWithRoles.orgId,
             createdAt: {
                 gte: startDate
             },
@@ -325,7 +363,7 @@ export const getActivityStats = async (req, res) => {
             const subordinateIds = await prisma.user.findMany({
                 where: {
                     managerId: user.id,
-                    orgId: user.orgId  // Ensure subordinates are from same org
+                    orgId: userWithRoles.orgId  // Ensure subordinates are from same org
                 },
                 select: { id: true }
             });
@@ -416,7 +454,7 @@ export const getActivityStats = async (req, res) => {
         const users = await prisma.user.findMany({
             where: {
                 id: { in: userIds },
-                orgId: user.orgId  // Ensure users are from same org
+                orgId: userWithRoles.orgId  // Ensure users are from same org
             },
             select: {
                 id: true,
@@ -485,11 +523,21 @@ export const getUserRecentActivities = async (req, res) => {
             return res.status(401).json({ error: 'Unauthorized' });
         }
 
+        // Get user's orgId first
+        const currentUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { orgId: true }
+        });
+
+        if (!currentUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
         // Check if target user exists and is in the same organization
         const targetUser = await prisma.user.findFirst({
             where: {
                 id: targetUserId,
-                orgId: user.orgId  // Ensure target user is from same org
+                orgId: currentUser.orgId  // Ensure target user is from same org
             }
         });
 
@@ -508,7 +556,7 @@ export const getUserRecentActivities = async (req, res) => {
                 where: {
                     id: targetUserId,
                     managerId: user.id,
-                    orgId: user.orgId  // Ensure subordinate is from same org
+                    orgId: currentUser.orgId  // Ensure subordinate is from same org
                 }
             });
 
@@ -547,7 +595,7 @@ export const getUserRecentActivities = async (req, res) => {
 
         const activities = await prisma.activityLog.findMany({
             where: {
-                orgId: user.orgId,  // Always filter by organization
+                orgId: currentUser.orgId,  // Always filter by organization
                 OR: [
                     { actorId: targetUserId },
                     { targetId: targetUserId }

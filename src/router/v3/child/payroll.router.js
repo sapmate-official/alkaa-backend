@@ -4,6 +4,7 @@ import {
     getPaySlipBasedOnParams,
     generateSalaryBasedOnParams,
     getSalaryStatisticsBasedOnId,
+    getPayslipDataForPDF,
     downloadPayslipAsPDF,
     checkMultiplePayslipStatus,
     preStatsSalaryGeneration
@@ -17,6 +18,7 @@ router.use((req, res, next) => {
 router.get("/payslip/:month/:year/:userId",validateToken, getPaySlipBasedOnParams);
 router.post("/salary-generate/:month/:year/:userId",validateToken, generateSalaryBasedOnParams);
 router.get("/statistics/:salaryRecordId",validateToken, getSalaryStatisticsBasedOnId);
+router.get("/pdf-data/:salaryRecordId",validateToken, getPayslipDataForPDF);
 router.get("/download/:salaryRecordId",validateToken, downloadPayslipAsPDF);
 router.post("/check-multiple-status", validateToken, checkMultiplePayslipStatus);
 router.use((req, res, next) => {

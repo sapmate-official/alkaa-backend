@@ -33,6 +33,7 @@
     "nodemon": "^3.1.9",
     "pdfkit": "^0.13.0",
     "prisma": "^6.2.1",
+    "puppeteer": "^24.11.1",
     "resend": "^4.1.1",
     "serverless-http": "^3.2.0",
     "web-push": "^3.6.7",

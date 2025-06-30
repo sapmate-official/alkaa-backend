@@ -138,6 +138,138 @@ export function formatMultiplePayslipStatus(statusMap) {
 }
 
 /**
+ * Format payslip data specifically for frontend PDF generation
+ */
+export function formatPayslipForFrontendPDF(salaryRecord, additionalData) {
+    const { month, year } = salaryRecord;
+    const { workingDays, attendanceStats, ytdTotal, previousSalaryRecord } = additionalData;
+
+    // Parse allowances and deductions
+    const allowances = salaryRecord.allowances || {};
+    const deductions = salaryRecord.deductions || {};
+    
+    // Calculate totals
+    const totalAllowances = Object.values(allowances).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+    const totalDeductions = Object.values(deductions).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+    const grossPay = salaryRecord.basicSalary + totalAllowances + (salaryRecord.incentive || 0) + (salaryRecord.bonus || 0);
+    
+    // Format month name and dates
+    const monthName = new Date(year, month - 1, 1).toLocaleString('default', { month: 'long' });
+    const payDate = salaryRecord.processedAt ? new Date(salaryRecord.processedAt).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
+    const period = `M${month.toString().padStart(2, '0')}${year}`;
+
+    // Employee information
+    const employee = {
+        name: `${salaryRecord.user.firstName || ''} ${salaryRecord.user.lastName || ''}`.trim(),
+        employeeId: salaryRecord.user.employeeId || 'N/A',
+        department: salaryRecord.user.department?.name || 'N/A',
+        email: salaryRecord.user.email || 'N/A',
+        bankDetails: salaryRecord.user.bankDetails ? {
+            bankName: salaryRecord.user.bankDetails.bankName || 'N/A',
+            accountNumber: `XXXX${(salaryRecord.user.bankDetails.accountNumber || '').slice(-4)}`,
+            ifscCode: salaryRecord.user.bankDetails.ifscCode || 'N/A'
+        } : null
+    };
+
+    // Company information
+    const company = {
+        name: salaryRecord.user.organization?.name || 'Company Name',
+        address: salaryRecord.user.organization?.address || 'Company Address',
+        email: salaryRecord.user.organization?.email || 'hr@company.com',
+        phone: salaryRecord.user.organization?.phone || 'Company Phone'
+    };
+
+    // Earnings breakdown
+    const earnings = {
+        basicSalary: {
+            description: 'Basic Salary',
+            hours: workingDays,
+            rate: salaryRecord.basicSalary / workingDays,
+            current: salaryRecord.basicSalary,
+            ytd: salaryRecord.basicSalary * month
+        },
+        allowances: Object.entries(allowances).map(([key, value]) => ({
+            description: key.toUpperCase(),
+            current: parseFloat(value) || 0,
+            ytd: (parseFloat(value) || 0) * month
+        })),
+        additionalPayments: []
+    };
+
+    // Add incentive and bonus if they exist
+    if (salaryRecord.incentive) {
+        earnings.additionalPayments.push({
+            description: 'Incentive',
+            current: salaryRecord.incentive,
+            ytd: salaryRecord.incentive * month
+        });
+    }
+
+    if (salaryRecord.bonus) {
+        earnings.additionalPayments.push({
+            description: 'Bonus',
+            current: salaryRecord.bonus,
+            ytd: salaryRecord.bonus * month
+        });
+    }
+
+    // Deductions breakdown
+    const deductionsBreakdown = Object.entries(deductions).map(([key, value]) => ({
+        description: key.toUpperCase(),
+        current: parseFloat(value) || 0,
+        ytd: (parseFloat(value) || 0) * month
+    }));
+
+    // Add tax if exists
+    if (salaryRecord.tax) {
+        deductionsBreakdown.push({
+            description: 'Tax',
+            current: salaryRecord.tax,
+            ytd: salaryRecord.tax * month
+        });
+    }
+
+    return {
+        // Basic Information
+        month,
+        year,
+        monthName,
+        payDate,
+        period,
+        status: salaryRecord.status,
+        paymentMode: salaryRecord.paymentMode || 'MANUAL',
+        paymentRef: salaryRecord.paymentRef,
+        
+        // Employee & Company Information
+        employee,
+        company,
+        
+        // Financial Data
+        basicSalary: salaryRecord.basicSalary,
+        grossPay,
+        totalDeductions: totalDeductions + (salaryRecord.tax || 0),
+        netSalary: salaryRecord.netSalary,
+        
+        // Detailed Breakdown
+        earnings,
+        deductions: deductionsBreakdown,
+        
+        // Attendance Information
+        attendance: {
+            workingDays,
+            ...attendanceStats
+        },
+        
+        // YTD Information
+        ytd: {
+            grossPay: grossPay * month,
+            totalDeductions: (totalDeductions + (salaryRecord.tax || 0)) * month,
+            netSalary: salaryRecord.netSalary * month
+        }
+    };
+}
+
+/**
  * Mask sensitive information in bank details
  */
 export function maskBankDetails(bankDetails) {

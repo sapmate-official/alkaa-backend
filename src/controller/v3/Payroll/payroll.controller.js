@@ -1,7 +1,8 @@
 import { PayrollService } from "./services/payrollService.js";
 import { PayslipPDFGenerator } from "./services/pdfGenerator.js";
+import { HTMLPayslipPDFGenerator } from "./services/htmlPdfGenerator.js";
 import { PayrollPermissions, PayrollValidators } from "./validators/payrollValidators.js";
-import { formatPayslipData, formatSalaryStatistics, formatMultiplePayslipStatus } from "./models/payrollModels.js";
+import { formatPayslipData, formatSalaryStatistics, formatMultiplePayslipStatus, formatPayslipForFrontendPDF } from "./models/payrollModels.js";
 import { EmailService } from "./services/emailService.js";
 
 /**
@@ -159,11 +160,54 @@ export const getSalaryStatisticsBasedOnId = async (req, res) => {
 };
 
 /**
- * Download payslip as PDF based on salary record ID
+ * Get detailed payslip data for frontend PDF generation
+ */
+export const getPayslipDataForPDF = async (req, res) => {
+    try {
+        const { salaryRecordId } = req.params;
+        const currentUserId = req.user.id;
+
+        // Validate parameters
+        PayrollValidators.validateSalaryRecordId(salaryRecordId);
+
+        // Get salary record data with all details needed for PDF
+        const statisticsData = await PayrollService.getSalaryStatistics(salaryRecordId);
+
+        // Check permissions
+        const canView = await PayrollPermissions.canViewStatistics(currentUserId, statisticsData.salaryRecord);
+        if (!canView) {
+            return res.status(403).json({
+                success: false,
+                message: "You don't have permission to view this payslip data"
+            });
+        }
+
+        // Format data specifically for frontend PDF generation
+        const pdfData = formatPayslipForFrontendPDF(statisticsData.salaryRecord, statisticsData);
+
+        return res.status(200).json({
+            success: true,
+            data: pdfData
+        });
+
+    } catch (error) {
+        console.error("Error fetching payslip data for PDF:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message.includes("not found") ? error.message : "Failed to fetch payslip data",
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Download payslip as PDF based on salary record ID (Backend generation - DEPRECATED)
+ * Use getPayslipDataForPDF for frontend PDF generation instead
  */
 export const downloadPayslipAsPDF = async (req, res) => {
     try {
         const { salaryRecordId } = req.params;
+        const { format = 'html' } = req.query; // Allow format selection: 'html' or 'pdfkit'
         const currentUserId = req.user.id;
 
         // Validate parameters
@@ -181,8 +225,14 @@ export const downloadPayslipAsPDF = async (req, res) => {
             });
         }
 
-        // Generate and send PDF
-        await PayslipPDFGenerator.generatePayslipPDF(statisticsData.salaryRecord, res);
+        // Generate and send PDF based on format preference
+        if (format === 'html' || format === 'modern') {
+            // Use HTML-based PDF generator (similar to your frontend approach)
+            await HTMLPayslipPDFGenerator.generatePayslipPDF(statisticsData.salaryRecord, res);
+        } else {
+            // Use existing PDFKit-based generator
+            await PayslipPDFGenerator.generatePayslipPDF(statisticsData.salaryRecord, res);
+        }
 
     } catch (error) {
         console.error("Error generating payslip PDF:", error);
