@@ -139,7 +139,7 @@ export const sendBillingEmail = async (email, billData, organizationName) => {
     }
 };
 
-    export const sendLeaveRequestEmail = async (managerEmail, adminEmail, employeeName, employeeEmail, leaveData, companyName) => {
+export const sendLeaveRequestEmail = async (managerEmail, adminEmail, employeeName, employeeEmail, leaveData, companyName) => {
     try {
         // managerEmail = "parambrataghosh26@gmail.com"
 
@@ -504,9 +504,25 @@ export const sendSalaryProcessingEmail = async (employeeEmail, employeeName, sal
 
 export const sendNewEmployeeWelcomeEmail = async (employeeEmail, employeeName, managerEmail, managerName, departmentHead, teamMembers, employeeDetails, companyName) => {
     try {
+        // Build CC array conditionally
+        const ccList = [
+            {
+                email: managerEmail,
+                name: managerName
+            }
+        ];
+        
+        // Only add department head to CC if it exists
+        if (departmentHead && departmentHead.email) {
+            ccList.push({
+                email: departmentHead.email,
+                name: departmentHead.name
+            });
+        }
+        
         const emailData = {
             sender: {
-                name: companyName.name,
+                name: companyName,
                 email: process.env.SENDER_EMAIL
             },
             to: [
@@ -515,16 +531,7 @@ export const sendNewEmployeeWelcomeEmail = async (employeeEmail, employeeName, m
                     name: employeeName
                 }
             ],
-            cc: [
-                {
-                    email: managerEmail,
-                    name: managerName
-                },
-                ...(departmentHead ? [{
-                    email: departmentHead.email,
-                    name: departmentHead.name
-                }] : [])
-            ],
+            cc: ccList,
             subject: `Welcome to ${companyName}!`,
             htmlContent: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">

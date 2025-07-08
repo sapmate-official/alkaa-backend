@@ -202,24 +202,27 @@ const createEmployee = async (req, res) => {
             role: member.roles.length > 0 ? member.roles[0].role.name : 'Team Member'
         }));
         
-        await sendNewEmployeeWelcomeEmail(
-            employee.email,
-            `${employee.firstName} ${employee.lastName}`,
-            employee.manager.email,
-            employee.manager.firstName + ' ' + employee.manager.lastName,
-            {
-                email: employee.department.departmentHead.email,
-                name: employee.department.departmentHead.firstName + ' ' + employee.department.departmentHead.lastName
-            },
-            formattedTeamMembers,
-            {
-                employeeId: employee.employeeId,
-                department: employee.department.name,
-                hiredDate: employee.hiredDate,
-                verificationToken: verificationToken
-            },
-            organizationValidation.name
-        )
+        // Only send email if manager exists
+        if (employee.manager && employee.manager.email) {
+            await sendNewEmployeeWelcomeEmail(
+                employee.email,
+                `${employee.firstName} ${employee.lastName}`,
+                employee.manager.email,
+                employee.manager.firstName + ' ' + employee.manager.lastName,
+                employee.department?.departmentHead ? {
+                    email: employee.department.departmentHead.email,
+                    name: employee.department.departmentHead.firstName + ' ' + employee.department.departmentHead.lastName
+                } : null,
+                formattedTeamMembers,
+                {
+                    employeeId: employee.employeeId,
+                    department: employee.department?.name || 'Not Assigned',
+                    hiredDate: employee.hiredDate,
+                    verificationToken: verificationToken
+                },
+                organizationValidation.name
+            );
+        }
         
         await prisma.user.update({
             where: { id: employee.id },

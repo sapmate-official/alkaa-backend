@@ -212,6 +212,7 @@ export const createLeaveRequest = async (req, res) => {
             }
             const employeeName = `${user.firstName} ${user.lastName}`;
             console.log(organization);
+            console.log(leaveRequest);
             
             try {
                 await sendLeaveRequestEmail(
