@@ -1,5 +1,6 @@
 import prisma from "../../../db/connectDb.js";
 import { sendAttendanceVerificationEmail } from "../../../util/sendEmail.js";
+
 const WORKING_HOURS = {
     FULL_DAY: 8,
     HALF_DAY: 4,
@@ -45,8 +46,8 @@ export const createAttendance = async (req, res) => {
                 status,
                 notes,
                 duration,
-                ipAddress,
-                deviceInfo,
+                ipAddress: req.ip,
+                deviceInfo: req.headers['user-agent'],
             },
         });
         res.status(201).json(newAttendance);
@@ -72,8 +73,8 @@ export const updateAttendance = async (req, res) => {
                 status,
                 notes,
                 duration,
-                ipAddress,
-                deviceInfo
+                ipAddress: req.ip,
+                deviceInfo: req.headers['user-agent']
             },
         });
         res.status(200).json(updatedAttendance);
@@ -104,8 +105,8 @@ export const deleteAttendance = async (req, res) => {
 export const checkIn = async (req, res) => {
     console.log('Starting checkIn process...');
     try {
-        const { date, checkInTime, checkInLocation, notes } = req.body;
-        console.log('Request body:', { date, checkInTime, checkInLocation, notes });
+        const { date, checkInTime, checkInLocation, notes, clientTimestamp, clientTimezone } = req.body;
+        console.log('Request body:', { date, checkInTime, checkInLocation, notes, clientTimestamp, clientTimezone });
         
         if (!date || !checkInTime || !checkInLocation) {
             console.log('Missing required fields:', { date, checkInTime, checkInLocation });
@@ -115,11 +116,28 @@ export const checkIn = async (req, res) => {
         const user = req.user;
         console.log('User details:', user);
         
+        // Use client-provided timestamp
         const checkInDateTime = new Date(checkInTime);
         const attendanceDate = new Date(date);
-        console.log('Parsed dates:', { checkInDateTime, attendanceDate });
+        const serverTime = new Date();
+        
+        console.log('Timestamps:', { 
+            clientCheckIn: checkInDateTime, 
+            attendanceDate, 
+            serverTime,
+            timezone: clientTimezone 
+        });
 
-        if (attendanceDate > new Date()) {
+        // Validate that the client time is reasonable (within 24 hours of server time)
+        const timeDifferenceHours = Math.abs(serverTime - checkInDateTime) / (1000 * 60 * 60);
+        if (timeDifferenceHours > 24) {
+            console.log('Time difference too large:', timeDifferenceHours, 'hours');
+            return res.status(400).json({ 
+                message: "Client time appears to be incorrect. Please check your device's time settings." 
+            });
+        }
+
+        if (attendanceDate > new Date(Date.now() + 24 * 60 * 60 * 1000)) { // Allow 1 day future
             console.log('Future date detected:', attendanceDate, new Date());
             return res.status(400).json({ message: "Cannot check in for future dates" });
         }
@@ -148,7 +166,7 @@ export const checkIn = async (req, res) => {
             data: {
                 userId: user.id,
                 date: attendanceDate,
-                checkInTime: checkInDateTime,
+                checkInTime: checkInDateTime, // Use client timestamp
                 checkInLocation,
                 notes,
                 sessionNumber: nextSessionNumber,
@@ -173,20 +191,49 @@ export const checkIn = async (req, res) => {
  */
 export const checkOut = async (req, res) => {
     try {
-        const { checkInId, date, checkOutTime, checkOutLocation, notes, reportContent } = req.body;
+        const { checkInId, date, checkOutTime, checkOutLocation, notes, reportContent, clientTimestamp, clientTimezone } = req.body;
         
         console.log('=== CHECKOUT REQUEST RECEIVED ===');
         console.log('Request body:', req.body);
         console.log('Report content received:', reportContent);
-        console.log('Type of reportContent:', typeof reportContent);
+        console.log('Client timezone:', clientTimezone);
         
         if (!date || !checkOutTime || !checkOutLocation) {
             return res.status(400).json({ message: "All required fields must be provided" });
         }
 
         const user = req.user;
-        const checkOutDateTime = new Date(checkOutTime);
-        const attendanceDate = new Date(date);
+        const checkOutDateTime = new Date(checkOutTime); // Use client timestamp
+        let attendanceDate = new Date(date);
+        const serverTime = new Date();
+
+        console.log('Parsed dates:', {
+            originalDate: date,
+            attendanceDate: attendanceDate,
+            checkOutDateTime: checkOutDateTime,
+            userId: user.id
+        });
+
+        // Validate that the client time is reasonable
+        const timeDifferenceHours = Math.abs(serverTime - checkOutDateTime) / (1000 * 60 * 60);
+        if (timeDifferenceHours > 24) {
+            return res.status(400).json({ 
+                message: "Client time appears to be incorrect. Please check your device's time settings." 
+            });
+        }
+
+        // First, let's find all sessions for this user to debug
+        const allUserSessions = await prisma.attendanceRecord.findMany({
+            where: {
+                userId: user.id
+            },
+            orderBy: {
+                date: 'desc'
+            },
+            take: 5
+        });
+
+        console.log('Recent user sessions:', allUserSessions);
 
         const currentSession = await prisma.attendanceRecord.findFirst({
             where: {
@@ -196,15 +243,49 @@ export const checkOut = async (req, res) => {
             }
         });
 
+        console.log('Found current session:', currentSession);
+
+        let anyActiveSession = null;
+        
         if (!currentSession) {
-            return res.status(400).json({ message: "No active work session found" });
+            // Try to find any active session for today without strict date matching
+            anyActiveSession = await prisma.attendanceRecord.findFirst({
+                where: {
+                    userId: user.id,
+                    checkOutTime: null
+                },
+                orderBy: {
+                    checkInTime: 'desc'
+                }
+            });
+
+            console.log('Any active session found:', anyActiveSession);
+
+            if (!anyActiveSession) {
+                return res.status(400).json({ 
+                    message: "No active work session found. Please check in first or contact support.",
+                    debug: {
+                        userId: user.id,
+                        searchDate: attendanceDate,
+                        recentSessions: allUserSessions.length
+                    }
+                });
+            } else {
+                // Use the active session found
+                console.log('Using any active session:', anyActiveSession.id);
+                // Update the attendanceDate to match the active session
+                attendanceDate = new Date(anyActiveSession.date);
+            }
         }
 
-        if (checkOutDateTime <= new Date(currentSession.checkInTime)) {
+        // Use the session we found (either currentSession or anyActiveSession)
+        const sessionToUpdate = currentSession || anyActiveSession;
+
+        if (checkOutDateTime <= new Date(sessionToUpdate.checkInTime)) {
             return res.status(400).json({ message: "Check-out time must be after check-in time" });
         }
 
-        const sessionDuration = calculateSessionDuration(currentSession.checkInTime, checkOutDateTime);
+        const sessionDuration = calculateSessionDuration(sessionToUpdate.checkInTime, checkOutDateTime);
         
         if (sessionDuration.hours < WORKING_HOURS.MINIMUM_SESSION) {
             return res.status(400).json({ 
@@ -221,17 +302,17 @@ export const checkOut = async (req, res) => {
 
         const totalDuration = calculateTotalDuration([
             ...allDaySessions.filter(session => session.checkOutTime),
-            { checkInTime: currentSession.checkInTime, checkOutTime: checkOutDateTime }
+            { checkInTime: sessionToUpdate.checkInTime, checkOutTime: checkOutDateTime }
         ]);
 
         const status = determineStatus(totalDuration.hours);
 
         const updatedSession = await prisma.attendanceRecord.update({
-            where: { id: currentSession.id },
+            where: { id: sessionToUpdate.id },
             data: {
-                checkOutTime: checkOutDateTime,
+                checkOutTime: checkOutDateTime, // Use client timestamp
                 checkOutLocation,
-                notes: notes ? `${currentSession.notes || ''} ${notes}`.trim() : currentSession.notes,
+                notes: notes ? `${sessionToUpdate.notes || ''} ${notes}`.trim() : sessionToUpdate.notes,
                 status,
                 duration: sessionDuration,
                 ipAddress: req.ip,
@@ -252,8 +333,8 @@ export const checkOut = async (req, res) => {
             console.log('Daily report created successfully:', report);
         } catch (reportError) {
             console.error('Error creating daily report:', reportError);
-            // Continue even if report creation fails
         }
+
         let userData = await prisma.user.findUnique({
             where: {
                 id: user.id
@@ -284,29 +365,48 @@ export const checkOut = async (req, res) => {
                 }
             }
         });
-        const employeename = `${userData.firstName} ${userData.lastName}`;
-        console.log( userData.manager.email,
-            userData.organization.Organization_admin[0].admin_user.email,
-            employeename,
-            userData.email,
-            updatedSession,
-            userData.organization.name);
         
-        await sendAttendanceVerificationEmail(
-            userData.manager.email,
-            userData.organization.Organization_admin[0].admin_user.email,
+        const employeename = `${userData.firstName} ${userData.lastName}`;
+        
+        // Check if manager and organization admin exist before sending email
+        const managerEmail = userData.manager?.email;
+        const organizationAdminEmail = userData.organization?.Organization_admin?.[0]?.admin_user?.email;
+        const organizationName = userData.organization?.name;
+        
+        console.log('Email details:', {
+            managerEmail,
+            organizationAdminEmail,
             employeename,
-            userData.email,
-            {
-                id: updatedSession.id,
-                date: updatedSession.date,
-                checkInTime: updatedSession.checkInTime,
-                checkOutTime: updatedSession.checkOutTime,
-                sessionNumber: updatedSession.sessionNumber,
-                status: updatedSession.status
-            },
-            userData.organization.name
-        )
+            userEmail: userData.email,
+            organizationName
+        });
+        
+        // Only send email if we have the required email addresses
+        if (managerEmail && organizationAdminEmail && organizationName) {
+            try {
+                await sendAttendanceVerificationEmail(
+                    managerEmail,
+                    organizationAdminEmail,
+                    employeename,
+                    userData.email,
+                    {
+                        id: updatedSession.id,
+                        date: updatedSession.date,
+                        checkInTime: updatedSession.checkInTime,
+                        checkOutTime: updatedSession.checkOutTime,
+                        sessionNumber: updatedSession.sessionNumber,
+                        status: updatedSession.status
+                    },
+                    organizationName
+                );
+                console.log('Attendance verification email sent successfully');
+            } catch (emailError) {
+                console.error('Failed to send attendance verification email:', emailError);
+                // Continue execution even if email fails
+            }
+        } else {
+            console.log('Skipping email notification - missing required email addresses or organization info');
+        }
 
         console.log('Checkout process completed successfully');
         res.status(200).json({
@@ -321,119 +421,7 @@ export const checkOut = async (req, res) => {
     }
 };
 
-/**
- * @route GET /api/v2/attendance/sessions
- * @desc Get all sessions for a specific date
- * @access Private
- */
-export const sessionListByDate = async (req, res) => {
-    console.log('Starting sessionListByDate...');
-    try {
-        const { date } = req.params;
-        console.log('Request query:', { date });
-        
-        if (!date) {
-            console.log('Date parameter missing');
-            return res.status(400).json({ message: "Date is required" });
-        }
-        
-        const user = req.user;
-        console.log('User details:', user);
 
-        const attendanceDate = new Date(date);
-        console.log('Parsed attendance date:', attendanceDate);
-
-        const sessions = await prisma.attendanceRecord.findMany({
-            where: {
-                userId: user.id,
-                date: attendanceDate
-            },
-            orderBy: {
-                checkInTime: 'asc'
-            }
-        });
-        console.log('Retrieved sessions:', sessions);
-
-        res.status(200).json(sessions);
-    } catch (error) {
-        console.error("Error in sessionListByDate:", error);
-        res.status(500).json({ message: "Internal server error", error: error.message });
-    }
-};
-
-/**
- * @route GET /api/v2/attendance/employees
- * @desc Get attendance records for all employees
- * @access Private (Admin only)
- */
-export const getEmployeeAttendance = async (req, res) => {
-    try {
-        const employeeList = await prisma.user.findMany({
-            include: {
-                attendanceRecords: true,
-                roles: {
-                    include: {
-                        role: true
-                    }
-                }
-            }
-        });
-
-        res.status(200).json(employeeList);
-    } catch (error) {
-        console.error("Error in getEmployeeAttendance:", error);
-        res.status(500).json({ message: "Internal server error", error: error.message });
-    }
-};
-
-// Helper functions
-const getNextSessionNumber = async (userId, date) => {
-    const sessions = await prisma.attendanceRecord.findMany({
-        where: { userId, date },
-        orderBy: { sessionNumber: 'desc' },
-        take: 1
-    });
-
-    return sessions.length > 0 ? sessions[0].sessionNumber + 1 : 1;
-};
-
-const calculateSessionDuration = (checkInTime, checkOutTime) => {
-    const checkIn = new Date(checkInTime);
-    const checkOut = new Date(checkOutTime);
-    const durationMs = checkOut - checkIn;
-    const hours = durationMs / (1000 * 60 * 60);
-    const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-    
-    return {
-        hours,
-        minutes,
-        totalMinutes: Math.floor(hours * 60 + minutes)
-    };
-};
-
-const calculateTotalDuration = (sessions) => {
-    const totalMinutes = sessions.reduce((total, session) => {
-        const duration = calculateSessionDuration(session.checkInTime, session.checkOutTime);
-        return total + duration.totalMinutes;
-    }, 0);
-
-    return {
-        hours: Math.floor(totalMinutes / 60),
-        minutes: totalMinutes % 60,
-        totalMinutes
-    };
-};
-
-const determineStatus = (totalHours) => {
-    if (totalHours >= WORKING_HOURS.FULL_DAY) {
-        return 'PRESENT';
-    } else if (totalHours >= WORKING_HOURS.HALF_DAY) {
-        return 'HALF_DAY';
-    } else if (totalHours > 0) {
-        return 'EARLY_DEPARTURE';
-    }
-    return 'ABSENT';
-};
 export const getUserAttendance = async(req, res) => {
     const {id} = req.params;
     try {
@@ -722,9 +710,9 @@ export const getCheckOutPast = async(req, res) => {
 
 export const postPastCheckOut = async(req, res) => {
     try {
-        const { attendanceId, checkOutTime, notes } = req.body;
+        const { attendanceId, checkOutTime, notes, clientTimestamp, clientTimezone } = req.body;
         const userId = req.user.id;
-        console.log('Request body:', { attendanceId, checkOutTime, notes });
+        console.log('Request body:', { attendanceId, checkOutTime, notes, clientTimestamp, clientTimezone });
         
         // Validate the attendance record belongs to the user
         const attendance = await prisma.attendanceRecord.findFirst({
@@ -738,8 +726,17 @@ export const postPastCheckOut = async(req, res) => {
             return res.status(404).json({ error: "Attendance record not found" });
         }
 
-        const checkOutDateTime = new Date(checkOutTime);
+        const checkOutDateTime = new Date(checkOutTime); // Use client timestamp
         const checkInDateTime = new Date(attendance.checkInTime);
+        const serverTime = new Date();
+
+        // Validate that the client time is reasonable
+        const timeDifferenceHours = Math.abs(serverTime - checkOutDateTime) / (1000 * 60 * 60);
+        if (timeDifferenceHours > 168) { // Allow 1 week difference for past entries
+            return res.status(400).json({ 
+                error: "Client time appears to be incorrect. Please check your device's time settings." 
+            });
+        }
 
         if (checkOutDateTime <= checkInDateTime) {
             return res.status(400).json({ 
@@ -754,7 +751,7 @@ export const postPastCheckOut = async(req, res) => {
                 id: attendanceId
             },
             data: {
-                checkOutTime: checkOutDateTime,
+                checkOutTime: checkOutDateTime, // Use client timestamp
                 notes: notes ? `${attendance.notes || ''} | Late checkout reason: ${notes}`.trim() : attendance.notes,
                 duration: sessionDuration,
                 status: determineStatus(sessionDuration.hours)
@@ -785,7 +782,9 @@ export const createPastAttendance = async (req, res) => {
             checkOutTime, 
             checkOutLocation, 
             notes,
-            reportContent 
+            reportContent,
+            clientTimestamp,
+            clientTimezone
         } = req.body;
         
         console.log('=== PAST ATTENDANCE REQUEST RECEIVED ===');
@@ -796,9 +795,20 @@ export const createPastAttendance = async (req, res) => {
         }
 
         const user = req.user;
-        const checkInDateTime = new Date(checkInTime);
-        const checkOutDateTime = new Date(checkOutTime);
+        const checkInDateTime = new Date(checkInTime); // Use client timestamp
+        const checkOutDateTime = new Date(checkOutTime); // Use client timestamp
         const attendanceDate = new Date(date);
+        const serverTime = new Date();
+        
+        // Validate that the client times are reasonable for past entries
+        const checkInTimeDifference = Math.abs(serverTime - checkInDateTime) / (1000 * 60 * 60 * 24);
+        const checkOutTimeDifference = Math.abs(serverTime - checkOutDateTime) / (1000 * 60 * 60 * 24);
+        
+        if (checkInTimeDifference > 365 || checkOutTimeDifference > 365) { // Allow up to 1 year for past entries
+            return res.status(400).json({ 
+                message: "Date is too far in the past. Please contact your administrator for older records." 
+            });
+        }
         
         // Validate dates
         const currentDate = new Date();
@@ -828,13 +838,13 @@ export const createPastAttendance = async (req, res) => {
         const sessionDuration = calculateSessionDuration(checkInDateTime, checkOutDateTime);
         const status = determineStatus(sessionDuration.hours);
         
-        // Create the attendance record
+        // Create the attendance record with client timestamps
         const newAttendance = await prisma.attendanceRecord.create({
             data: {
                 userId: user.id,
                 date: attendanceDate,
-                checkInTime: checkInDateTime,
-                checkOutTime: checkOutDateTime,
+                checkInTime: checkInDateTime, // Use client timestamp
+                checkOutTime: checkOutDateTime, // Use client timestamp
                 checkInLocation,
                 checkOutLocation,
                 notes: `Past attendance reason: ${notes}`,
@@ -932,6 +942,7 @@ export const createPastAttendance = async (req, res) => {
         res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
+
 export const getAllUserLiveAttendance = async (req, res) => {
     try {
         console.log('Fetching all users live attendance...');
@@ -1233,4 +1244,118 @@ export const adminVerifyAttendance = async (req, res) => {
             details: error.message 
         });
     }
+};
+
+/**
+ * @route GET /api/v2/attendance/sessions
+ * @desc Get all sessions for a specific date
+ * @access Private
+ */
+export const sessionListByDate = async (req, res) => {
+    console.log('Starting sessionListByDate...');
+    try {
+        const { date } = req.params;
+        console.log('Request query:', { date });
+        
+        if (!date) {
+            console.log('Date parameter missing');
+            return res.status(400).json({ message: "Date is required" });
+        }
+        
+        const user = req.user;
+        console.log('User details:', user);
+
+        const attendanceDate = new Date(date);
+        console.log('Parsed attendance date:', attendanceDate);
+
+        const sessions = await prisma.attendanceRecord.findMany({
+            where: {
+                userId: user.id,
+                date: attendanceDate
+            },
+            orderBy: {
+                checkInTime: 'asc'
+            }
+        });
+        console.log('Retrieved sessions:', sessions);
+
+        res.status(200).json(sessions);
+    } catch (error) {
+        console.error("Error in sessionListByDate:", error);
+        res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+};
+
+/**
+ * @route GET /api/v2/attendance/employees
+ * @desc Get attendance records for all employees
+ * @access Private (Admin only)
+ */
+export const getEmployeeAttendance = async (req, res) => {
+    try {
+        const employeeList = await prisma.user.findMany({
+            include: {
+                attendanceRecords: true,
+                roles: {
+                    include: {
+                        role: true
+                    }
+                }
+            }
+        });
+
+        res.status(200).json(employeeList);
+    } catch (error) {
+        console.error("Error in getEmployeeAttendance:", error);
+        res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+};
+
+// Helper functions
+const getNextSessionNumber = async (userId, date) => {
+    const sessions = await prisma.attendanceRecord.findMany({
+        where: { userId, date },
+        orderBy: { sessionNumber: 'desc' },
+        take: 1
+    });
+
+    return sessions.length > 0 ? sessions[0].sessionNumber + 1 : 1;
+};
+
+const calculateSessionDuration = (checkInTime, checkOutTime) => {
+    const checkIn = new Date(checkInTime);
+    const checkOut = new Date(checkOutTime);
+    const durationMs = checkOut - checkIn;
+    const hours = durationMs / (1000 * 60 * 60);
+    const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return {
+        hours,
+        minutes,
+        totalMinutes: Math.floor(hours * 60 + minutes)
+    };
+};
+
+const calculateTotalDuration = (sessions) => {
+    const totalMinutes = sessions.reduce((total, session) => {
+        const duration = calculateSessionDuration(session.checkInTime, session.checkOutTime);
+        return total + duration.totalMinutes;
+    }, 0);
+
+    return {
+        hours: Math.floor(totalMinutes / 60),
+        minutes: totalMinutes % 60,
+        totalMinutes
+    };
+};
+
+const determineStatus = (totalHours) => {
+    if (totalHours >= WORKING_HOURS.FULL_DAY) {
+        return 'PRESENT';
+    } else if (totalHours >= WORKING_HOURS.HALF_DAY) {
+        return 'HALF_DAY';
+    } else if (totalHours > 0) {
+        return 'EARLY_DEPARTURE';
+    }
+    return 'ABSENT';
 };

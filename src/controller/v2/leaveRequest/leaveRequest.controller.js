@@ -41,9 +41,9 @@ export const createLeaveRequest = async (req, res) => {
             return res.status(400).json({ error: "All fields are required: userId, leaveTypeId, startDate, endDate, reason" });
         }
 
-        // Date validation
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        // Date validation - parse as local dates
+        const start = new Date(startDate + 'T00:00:00');
+        const end = new Date(endDate + 'T00:00:00');
 
         if (isNaN(start.getTime()) || isNaN(end.getTime())) {
             console.log('Invalid date format:', { startDate, endDate });
@@ -153,7 +153,7 @@ export const createLeaveRequest = async (req, res) => {
             },
             include: {
                 user: true,
-                leaveType: true  // Make sure this is included
+                leaveType: true
             }
         });
 
@@ -254,8 +254,8 @@ export const updateLeaveRequest = async (req, res) => {
         const leaveRequest = await prisma.leaveRequest.update({
             where: { id },
             data: {
-                startDate: startDate ? new Date(startDate) : undefined,
-                endDate: endDate ? new Date(endDate) : undefined,
+                startDate: startDate ? new Date(startDate + 'T00:00:00') : undefined,
+                endDate: endDate ? new Date(endDate + 'T00:00:00') : undefined,
                 reason: reason !== undefined ? reason : undefined,
                 status: status !== undefined ? status : undefined,
                 approvedBy: approvedBy !== undefined ? approvedBy : undefined,
