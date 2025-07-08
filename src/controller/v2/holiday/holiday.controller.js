@@ -88,7 +88,10 @@ export const createHoliday = async (req, res) => {
             select: { email: true }
         });
 
-        await sendHolidayAnnouncementEmail(employeeEmailList,newHoliday,newHoliday.organization.name)
+        // Extract email strings from the user objects
+        const emailStrings = employeeEmailList.map(user => user.email);
+
+        await sendHolidayAnnouncementEmail(emailStrings, newHoliday, newHoliday.organization.name)
         res.status(201).json(newHoliday);
     } catch (error) {
         console.error("Error creating holiday:", error);
