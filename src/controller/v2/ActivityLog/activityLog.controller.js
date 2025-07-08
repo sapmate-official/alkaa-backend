@@ -29,30 +29,15 @@ export const getActivityLogs = async (req, res) => {
         // Check user permissions and get orgId
         const userWithRoles = await prisma.user.findUnique({
             where: { id: user.id },
-            include: {
-                roles: {
-                    include: {
-                        role: {
-                            include: {
-                                permissions: {
-                                    include: {
-                                        permission: true
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             select: {
                 id: true,
                 orgId: true,
                 roles: {
-                    include: {
+                    select: {
                         role: {
-                            include: {
+                            select: {
                                 permissions: {
-                                    include: {
+                                    select: {
                                         permission: true
                                     }
                                 }
@@ -297,30 +282,15 @@ export const getActivityStats = async (req, res) => {
         // Check permissions (same logic as getActivityLogs) and get orgId
         const userWithRoles = await prisma.user.findUnique({
             where: { id: user.id },
-            include: {
-                roles: {
-                    include: {
-                        role: {
-                            include: {
-                                permissions: {
-                                    include: {
-                                        permission: true
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
             select: {
                 id: true,
                 orgId: true,
                 roles: {
-                    include: {
+                    select: {
                         role: {
-                            include: {
+                            select: {
                                 permissions: {
-                                    include: {
+                                    select: {
                                         permission: true
                                     }
                                 }

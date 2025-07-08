@@ -453,7 +453,7 @@ model UserDailyReport {
   id            String           @id @default(cuid())
   attendanceId  String
   reportContent Json
-  attendance    AttendanceRecord @relation(fields: [attendanceId], references: [id])
+  attendance    AttendanceRecord @relation(fields: [attendanceId], references: [id],onDelete: Cascade)
 
   @@index([id, attendanceId])
 }
