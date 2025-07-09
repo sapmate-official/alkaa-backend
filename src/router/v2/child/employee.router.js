@@ -1,9 +1,16 @@
 import express from "express";
-import { createEmployee, deleteEmployee, getEmployeeById, listOfEmployees,checkEmployeeId, updateEmployee,generateEmployeeId } from "../../../controller/v2/organization/Employee/employee.controller.js";
+
 import draftRouter from "./draft.router.js";
+import {
+    getEmployeeById,
+    createEmployee,
+    updateEmployee,
+    deleteEmployee,
+    generateEmployeeId,
+    checkEmployeeId
+} from "../../../controller/v2/organization/Employee/index.js";
 
 const router = express.Router();
- router.get('/:orgId',listOfEmployees);
  router.get('/:id',getEmployeeById);
 router.post('/',createEmployee);
 router.put('/',updateEmployee);

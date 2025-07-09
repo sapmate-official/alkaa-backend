@@ -1,8 +1,8 @@
 import express from "express";
-import { saveSubscription } from "../../../controller/v3/PushNotification/pushNotification.controller.js"; 
+// import { saveSubscription } from "../../../controller/v3/PushNotification/pushNotification.controller.js"; 
 import { createNotification, createNotificationTemplate, deleteNotification, deleteNotificationTemplate, getAllnotification, getAllnotificationTemplate, getNotificationByUserId, getNotificationTemplateById, updateNotification, updateNotificationTemplate } from "../../../controller/v2/Notification/Template/Notification.template.controller.js";
 import { sendTestPushNotification } from "../../../controller/v2/Notification/PushSubscription/test-push.controller.js";
-import { scheduleNotificationController } from "../../../controller/v2/Notification/Schedule/notification.schedule.controller.js";
+// import { scheduleNotificationController } from "../../../controller/v2/Notification/Schedule/notification.schedule.controller.js";
 
 const router = express.Router();
 
@@ -12,9 +12,9 @@ router.post("/", createNotification);
 router.get("/:id", getNotificationByUserId);
 router.put("/:id", updateNotification);
 router.delete("/:id", deleteNotification);
-router.post("/subscription", saveSubscription);
+// router.post("/subscription", saveSubscription);
 router.get("/test-push/:userId", sendTestPushNotification);
-router.post("/schedule", scheduleNotificationController);
+// router.post("/schedule", scheduleNotificationController);
 
 // notification template routes
 router.get("/template", getAllnotificationTemplate);

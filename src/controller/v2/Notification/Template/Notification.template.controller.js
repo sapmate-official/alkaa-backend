@@ -1,5 +1,5 @@
 import prisma from "../../../../db/connectDb.js";
-import { sendPushNotification } from "../../../v3/PushNotification/pushNotification.controller.js"; 
+// import { sendPushNotification } from "../../../v3/PushNotification/pushNotification.controller.js"; 
 
 
 const getAllnotification = async (req, res) => {

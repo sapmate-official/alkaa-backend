@@ -99,7 +99,7 @@ export const getBankById = async (req, res) => {
         if (bank) {
             res.status(200).json(bank);
         } else {
-            res.status(404).json({ error: 'Bank not found' });
+            res.status(204  ).json({ message: 'Bank not found' });
         }
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch bank details' });
