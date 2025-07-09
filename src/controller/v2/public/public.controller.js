@@ -1,8 +1,31 @@
-import { Resend } from "resend";
 import { configDotenv } from "dotenv";
 configDotenv();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+
+const sendBrevoEmail = async (emailData) => {
+    try {
+        const response = await fetch(BREVO_API_URL, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Api-Key': BREVO_API_KEY,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(emailData)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Brevo API error: ${response.status} - ${JSON.stringify(errorData)}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        throw error;
+    }
+};
 
 export const sendDemoRequestEmail = async (req, res) => {
     try {
@@ -25,17 +48,17 @@ export const sendDemoRequestEmail = async (req, res) => {
 
         // Recipients list
         const recipients = [
-            "parambrataghosh@Sapmate.com",
-            "kabir.khan@Sapmate.com",
-            "Sadaf.salam@Sapmate.com"
-        ];
-
-        // Send email to all recipients
-        const { data, error } = await resend.emails.send({
-            from: process.env.SENDER_EMAIL || "info@alkaa.online",
-            to: recipients,
+            "support@alkaa.online",
+            "shramana.show@alkaa.online",
+        ];        
+        const emailData = {
+            sender: {
+                name: "Sapmate Demo Requests",
+                email: process.env.SENDER_EMAIL || "noreply@sapmate.com"
+            },
+            to: recipients.map(email => ({ email })),
             subject: `New Demo Request from ${company}`,
-            html: `
+            htmlContent: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                     <h2 style="color: #2c3e50; text-align: center;">New Demo Request</h2>
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
@@ -63,16 +86,10 @@ export const sendDemoRequestEmail = async (req, res) => {
                         </p>
                     </div>
                 </div>
-            `,
-        });
+            `
+        };
 
-        if (error) {
-            console.error("Email sending error:", error);
-            return res.status(500).json({ 
-                error: "Failed to send email", 
-                details: process.env.NODE_ENV === 'development' ? error.message : undefined 
-            });
-        }
+        const result = await sendBrevoEmail(emailData);        console.log("Email sent successfully via Brevo:", result);
 
         // Success response
         res.status(200).json({ 

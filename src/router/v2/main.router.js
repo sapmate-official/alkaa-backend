@@ -22,6 +22,7 @@ import billingRouter from "./child/billing.router.js";
 import eventsRouter from "./child/events.router.js";
 import subscriptionPlanRouter from "./child/subscriptionPlan.router.js";
 import publicRouter from "./child/public.router.js";
+import activityLogRouter from "./child/activityLog.router.js";
 
 const router = express.Router();
 
@@ -48,5 +49,6 @@ router.use("/billing", billingRouter);
 router.use("/events", eventsRouter);
 router.use("/subscription-plans", subscriptionPlanRouter);
 router.use("/public", publicRouter);
+router.use("/activity-logs", activityLogRouter);
 
 export default router;

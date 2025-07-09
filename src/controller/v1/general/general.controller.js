@@ -216,12 +216,12 @@ const loginUser = async (req, res) => {
 const validatetoken = async (req, res) => {
     try {
         // req.user should be available from the middleware
-        if (!req.user || !req.user.email) {
+        if (!req.user || !req.user.id) {
             return res.status(401).json({ message: "Invalid user authentication" });
         }
 
         let data = await prisma.user.findFirst({
-            where: { email: req.user.email }, 
+            where: { id: req.user.id }, 
             include: {
                 organization: {
                     select: {
@@ -245,7 +245,7 @@ const validatetoken = async (req, res) => {
         
         if (!data) {
             data = await prisma.superAdmin.findUnique({ 
-                where: { email: req.user.email },
+                where: { id: req.user.id },
                 select: {
                     id: true,
                     email: true,
@@ -284,8 +284,8 @@ const refreshToken = async (req, res) => {
             process.env.REFRESH_TOKEN_SECRET
         );
 
-        // Find user
-        const user = await findUserById(decodedToken.email);
+        // Find user using ID from token
+        const user = await findUserById(decodedToken.id);
         if (!user || user.refreshToken !== refreshToken) {
             return res.status(403).json({ message: "Invalid refresh token." });
         }
@@ -299,7 +299,7 @@ const refreshToken = async (req, res) => {
         );
 
         // Update user's refresh token
-        await updateUser(user.email, { refreshToken: tokens.refreshToken });
+        await updateUser(user.id, { refreshToken: tokens.refreshToken });
 
         // Return new tokens
         return res.status(200).json({
@@ -338,8 +338,8 @@ const logout = async (req, res) => {
                 process.env.REFRESH_TOKEN_SECRET
             );
 
-            // Find user and verify tokens
-            const user = await findUserById(accessDecoded.email);
+            // Find user and verify tokens using ID from token
+            const user = await findUserById(accessDecoded.id);
             if (!user || user.refreshToken !== refreshToken) {
                 return res.status(403).json({
                     message: "Access denied. Invalid tokens."
@@ -347,7 +347,7 @@ const logout = async (req, res) => {
             }
 
             // Clear refresh token in database
-            await updateUser(user.email, { refreshToken: null });
+            await updateUser(user.id, { refreshToken: null });
 
             // Clear cookies
             res.clearCookie("refreshToken");
@@ -372,27 +372,28 @@ const logout = async (req, res) => {
     }
 };
 
-const findUserById = async (email) => {
-    let user = await prisma.user.findUnique({ where: { email } });
+const findUserById = async (id) => {
+    let user = await prisma.user.findUnique({ where: { id } });
     if (!user) {
-        user = await prisma.superAdmin.findUnique({ where: { email } });
+        user = await prisma.superAdmin.findUnique({ where: { id } });
     }
     return user;
 }
-const updateUser = async (email, data) => {
-    let user = await prisma.user.findUnique({ where: { email } });
+
+const updateUser = async (id, data) => {
+    let user = await prisma.user.findUnique({ where: { id } });
     if (!user) {
-        user = await prisma.superAdmin.findUnique({ where: { email } });
+        user = await prisma.superAdmin.findUnique({ where: { id } });
         if (user) {
             return await prisma.superAdmin.update({
-                where: { email },
+                where: { id },
                 data,
             });
         }
     }
     if (user) {
         return await prisma.user.update({
-            where: { email },
+            where: { id },
             data,
         });
 

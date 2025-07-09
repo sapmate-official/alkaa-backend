@@ -1,4 +1,4 @@
-export const allowedOrigins = [
+        export const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:5174',
@@ -6,6 +6,7 @@ export const allowedOrigins = [
     'http://192.168.0.193:5173',
     'https://myapp.herokuapp.com',
     'http://127.0.0.1:5173',
+    'http://192.168.0.158:5174',
     'https://192.168.0.193:5173',
     'http://sapmate-employee-bucket.s3-website.ap-south-1.amazonaws.com',
     "https://main.dy4iqzhph9mgs.amplifyapp.com",

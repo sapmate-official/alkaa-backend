@@ -7,6 +7,7 @@ import path from "path"
 import { configDotenv } from 'dotenv'
 // import fs from 'fs'
 import ServerlessHttp from 'serverless-http'
+import { startScheduledJobs } from './src/jobs/scheduler.js'
 // import morgan from 'morgan'
 // import winston from 'winston'
 // import 'winston-daily-rotate-file'
@@ -19,20 +20,18 @@ configDotenv()
 const app = express()
 const port = process.env.PORT || 3000
 
-app.use(cors(corsOptions))
-app.use(express.json())
-
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK' })
-})
-// Middleware
+// Middleware - consolidated to avoid duplicates
 app.use(cors(corsOptions))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 
-// Add before routes
-app.options('*', cors(corsOptions));
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK' })
+})
+
+// Handle preflight requests
+app.options('*', cors(corsOptions))
 
 // Add in your middleware or authentication-related code
 app.use((req, res, next) => {
@@ -80,8 +79,9 @@ app.use("/api/v1/salary/", salary)
 
 import mainV2Router from './src/router/v2/main.router.js'
 import mainv3Router from './src/router/v3/main.router.js'
-app.use("/api/v2/", mainV2Router)
-app.use("/api/v3/", mainv3Router)
+import validateTokenMiddlewear from './src/middleware/validateToken.js'
+app.use("/api/v2/",validateTokenMiddlewear, mainV2Router)
+app.use("/api/v3/",validateTokenMiddlewear, mainv3Router)
 
 // Import the bill controllers
 import { getBillById, processBillPayment } from './src/controller/v2/superAdmin/superAdmin.controller.js';
@@ -102,7 +102,9 @@ app.get('/', (req, res) => {
 // Start server
 if (process.env.NODE_ENV !== 'production') {
   app.listen(port, '0.0.0.0', () => {
-      console.log(`Server is running on port ${port}`)
+      console.log(`Server is running on port ${port}`);
+      // Start the job scheduler
+      startScheduledJobs();
   })
 }
 
