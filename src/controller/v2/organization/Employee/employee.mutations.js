@@ -1,6 +1,6 @@
 import prisma from "../../../../db/connectDb.js";
 import { sendNewEmployeeWelcomeEmail } from "../../../../util/sendEmail.js";
-
+//working solution
 // Create new employee
 const createEmployee = async (req, res) => {
     try {

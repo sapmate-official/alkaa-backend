@@ -6,7 +6,7 @@ const BASE_URL = 'http://localhost:3000/api/v2';
 
 // Super admin credentials for organization creation
 const SUPER_ADMIN_CREDENTIALS = {
-  email: 'superadmin-test@alkaa.com',
+  email: 'superadmin-test@alkaa.online',
   password: 'superAdmin-test@2025'
 };
 

@@ -23,7 +23,7 @@ async function main() {
     console.log('🔑 All employees can login with password: "password"');
     console.log('');
     console.log('🔐 Super Admin used for seeding:');
-    console.log('   Email: superadmin-test@alkaa.com');
+    console.log('   Email: superadmin-test@alkaa.online');
     console.log('   Password: superAdmin-test@2025');
   } catch (error) {
     console.error('💥 Error during seeding:', error);

@@ -271,6 +271,23 @@ export const logAuthActivity = async (userId, orgId, action, req = null) => {
 };
 
 /**
+ * Log general user activity
+ */
+export const logUserActivity = async (actorId, orgId, action, entity, entityId, description, metadata = null, req = null) => {
+    await logActivity({
+        orgId,
+        actorId,
+        action,
+        entity,
+        entityId,
+        description,
+        metadata,
+        ipAddress: req?.ip,
+        userAgent: req?.headers?.['user-agent']
+    });
+};
+
+/**
  * Log user deletion
  */
 export const logUserDeletion = async (actorId, targetId, orgId, userInfo, req = null) => {
@@ -307,5 +324,6 @@ export default {
     logUserCreation,
     logUserStatusChange,
     logAuthActivity,
-    logUserDeletion
+    logUserDeletion,
+    logUserActivity
 };

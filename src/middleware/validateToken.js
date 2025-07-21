@@ -1,9 +1,15 @@
 import jwt from "jsonwebtoken";
+import prisma from "../db/connectDb.js";
 
-export default function validateToken(req, res, next) {
+export default async function validateToken(req, res, next) {
     try {
 
         if (req.path === "/super-admin") {
+            return next();
+        }
+        if (req.path === "/super-admin" || 
+            req.path.startsWith("/verify/") || 
+            req.path.startsWith("/submit/")) {
             return next();
         }
         // Get token from multiple sources (header or cookie)
@@ -30,11 +36,50 @@ export default function validateToken(req, res, next) {
             clockTolerance: 60 // 60 seconds tolerance
         });
 
-        // Standardize the user ID format
-        req.user = {
-            id: decoded.id || decoded.userId,
-            email: decoded.email
-        };
+        // Fetch user data from database to get orgId and other details
+        const userId = decoded.id || decoded.userId;
+        const userdata = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                email: true,
+                orgId: true,
+                firstName: true,
+                lastName: true
+            }
+        });
+
+        if (!userdata) {
+            // Check if it's a super admin
+            const superAdmin = await prisma.superAdmin.findUnique({
+                where: { id: userId },
+                select: {
+                    id: true,
+                    email: true
+                }
+            });
+            
+            if (superAdmin) {
+                req.user = {
+                    id: superAdmin.id,
+                    email: superAdmin.email
+                };
+            } else {
+                return res.status(401).json({ 
+                    message: "User not found.",
+                    expired: false 
+                });
+            }
+        } else {
+            // Standardize the user object with orgId
+            req.user = {
+                id: userdata.id,
+                email: userdata.email,
+                orgId: userdata.orgId,
+                firstName: userdata.firstName,
+                lastName: userdata.lastName
+            };
+        }
         
         next();
     } catch (error) {

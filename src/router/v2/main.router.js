@@ -23,6 +23,8 @@ import eventsRouter from "./child/events.router.js";
 import subscriptionPlanRouter from "./child/subscriptionPlan.router.js";
 import publicRouter from "./child/public.router.js";
 import activityLogRouter from "./child/activityLog.router.js";
+import onboardingRouter from "./child/onboarding.router.js";
+
 
 const router = express.Router();
 
@@ -38,7 +40,7 @@ router.use("/salary/",salaryRouter);
 router.use("/super-admin/",superAdminRouter);
 router.use("/role/",roleRouter);
 router.use("/permission/",permissionRouter);
-router.use("/role-permission/",rolePermissionRouter); // Fixed missing slash
+router.use("/role-permission/",rolePermissionRouter); 
 router.use("/user-role/",userRoleRouter);
 router.use("/holiday/",holidayRouter);
 router.use("/holiday-type/",holidayTypeRouter);
@@ -50,5 +52,6 @@ router.use("/events", eventsRouter);
 router.use("/subscription-plans", subscriptionPlanRouter);
 router.use("/public", publicRouter);
 router.use("/activity-logs", activityLogRouter);
+router.use("/onboarding", onboardingRouter);
 
 export default router;

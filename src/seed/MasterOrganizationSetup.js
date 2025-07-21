@@ -49,7 +49,7 @@ async function runCompleteOrganizationSetup() {
     console.log('✅ Organizational hierarchy validated');
     
     console.log('\n🔑 Login Credentials:');
-    console.log('Super Admin: superadmin-test@alkaa.com / superAdmin-test@2025');
+    console.log('Super Admin: superadmin-test@alkaa.online / superAdmin-test@2025');
     console.log('Org Admin: admin@techvantage.com / password');
     console.log('All Employees: [employee-email] / password');
     
