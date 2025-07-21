@@ -35,8 +35,7 @@ export const sendPasswordResetEmail = async (email, verificationToken, companyNa
     try {
         const emailData = {
             sender: {
-                name: companyName.name,
-                // email: "noreply@alkaa.online"
+                name: "Alkaa",
                 email: process.env.SENDER_EMAIL
             },
             to: [
@@ -45,11 +44,14 @@ export const sendPasswordResetEmail = async (email, verificationToken, companyNa
                     name: "Customer"
                 }
             ],
-            subject: "Set Your Password",
+            subject: "Set Your Password - Alkaa",
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #2c3e50; text-align: center;">Welcome to ${companyName.name}</h2>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to Alkaa</h1>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
                         <p style="color: #636363; margin-bottom: 15px;">
                             We're excited to have you join us starting from ${new Date(hiredDate).toLocaleDateString()}!
                         </p>
@@ -58,13 +60,16 @@ export const sendPasswordResetEmail = async (email, verificationToken, companyNa
                         </p>
                         <div style="text-align: center; margin: 30px 0;">
                             <a href="${process.env.CLIENT_URL}/reset-password/${verificationToken}"
-                               style="background-color: #007bff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px;">
+                               style="background: linear-gradient(135deg, #4CAF50, #66BB6A); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
                                Set Password
                             </a>
                         </div>
                         <p style="color: #636363; font-size: 12px;">
                             If you didn't request this email, please ignore it.
                         </p>
+                    </div>
+                    <div style="text-align: center; margin-top: 30px; padding: 15px; background-color: #f1f1f1; border-radius: 5px;">
+                        <p style="margin: 0; color: #888; font-size: 12px;">© 2024 Alkaa. All rights reserved.</p>
                     </div>
                 </div>
             `
@@ -80,7 +85,7 @@ export const sendBillingEmail = async (email, billData, organizationName) => {
     try {
         const emailData = {
             sender: {
-                name: organizationName,
+                name: "Alkaa",
                 email: process.env.SENDER_EMAIL
             },
             to: [
@@ -89,11 +94,14 @@ export const sendBillingEmail = async (email, billData, organizationName) => {
                     name: ""
                 }
             ],
-            subject: `${organizationName} - Billing Statement for ${billData.month}/${billData.year}`,
+            subject: `Alkaa - Billing Statement for ${billData.month}/${billData.year}`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #2c3e50; text-align: center;">Billing Statement</h2>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Billing Statement</h1>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #FF9800;">
                         <h3 style="color: #34495e;">${organizationName}</h3>
                         <p><strong>Billing Period:</strong> ${new Date(billData.year, billData.month - 1).toLocaleDateString('default', { month: 'long' })} ${billData.year}</p>
                         
@@ -120,7 +128,7 @@ export const sendBillingEmail = async (email, billData, organizationName) => {
                         
                         <div style="text-align: center; margin: 30px 0;">
                             <a href="${process.env.ADMIN_URL || process.env.CLIENT_URL}/billing/pay/${billData.id}"
-                               style="background-color: #007bff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px;">
+                               style="background: linear-gradient(135deg, #FF9800, #FFB74D); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
                                View Details / Make Payment
                             </a>
                         </div>
@@ -128,6 +136,9 @@ export const sendBillingEmail = async (email, billData, organizationName) => {
                         <p style="font-size: 12px; color: #636363;">
                             If you have any questions about this bill, please contact our support team.
                         </p>
+                    </div>
+                    <div style="text-align: center; margin-top: 30px; padding: 15px; background-color: #f1f1f1; border-radius: 5px;">
+                        <p style="margin: 0; color: #888; font-size: 12px;">© 2024 Alkaa. All rights reserved.</p>
                     </div>
                 </div>
             `
@@ -141,12 +152,9 @@ export const sendBillingEmail = async (email, billData, organizationName) => {
 
 export const sendLeaveRequestEmail = async (managerEmail, adminEmail, employeeName, employeeEmail, leaveData, companyName) => {
     try {
-        // managerEmail = "parambrataghosh26@gmail.com"
-
-        
         const emailData = {
             sender: {
-                name: companyName,
+                name: "Alkaa",
                 email: process.env.SENDER_EMAIL
             },
             to: [
@@ -159,11 +167,14 @@ export const sendLeaveRequestEmail = async (managerEmail, adminEmail, employeeNa
                     name: "Admin"
                 }
             ],
-            subject: `Leave Request from ${employeeName}`,
+            subject: `Leave Request from ${employeeName} - Alkaa`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #2c3e50; text-align: center;">Leave Request</h2>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Leave Request</h1>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
                         <p style="color: #636363; margin-bottom: 15px;">
                             <strong>${employeeName}</strong> has submitted a leave request for your approval.
                         </p>
@@ -199,11 +210,11 @@ export const sendLeaveRequestEmail = async (managerEmail, adminEmail, employeeNa
                         
                         <div style="text-align: center; margin: 30px 0;">
                             <a href="${process.env.CLIENT_URL}/p/leaverequest/approve"
-                               style="background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; margin-right: 10px;">
+                               style="background: linear-gradient(135deg, #4CAF50, #66BB6A); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; margin-right: 10px; display: inline-block; font-weight: bold;">
                                Approve
                             </a>
                             <a href="${process.env.CLIENT_URL}/p/leaverequest/approve"
-                               style="background-color: #dc3545; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px;">
+                               style="background: linear-gradient(135deg, #f44336, #ef5350); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
                                Reject
                             </a>
                         </div>
@@ -211,6 +222,9 @@ export const sendLeaveRequestEmail = async (managerEmail, adminEmail, employeeNa
                         <p style="font-size: 12px; color: #636363;">
                             Please review and respond to this leave request at your earliest convenience.
                         </p>
+                    </div>
+                    <div style="text-align: center; margin-top: 30px; padding: 15px; background-color: #f1f1f1; border-radius: 5px;">
+                        <p style="margin: 0; color: #888; font-size: 12px;">© 2024 Alkaa. All rights reserved.</p>
                     </div>
                 </div>
             `
@@ -244,8 +258,11 @@ export const sendCheckoutReminderEmail = async (employeeEmail, employeeName, che
             subject: `Reminder: Please Check Out for Today`,
             htmlContent: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #2c3e50; text-align: center;">Checkout Reminder</h2>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Checkout Reminder</h1>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
                         <p style="color: #636363; margin-bottom: 15px;">
                             Hello <strong>${employeeName}</strong>,
                         </p>
@@ -301,8 +318,11 @@ export const sendAttendanceVerificationEmail = async (managerEmail, adminEmail, 
             subject: `Attendance Verification Required: ${employeeName}`,
             htmlContent: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #2c3e50; text-align: center;">Attendance Verification Required</h2>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Attendance Verification Required</h1>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
                         <p style="color: #636363; margin-bottom: 15px;">
                             <strong>${employeeName}</strong> has submitted an attendance record that requires verification.
                         </p>
@@ -372,8 +392,11 @@ export const sendLeaveStatusUpdateEmail = async (employeeEmail, employeeName, le
             subject: `Leave Request ${statusText.toUpperCase()}`,
             htmlContent: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #2c3e50; text-align: center;">Leave Request Update</h2>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Leave Request Update</h1>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #FF9800;">
                         <p style="color: #636363; margin-bottom: 15px;">
                             Dear <strong>${employeeName}</strong>,
                         </p>
@@ -436,8 +459,11 @@ export const sendSalaryProcessingEmail = async (employeeEmail, employeeName, sal
             subject: `Salary Processed for ${salaryData.month}/${salaryData.year}`,
             htmlContent: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #2c3e50; text-align: center;">Salary Notification</h2>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Salary Notification</h1>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
                         <p style="color: #636363; margin-bottom: 15px;">
                             Dear <strong>${employeeName}</strong>,
                         </p>
@@ -522,7 +548,7 @@ export const sendNewEmployeeWelcomeEmail = async (employeeEmail, employeeName, m
         
         const emailData = {
             sender: {
-                name: companyName,
+                name: "Alkaa",
                 email: process.env.SENDER_EMAIL
             },
             to: [
@@ -532,16 +558,19 @@ export const sendNewEmployeeWelcomeEmail = async (employeeEmail, employeeName, m
                 }
             ],
             cc: ccList,
-            subject: `Welcome to ${companyName}!`,
+            subject: `Welcome to Alkaa!`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #2c3e50; text-align: center;">Welcome to ${companyName}!</h2>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to Alkaa!</h1>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
                         <p style="color: #636363; margin-bottom: 15px;">
                             Dear <strong>${employeeName}</strong>,
                         </p>
                         <p style="color: #636363; margin-bottom: 15px;">
-                            We are delighted to welcome you to ${companyName}! We are excited to have you join our team 
+                            We are delighted to welcome you to Alkaa! We are excited to have you join our team 
                             and look forward to your contributions.
                         </p>
                         
@@ -594,7 +623,7 @@ export const sendNewEmployeeWelcomeEmail = async (employeeEmail, employeeName, m
                         <p style="color: #636363; margin-bottom: 15px;">
                             Best regards,<br>
                             HR Team<br>
-                            ${companyName}
+                            Alkaa
                         </p>
                     </div>
                 </div>
@@ -724,8 +753,11 @@ export const sendHolidayAnnouncementEmail = async (emails, holidayData, companyN
             subject: `Holiday Announcement: ${holidayData.name}`,
             htmlContent: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #2c3e50; text-align: center;">Holiday Announcement</h2>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Holiday Announcement</h1>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
                         <p style="color: #636363; margin-bottom: 15px;">
                             Dear Employees,
                         </p>
@@ -779,7 +811,7 @@ export const sendHolidayAnnouncementEmail = async (emails, holidayData, companyN
                         <p style="color: #636363; margin-bottom: 15px;">
                             Best regards,<br>
                             HR Team<br>
-                            ${companyName}
+                            Alkaa
                         </p>
                     </div>
                 </div>
@@ -813,7 +845,7 @@ export const sendDepartmentChangeEmail = async (employeeEmail, employeeName, old
         
         const emailData = {
             sender: {
-                name: companyName,
+                name: "Alkaa",
                 email: process.env.SENDER_EMAIL
             },
             to: recipients,
@@ -821,8 +853,11 @@ export const sendDepartmentChangeEmail = async (employeeEmail, employeeName, old
             subject: `Department Change Notification - ${employeeName}`,
             htmlContent: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #2c3e50; text-align: center;">Department Change Notification</h2>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Department Change Notification</h1>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
                         <p style="color: #636363; margin-bottom: 15px;">
                             Dear <strong>${employeeName}</strong>,
                         </p>
@@ -877,7 +912,7 @@ export const sendDepartmentChangeEmail = async (employeeEmail, employeeName, old
                         <p style="color: #636363; margin-bottom: 15px;">
                             Best regards,<br>
                             HR Team<br>
-                            ${companyName}
+                            Alkaa
                         </p>
                     </div>
                 </div>
@@ -1353,6 +1388,251 @@ export const sendEmailWithCustomContent = async (to, subject, htmlContent, compa
 
         return await sendBrevoEmail(emailData);
     } catch (error) {
+        return error;
+    }
+}
+
+// Onboarding Email Functions
+export const sendOnboardingInvitationEmail = async (email, firstName, onboardingUrl, companyName) => {
+    try {
+        console.log('=== SENDING ONBOARDING EMAIL ===');
+        console.log('Email:', email);
+        console.log('First Name:', firstName);
+        console.log('Onboarding URL:', onboardingUrl);
+        console.log('Company Name:', companyName);
+        console.log('================================');
+        
+        const emailData = {
+            sender: {
+                name: "Alkaa",
+                email: process.env.SENDER_EMAIL
+            },
+            to: [{
+                email,
+                name: firstName
+            }],
+            subject: `Welcome to Alkaa - Complete Your Onboarding`,
+            htmlContent: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to Alkaa!</h1>
+                    </div>
+                    
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            Hello ${firstName},
+                        </p>
+                        
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            We're excited to have you join our team at Alkaa! To complete your onboarding process, 
+                            please click the button below to provide some additional information we need to set up your account.
+                        </p>
+                        
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="${onboardingUrl}"
+                               style="background: linear-gradient(135deg, #4CAF50, #66BB6A); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
+                               Complete Your Onboarding
+                            </a>
+                        </div>
+                        
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            This link will expire in 7 days. If you have any questions, please contact your hiring manager.
+                        </p>
+                        
+                        <p style="font-size: 12px; color: #636363;">
+                            If you did not expect this email, please ignore it.
+                        </p>
+                    </div>
+                    <div style="text-align: center; margin-top: 30px; padding: 15px; background-color: #f1f1f1; border-radius: 5px;">
+                        <p style="margin: 0; color: #888; font-size: 12px;">© 2024 Alkaa. All rights reserved.</p>
+                    </div>
+                </div>
+            `
+        };
+
+        return await sendBrevoEmail(emailData);
+    } catch (error) {
+        console.error('Error sending onboarding invitation email:', error);
+        return error;
+    }
+};
+
+export const sendOnboardingChangeRequestEmail = async (email, firstName, onboardingUrl, feedback, companyName, managerName) => {
+    try {
+        const emailData = {
+            sender: {
+                name: "Alkaa",
+                email: process.env.SENDER_EMAIL
+            },
+            to: [{
+                email,
+                name: firstName
+            }],
+            subject: `Action Required: Update Your Onboarding Information`,
+            htmlContent: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Onboarding Information Update</h1>
+                    </div>
+                    
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            Hello ${firstName},
+                        </p>
+                        
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            Thank you for submitting your information. We need a few changes to complete your onboarding process. 
+                            Please review the feedback below and update your information:
+                        </p>
+                        
+                        <div style="background-color: #ffffff; padding: 15px; border-left: 4px solid #3498db; margin: 20px 0;">
+                            <p style="margin: 0; color: #636363;">
+                                <strong>Feedback from ${managerName}:</strong><br>
+                                ${feedback}
+                            </p>
+                        </div>
+                        
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="${onboardingUrl}"
+                               style="background: linear-gradient(135deg, #4CAF50, #66BB6A); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
+                               Update Your Information
+                            </a>
+                        </div>
+                        
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            This link will expire in 7 days. If you have any questions, please contact your hiring manager.
+                        </p>
+                    </div>
+                    <div style="text-align: center; margin-top: 30px; padding: 15px; background-color: #f1f1f1; border-radius: 5px;">
+                        <p style="margin: 0; color: #888; font-size: 12px;">© 2024 Alkaa. All rights reserved.</p>
+                    </div>
+                </div>
+            `
+        };
+
+        return await sendBrevoEmail(emailData);
+    } catch (error) {
+        console.error('Error sending onboarding change request email:', error);
+        return error;
+    }
+};
+
+export const sendEmployeeWelcomeEmail = async (email, firstName, loginUrl, employeeId, companyName) => {
+    try {
+        const emailData = {
+            sender: {
+                name: "Alkaa",
+                email: process.env.SENDER_EMAIL
+            },
+            to: [{
+                email,
+                name: firstName
+            }],
+            subject: `Welcome to Alkaa - Your Onboarding is Complete!`,
+            htmlContent: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to Alkaa!</h1>
+                    </div>
+                    
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            Dear <strong>${firstName}</strong>,
+                        </p>
+                        
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            Congratulations! Your onboarding process is complete, and your account has been set up in our HR system.
+                        </p>
+                        
+                        <div style="background-color: #ffffff; padding: 15px; border-left: 4px solid #2ecc71; margin: 20px 0;">
+                            <p style="margin: 0; color: #636363;">
+                                <strong>Your Employee ID:</strong> ${employeeId}<br>
+                                <strong>Email:</strong> ${email}
+                            </p>
+                        </div>
+                        
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            To get started, please set your password by clicking the button below:
+                        </p>
+                        
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="${loginUrl}"
+                               style="background: linear-gradient(135deg, #2ecc71, #66BB6A); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
+                               Set Your Password
+                            </a>
+                        </div>
+                        
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            After setting your password, you can log in to our HR portal at <a href="${process.env.CLIENT_URL}" style="color: #3498db; text-decoration: none;">${process.env.CLIENT_URL}</a> using your email and password.
+                        </p>
+                        
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            This link will expire in 24 hours for security reasons.
+                        </p>
+                    </div>
+                </div>
+            `
+        };
+
+        return await sendBrevoEmail(emailData);
+    } catch (error) {
+        console.error('Error sending employee welcome email:', error);
+        return error;
+    }
+};
+export const sendEmployeeOnboardingSubmissionEmailToManager = async (email, firstName, managerEmail, managerName, companyName) => {
+    try {
+        const emailData = {
+            sender: {
+                name: "Alkaa",
+                email: process.env.SENDER_EMAIL
+            },
+            to: [{
+                email: managerEmail,
+                name: managerName
+            }],
+            subject: `New Employee Onboarding Submission - ${firstName}`,
+            htmlContent: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
+                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">New Employee Onboarding Submission</h1>
+                    </div>
+                    
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            Hello ${managerName},
+                        </p>
+                        
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            ${firstName} has completed their onboarding submission. Please review the information and take any necessary actions.
+                        </p>
+                        
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            You can view the submission details in the HR portal.
+                        </p>
+                        
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="${process.env.CLIENT_URL}/p/onboarding"
+                               style="background: linear-gradient(135deg, #4CAF50, #66BB6A); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
+                               Review Onboarding Submission
+                            </a>
+                        </div>
+                        
+                        <p style="color: #636363; margin-bottom: 15px;">
+                            If you have any questions, please contact the HR department.
+                        </p>
+                    </div>
+                </div>
+            `
+        };
+
+        return await sendBrevoEmail(emailData);
+    } catch (error) {
+        console.error('Error sending onboarding submission email to manager:', error);
         return error;
     }
 }

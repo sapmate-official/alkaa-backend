@@ -6,7 +6,7 @@ import bcrypt from 'bcrypt';
 
 export const getUser = async (req, res) => {
     try {
-        const { orgId } = req.params;
+        const { orgId } = req.query;
         const users = await prisma.user.findMany({ where: { orgId } ,
         include:{
             organization:true,
