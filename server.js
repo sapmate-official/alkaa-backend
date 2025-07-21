@@ -80,8 +80,40 @@ app.use("/api/v1/salary/", salary)
 import mainV2Router from './src/router/v2/main.router.js'
 import mainv3Router from './src/router/v3/main.router.js'
 import validateTokenMiddlewear from './src/middleware/validateToken.js'
-app.use("/api/v2/",validateTokenMiddlewear, mainV2Router)
+import apiService from './src/router/api/main.router.js'
+
+// Conditional middleware that skips validation for specific public routes
+app.use("/api/v2/", (req, res, next) => {
+  // Public routes that don't require authentication
+  const publicRoutes = [
+    '/onboarding/verify/',
+    '/onboarding/submit/',
+    '/public/',
+    '/super-admin/'
+  ];
+  
+  // Check if the current route starts with any public route
+  const isPublicRoute = publicRoutes.some(route => req.path.startsWith(route));
+  
+  if (isPublicRoute) {
+    // Skip token validation for public routes
+    return next();
+  }
+  
+  // Apply token validation for protected routes
+  return validateTokenMiddlewear(req, res, next);
+  
+  if (isPublicRoute) {
+    // Skip authentication for public routes
+    next();
+  } else {
+    // Apply authentication for all other routes
+    validateTokenMiddlewear(req, res, next);
+  }
+}, mainV2Router);
+
 app.use("/api/v3/",validateTokenMiddlewear, mainv3Router)
+app.use("/service/api/",apiService)
 
 // Import the bill controllers
 import { getBillById, processBillPayment } from './src/controller/v2/superAdmin/superAdmin.controller.js';
