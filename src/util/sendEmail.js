@@ -35,7 +35,7 @@ export const sendPasswordResetEmail = async (email, verificationToken, companyNa
     try {
         const emailData = {
             sender: {
-                name: "Alkaa",
+                name: companyName || "Alkaa",
                 email: process.env.SENDER_EMAIL
             },
             to: [
@@ -44,32 +44,42 @@ export const sendPasswordResetEmail = async (email, verificationToken, companyNa
                     name: "Customer"
                 }
             ],
-            subject: "Set Your Password - Alkaa",
+            subject: `Set Your Password - ${companyName || "Alkaa"}`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
-                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
-                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to Alkaa</h1>
-                    </div>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
-                        <p style="color: #636363; margin-bottom: 15px;">
-                            We're excited to have you join us starting from ${new Date(hiredDate).toLocaleDateString()}!
-                        </p>
-                        <p style="color: #636363; margin-bottom: 15px;">
-                            To get started, please set up your password by clicking the button below:
-                        </p>
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="${process.env.CLIENT_URL}/reset-password/${verificationToken}"
-                               style="background: linear-gradient(135deg, #4CAF50, #66BB6A); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
-                               Set Password
-                            </a>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fafafa;">
+                    <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 50%, #FF9800 100%); padding: 30px 20px; text-align: center;">
+                            <img src="${process.env.CLIENT_URL}/logo.svg" alt="Alkaa" style="height: 50px; margin-bottom: 15px;" onerror="this.style.display='none';">
+                            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.5px;">Welcome to ${companyName || "Alkaa"}</h1>
                         </div>
-                        <p style="color: #636363; font-size: 12px;">
-                            If you didn't request this email, please ignore it.
-                        </p>
+                        <div style="padding: 40px 30px;">
+                            <h2 style="color: #1a1a1a; font-size: 22px; font-weight: 500; margin-bottom: 20px;">You're almost ready to get started!</h2>
+                            <p style="color: #4a4a4a; margin-bottom: 20px; line-height: 1.6; font-size: 16px;">
+                                We're excited to have you join ${companyName || "our team"} starting from <strong>${new Date(hiredDate).toLocaleDateString('en-US', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                })}</strong>!
+                            </p>
+                            <p style="color: #4a4a4a; margin-bottom: 30px; line-height: 1.6; font-size: 16px;">
+                                To complete your account setup, please create your password by clicking the button below:
+                            </p>
+                            <div style="text-align: center; margin: 40px 0;">
+                                <a href="${process.env.CLIENT_URL}/reset-password/${verificationToken}"
+                                   style="background: linear-gradient(135deg, #2E7D32, #4CAF50); color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 500; font-size: 16px; box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3); transition: all 0.2s;">
+                                   Create My Password
+                                </a>
+                            </div>
+                            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 6px; border-left: 4px solid #4CAF50;">
+                                <p style="color: #6c757d; font-size: 14px; margin: 0; line-height: 1.5;">
+                                    This link will expire in 24 hours for security reasons. If you didn't expect this email or have any questions, please contact your manager or our support team.
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <div style="text-align: center; margin-top: 30px; padding: 15px; background-color: #f1f1f1; border-radius: 5px;">
-                        <p style="margin: 0; color: #888; font-size: 12px;">© 2024 Alkaa. All rights reserved.</p>
+                    <div style="text-align: center; margin-top: 20px; color: #8e8e93; font-size: 12px;">
+                        <p style="margin: 0;">© ${new Date().getFullYear()} ${companyName || "Alkaa"}. All rights reserved.</p>
                     </div>
                 </div>
             `
@@ -85,7 +95,7 @@ export const sendBillingEmail = async (email, billData, organizationName) => {
     try {
         const emailData = {
             sender: {
-                name: "Alkaa",
+                name: organizationName || "Alkaa",
                 email: process.env.SENDER_EMAIL
             },
             to: [
@@ -94,51 +104,66 @@ export const sendBillingEmail = async (email, billData, organizationName) => {
                     name: ""
                 }
             ],
-            subject: `Alkaa - Billing Statement for ${billData.month}/${billData.year}`,
+            subject: `${organizationName || "Alkaa"} - Billing Statement for ${billData.month}/${billData.year}`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
-                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
-                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">Billing Statement</h1>
-                    </div>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #FF9800;">
-                        <h3 style="color: #34495e;">${organizationName}</h3>
-                        <p><strong>Billing Period:</strong> ${new Date(billData.year, billData.month - 1).toLocaleDateString('default', { month: 'long' })} ${billData.year}</p>
-                        
-                        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                            <tr style="border-bottom: 1px solid #ddd;">
-                                <td style="padding: 8px;">Active Users</td>
-                                <td style="padding: 8px; text-align: right;">${billData.activeUserCount}</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #ddd;">
-                                <td style="padding: 8px;">Price Per User</td>
-                                <td style="padding: 8px; text-align: right;">$${billData.pricePerUser.toFixed(2)}</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #ddd;">
-                                <td style="padding: 8px;">Subscription Plan</td>
-                                <td style="padding: 8px; text-align: right;">${billData.subscriptionPlan}</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #ddd; font-weight: bold;">
-                                <td style="padding: 8px;">Total Amount Due</td>
-                                <td style="padding: 8px; text-align: right;">$${billData.totalAmount.toFixed(2)}</td>
-                            </tr>
-                        </table>
-                        
-                        <p><strong>Due Date:</strong> ${new Date(billData.dueDate).toLocaleDateString()}</p>
-                        
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="${process.env.ADMIN_URL || process.env.CLIENT_URL}/billing/pay/${billData.id}"
-                               style="background: linear-gradient(135deg, #FF9800, #FFB74D); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
-                               View Details / Make Payment
-                            </a>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fafafa;">
+                    <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 50%, #FF9800 100%); padding: 30px 20px; text-align: center;">
+                            <img src="${process.env.CLIENT_URL}/logo.svg" alt="Alkaa" style="height: 50px; margin-bottom: 15px;" onerror="this.style.display='none';">
+                            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Billing Statement</h1>
+                            <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0; font-size: 16px;">${organizationName}</p>
                         </div>
-                        
-                        <p style="font-size: 12px; color: #636363;">
-                            If you have any questions about this bill, please contact our support team.
-                        </p>
+                        <div style="padding: 40px 30px;">
+                            <h2 style="color: #1a1a1a; font-size: 20px; font-weight: 500; margin-bottom: 25px;">
+                                ${new Date(billData.year, billData.month - 1).toLocaleDateString('default', { month: 'long' })} ${billData.year} Statement
+                            </h2>
+                            
+                            <div style="background-color: #f8f9fa; padding: 25px; border-radius: 8px; margin-bottom: 30px;">
+                                <table style="width: 100%; border-collapse: collapse;">
+                                    <tr>
+                                        <td style="padding: 12px 0; color: #6c757d; font-size: 15px; border-bottom: 1px solid #e9ecef;">Active Users</td>
+                                        <td style="padding: 12px 0; text-align: right; font-weight: 500; color: #212529; border-bottom: 1px solid #e9ecef;">${billData.activeUserCount}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 12px 0; color: #6c757d; font-size: 15px; border-bottom: 1px solid #e9ecef;">Price Per User</td>
+                                        <td style="padding: 12px 0; text-align: right; font-weight: 500; color: #212529; border-bottom: 1px solid #e9ecef;">$${billData.pricePerUser.toFixed(2)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 12px 0; color: #6c757d; font-size: 15px; border-bottom: 1px solid #e9ecef;">Subscription Plan</td>
+                                        <td style="padding: 12px 0; text-align: right; font-weight: 500; color: #212529; border-bottom: 1px solid #e9ecef;">${billData.subscriptionPlan}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 15px 0 0; color: #1a1a1a; font-size: 16px; font-weight: 600;">Total Amount Due</td>
+                                        <td style="padding: 15px 0 0; text-align: right; font-weight: 600; color: #1a1a1a; font-size: 18px;">$${billData.totalAmount.toFixed(2)}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            
+                            <p style="color: #4a4a4a; margin-bottom: 25px; line-height: 1.6; font-size: 15px;">
+                                <strong>Payment Due:</strong> ${new Date(billData.dueDate).toLocaleDateString('en-US', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                })}
+                            </p>
+                            
+                            <div style="text-align: center; margin: 35px 0;">
+                                <a href="${process.env.ADMIN_URL || process.env.CLIENT_URL}/billing/pay/${billData.id}"
+                                   style="background: linear-gradient(135deg, #FF9800, #FFB74D); color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 500; font-size: 16px; box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);">
+                                   View Details & Pay
+                                </a>
+                            </div>
+                            
+                            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 6px; border-left: 4px solid #FF9800;">
+                                <p style="color: #6c757d; font-size: 14px; margin: 0; line-height: 1.5;">
+                                    Questions about this invoice? We're here to help! Contact our billing support team anytime.
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <div style="text-align: center; margin-top: 30px; padding: 15px; background-color: #f1f1f1; border-radius: 5px;">
-                        <p style="margin: 0; color: #888; font-size: 12px;">© 2024 Alkaa. All rights reserved.</p>
+                    <div style="text-align: center; margin-top: 20px; color: #8e8e93; font-size: 12px;">
+                        <p style="margin: 0;">© ${new Date().getFullYear()} ${organizationName || "Alkaa"}. All rights reserved.</p>
                     </div>
                 </div>
             `
@@ -169,14 +194,14 @@ export const sendLeaveRequestEmail = async (managerEmail, adminEmail, employeeNa
             ],
             subject: `Leave Request from ${employeeName} - Alkaa`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
-                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
-                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">Leave Request</h1>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 50%, #FF9800 100%); padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+                        <img src="${process.env.CLIENT_URL}/logo.svg" alt="Alkaa" style="height: 50px; margin-bottom: 15px;" onerror="this.style.display='none';">
+                        <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Leave Request</h1>
                     </div>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
-                        <p style="color: #636363; margin-bottom: 15px;">
-                            <strong>${employeeName}</strong> has submitted a leave request for your approval.
+                    <div style="background-color: white; padding: 40px 30px; border-radius: 0 0 8px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <p style="color: #333; margin-bottom: 20px; font-size: 16px;">
+                            <strong>${employeeName}</strong> has submitted a leave request that requires your attention.
                         </p>
                         
                         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
@@ -210,7 +235,7 @@ export const sendLeaveRequestEmail = async (managerEmail, adminEmail, employeeNa
                         
                         <div style="text-align: center; margin: 30px 0;">
                             <a href="${process.env.CLIENT_URL}/p/leaverequest/approve"
-                               style="background: linear-gradient(135deg, #4CAF50, #66BB6A); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; margin-right: 10px; display: inline-block; font-weight: bold;">
+                               style="background: linear-gradient(135deg, #2E7D32, #4CAF50); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; margin-right: 10px; display: inline-block; font-weight: bold;">
                                Approve
                             </a>
                             <a href="${process.env.CLIENT_URL}/p/leaverequest/approve"
@@ -257,20 +282,20 @@ export const sendCheckoutReminderEmail = async (employeeEmail, employeeName, che
             ] : [],
             subject: `Reminder: Please Check Out for Today`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
-                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">Checkout Reminder</h1>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 50%, #FF9800 100%); padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+                        <img src="${process.env.CLIENT_URL}/logo.svg" alt="Alkaa" style="height: 50px; margin-bottom: 15px;" onerror="this.style.display='none';">
+                        <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Checkout Reminder</h1>
                     </div>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
-                        <p style="color: #636363; margin-bottom: 15px;">
+                    <div style="background-color: white; padding: 40px 30px; border-radius: 0 0 8px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <p style="color: #333; margin-bottom: 20px; font-size: 16px;">
                             Hello <strong>${employeeName}</strong>,
                         </p>
-                        <p style="color: #636363; margin-bottom: 15px;">
+                        <p style="color: #4a4a4a; margin-bottom: 20px; line-height: 1.6; font-size: 16px;">
                             Our records show that you checked in at <strong>${new Date(checkInTime).toLocaleTimeString()}</strong> today 
                             but haven't checked out yet. It has been more than 8 hours since your check-in.
                         </p>
-                        <p style="color: #636363; margin-bottom: 15px;">
+                        <p style="color: #4a4a4a; margin-bottom: 30px; line-height: 1.6; font-size: 16px;">
                             Please remember to check out through the attendance system to ensure accurate time tracking.
                         </p>
                         
@@ -317,13 +342,13 @@ export const sendAttendanceVerificationEmail = async (managerEmail, adminEmail, 
             ],
             subject: `Attendance Verification Required: ${employeeName}`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
-                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">Attendance Verification Required</h1>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 50%, #FF9800 100%); padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+                        <img src="${process.env.CLIENT_URL}/logo.svg" alt="Alkaa" style="height: 50px; margin-bottom: 15px;" onerror="this.style.display='none';">
+                        <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Attendance Verification Required</h1>
                     </div>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
-                        <p style="color: #636363; margin-bottom: 15px;">
+                    <div style="background-color: white; padding: 40px 30px; border-radius: 0 0 8px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <p style="color: #333; margin-bottom: 20px; font-size: 16px;">
                             <strong>${employeeName}</strong> has submitted an attendance record that requires verification.
                         </p>
                         
@@ -391,16 +416,16 @@ export const sendLeaveStatusUpdateEmail = async (employeeEmail, employeeName, le
             ],
             subject: `Leave Request ${statusText.toUpperCase()}`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
-                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">Leave Request Update</h1>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 50%, #FF9800 100%); padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+                        <img src="${process.env.CLIENT_URL}/logo.svg" alt="Alkaa" style="height: 50px; margin-bottom: 15px;" onerror="this.style.display='none';">
+                        <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Leave Request Update</h1>
                     </div>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #FF9800;">
-                        <p style="color: #636363; margin-bottom: 15px;">
+                    <div style="background-color: white; padding: 40px 30px; border-radius: 0 0 8px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <p style="color: #333; margin-bottom: 20px; font-size: 16px;">
                             Dear <strong>${employeeName}</strong>,
                         </p>
-                        <p style="color: #636363; margin-bottom: 15px;">
+                        <p style="color: #333; margin-bottom: 20px; font-size: 16px;">
                             Your leave request has been <strong style="color: ${statusColor};">${statusText}</strong>.
                         </p>
                         
@@ -458,58 +483,60 @@ export const sendSalaryProcessingEmail = async (employeeEmail, employeeName, sal
             ],
             subject: `Salary Processed for ${salaryData.month}/${salaryData.year}`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
-                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">Salary Notification</h1>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 50%, #FF9800 100%); padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+                        <img src="${process.env.CLIENT_URL}/logo.svg" alt="Alkaa" style="height: 50px; margin-bottom: 15px;" onerror="this.style.display='none';">
+                        <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Salary Notification</h1>
                     </div>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
-                        <p style="color: #636363; margin-bottom: 15px;">
+                    <div style="background-color: white; padding: 40px 30px; border-radius: 0 0 8px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <p style="color: #333; margin-bottom: 20px; font-size: 16px;">
                             Dear <strong>${employeeName}</strong>,
                         </p>
-                        <p style="color: #636363; margin-bottom: 15px;">
+                        <p style="color: #333; margin-bottom: 20px; font-size: 16px;">
                             Your salary for ${new Date(salaryData.year, salaryData.month - 1).toLocaleDateString('default', { month: 'long', year: 'numeric' })} has been processed.
                         </p>
                         
-                        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                            <tr style="border-bottom: 1px solid #ddd;">
-                                <td style="padding: 8px; font-weight: bold;">Basic Salary</td>
-                                <td style="padding: 8px; text-align: right;">${salaryData.currency || '$'}${salaryData.basicSalary.toFixed(2)}</td>
-                            </tr>
-                            ${salaryData.allowances ? Object.entries(salaryData.allowances).map(([key, value]) => `
-                            <tr style="border-bottom: 1px solid #ddd;">
-                                <td style="padding: 8px;">${key}</td>
-                                <td style="padding: 8px; text-align: right;">${salaryData.currency || '$'}${parseFloat(value).toFixed(2)}</td>
-                            </tr>
-                            `).join('') : ''}
-                            ${salaryData.deductions ? Object.entries(salaryData.deductions).map(([key, value]) => `
-                            <tr style="border-bottom: 1px solid #ddd;">
-                                <td style="padding: 8px;">${key} (Deduction)</td>
-                                <td style="padding: 8px; text-align: right;">-${salaryData.currency || '$'}${parseFloat(value).toFixed(2)}</td>
-                            </tr>
-                            `).join('') : ''}
-                            <tr style="border-bottom: 1px solid #ddd;">
-                                <td style="padding: 8px; font-weight: bold;">Tax Deduction</td>
-                                <td style="padding: 8px; text-align: right;">-${salaryData.currency || '$'}${salaryData.tax.toFixed(2)}</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #ddd; font-weight: bold;">
-                                <td style="padding: 8px;">Net Salary</td>
-                                <td style="padding: 8px; text-align: right;">${salaryData.currency || '$'}${salaryData.netSalary.toFixed(2)}</td>
-                            </tr>
-                        </table>
+                        <div style="background-color: #f8f9fa; padding: 25px; border-radius: 8px; margin-bottom: 30px;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr style="border-bottom: 1px solid #ddd;">
+                                    <td style="padding: 12px 0; color: #6c757d; font-size: 15px; border-bottom: 1px solid #e9ecef;">Basic Salary</td>
+                                    <td style="padding: 12px 0; text-align: right; font-weight: 500; color: #212529; border-bottom: 1px solid #e9ecef;">${salaryData.currency || '$'}${salaryData.basicSalary.toFixed(2)}</td>
+                                </tr>
+                                ${salaryData.allowances ? Object.entries(salaryData.allowances).map(([key, value]) => `
+                                <tr style="border-bottom: 1px solid #ddd;">
+                                    <td style="padding: 8px;">${key}</td>
+                                    <td style="padding: 8px; text-align: right;">${salaryData.currency || '$'}${parseFloat(value).toFixed(2)}</td>
+                                </tr>
+                                `).join('') : ''}
+                                ${salaryData.deductions ? Object.entries(salaryData.deductions).map(([key, value]) => `
+                                <tr style="border-bottom: 1px solid #ddd;">
+                                    <td style="padding: 8px;">${key} (Deduction)</td>
+                                    <td style="padding: 8px; text-align: right;">-${salaryData.currency || '$'}${parseFloat(value).toFixed(2)}</td>
+                                </tr>
+                                `).join('') : ''}
+                                <tr style="border-bottom: 1px solid #ddd;">
+                                    <td style="padding: 8px; font-weight: bold;">Tax Deduction</td>
+                                    <td style="padding: 8px; text-align: right;">-${salaryData.currency || '$'}${salaryData.tax.toFixed(2)}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #ddd; font-weight: bold;">
+                                    <td style="padding: 8px;">Net Salary</td>
+                                    <td style="padding: 8px; text-align: right;">${salaryData.currency || '$'}${salaryData.netSalary.toFixed(2)}</td>
+                                </tr>
+                            </table>
+                        </div>
                         
-                        <p style="color: #636363; margin-bottom: 15px;">
+                        <p style="color: #333; margin-bottom: 20px; font-size: 16px;">
                             <strong>Payment Method:</strong> ${salaryData.paymentMode || 'Bank Transfer'}
                         </p>
                         ${salaryData.paymentRef ? `
-                        <p style="color: #636363; margin-bottom: 15px;">
+                        <p style="color: #333; margin-bottom: 20px; font-size: 16px;">
                             <strong>Payment Reference:</strong> ${salaryData.paymentRef}
                         </p>
                         ` : ''}
                         
-                        <div style="text-align: center; margin: 30px 0;">
+                        <div style="text-align: center; margin: 35px 0;">
                             <a href="${process.env.CLIENT_URL}/payslip/${salaryData.id}"
-                               style="background-color: #007bff; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px;">
+                               style="background-color: #007bff; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 500; font-size: 16px; box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);">
                                View Detailed Payslip
                             </a>
                         </div>
@@ -517,6 +544,9 @@ export const sendSalaryProcessingEmail = async (employeeEmail, employeeName, sal
                         <p style="font-size: 12px; color: #636363;">
                             For any queries regarding your salary, please contact the HR department.
                         </p>
+                    </div>
+                    <div style="text-align: center; margin-top: 20px; color: #8e8e93; font-size: 12px;">
+                        <p style="margin: 0;">© ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
                     </div>
                 </div>
             `
@@ -560,7 +590,7 @@ export const sendNewEmployeeWelcomeEmail = async (employeeEmail, employeeName, m
             cc: ccList,
             subject: `Welcome to Alkaa!`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
                     <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
                         <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
                         <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to Alkaa!</h1>
@@ -752,7 +782,7 @@ export const sendHolidayAnnouncementEmail = async (emails, holidayData, companyN
             to: recipients,
             subject: `Holiday Announcement: ${holidayData.name}`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                     <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
                         <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
                         <h1 style="color: white; margin: 0; font-size: 24px;">Holiday Announcement</h1>
@@ -852,16 +882,16 @@ export const sendDepartmentChangeEmail = async (employeeEmail, employeeName, old
             cc: cc,
             subject: `Department Change Notification - ${employeeName}`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
-                        <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">Department Change Notification</h1>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 50%, #FF9800 100%); padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+                        <img src="${process.env.CLIENT_URL}/logo.svg" alt="Alkaa" style="height: 50px; margin-bottom: 15px;" onerror="this.style.display='none';">
+                        <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">Department Change Notification</h1>
                     </div>
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
-                        <p style="color: #636363; margin-bottom: 15px;">
+                    <div style="background-color: white; padding: 40px 30px; border-radius: 0 0 8px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <p style="color: #333; margin-bottom: 20px; font-size: 16px;">
                             Dear <strong>${employeeName}</strong>,
                         </p>
-                        <p style="color: #636363; margin-bottom: 15px;">
+                        <p style="color: #333; margin-bottom: 20px; font-size: 16px;">
                             This is to inform you that your department has been changed from <strong>${oldDepartment.name}</strong> 
                             to <strong>${newDepartment.name}</strong> effective from <strong>${new Date(effectiveDate).toLocaleDateString()}</strong>.
                         </p>
@@ -1367,8 +1397,6 @@ export const sendDepartmentChangeEmail = async (employeeEmail, employeeName, old
 //     }
 // };
 
-// neither check out nor check in
-
 export const sendEmailWithCustomContent = async (to, subject, htmlContent, companyName) => {
     try {
         const emailData = {
@@ -1413,7 +1441,7 @@ export const sendOnboardingInvitationEmail = async (email, firstName, onboarding
             }],
             subject: `Welcome to Alkaa - Complete Your Onboarding`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
                     <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
                         <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
                         <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to Alkaa!</h1>
@@ -1444,8 +1472,8 @@ export const sendOnboardingInvitationEmail = async (email, firstName, onboarding
                             If you did not expect this email, please ignore it.
                         </p>
                     </div>
-                    <div style="text-align: center; margin-top: 30px; padding: 15px; background-color: #f1f1f1; border-radius: 5px;">
-                        <p style="margin: 0; color: #888; font-size: 12px;">© 2024 Alkaa. All rights reserved.</p>
+                    <div style="text-align: center; margin-top: 20px; color: #8e8e93; font-size: 12px;">
+                        <p style="margin: 0;">© 2024 Alkaa. All rights reserved.</p>
                     </div>
                 </div>
             `
@@ -1471,7 +1499,7 @@ export const sendOnboardingChangeRequestEmail = async (email, firstName, onboard
             }],
             subject: `Action Required: Update Your Onboarding Information`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
                     <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
                         <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
                         <h1 style="color: white; margin: 0; font-size: 24px;">Onboarding Information Update</h1>
@@ -1505,8 +1533,8 @@ export const sendOnboardingChangeRequestEmail = async (email, firstName, onboard
                             This link will expire in 7 days. If you have any questions, please contact your hiring manager.
                         </p>
                     </div>
-                    <div style="text-align: center; margin-top: 30px; padding: 15px; background-color: #f1f1f1; border-radius: 5px;">
-                        <p style="margin: 0; color: #888; font-size: 12px;">© 2024 Alkaa. All rights reserved.</p>
+                    <div style="text-align: center; margin-top: 20px; color: #8e8e93; font-size: 12px;">
+                        <p style="margin: 0;">© 2024 Alkaa. All rights reserved.</p>
                     </div>
                 </div>
             `
@@ -1532,7 +1560,7 @@ export const sendEmployeeWelcomeEmail = async (email, firstName, loginUrl, emplo
             }],
             subject: `Welcome to Alkaa - Your Onboarding is Complete!`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
                     <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
                         <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
                         <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to Alkaa!</h1>
@@ -1547,7 +1575,7 @@ export const sendEmployeeWelcomeEmail = async (email, firstName, loginUrl, emplo
                             Congratulations! Your onboarding process is complete, and your account has been set up in our HR system.
                         </p>
                         
-                        <div style="background-color: #ffffff; padding: 15px; border-left: 4px solid #2ecc71; margin: 20px 0;">
+                        <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #28a745; margin: 20px 0;">
                             <p style="margin: 0; color: #636363;">
                                 <strong>Your Employee ID:</strong> ${employeeId}<br>
                                 <strong>Email:</strong> ${email}
@@ -1560,7 +1588,7 @@ export const sendEmployeeWelcomeEmail = async (email, firstName, loginUrl, emplo
                         
                         <div style="text-align: center; margin: 30px 0;">
                             <a href="${loginUrl}"
-                               style="background: linear-gradient(135deg, #2ecc71, #66BB6A); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
+                               style="background: linear-gradient(135deg, #28a745, #66BB6A); color: white; padding: 12px 25px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
                                Set Your Password
                             </a>
                         </div>
@@ -1596,7 +1624,7 @@ export const sendEmployeeOnboardingSubmissionEmailToManager = async (email, firs
             }],
             subject: `New Employee Onboarding Submission - ${firstName}`,
             htmlContent: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
                     <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #4CAF50, #FF9800); border-radius: 10px;">
                         <img src="https://www.alkaa.online/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 10px;">
                         <h1 style="color: white; margin: 0; font-size: 24px;">New Employee Onboarding Submission</h1>
