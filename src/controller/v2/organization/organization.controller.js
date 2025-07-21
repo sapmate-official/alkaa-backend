@@ -598,42 +598,73 @@ cmcaof3i1002ttg1c5qfvpjzv
                 const emailSubject = "Welcome to Alkaa - Your Organization Setup is Complete";
 
                 const emailContent = `
-                <div style="font-family: 'Helvetica', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333333;">
-                    <div style="text-align: center; margin-bottom: 30px;">
-                        <img src="${process.env.VITE_ALKAA_LOGO || 'https://alkaa.online/logo.svg'}" alt="Alkaa Logo" style="max-width: 150px;">
-                    </div>
-                    
-                    <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
-                        <h1 style="color: #3f51b5; font-size: 24px; margin-bottom: 20px; text-align: center;">Welcome to Alkaa!</h1>
-                        
-                        <p style="margin-bottom: 15px; line-height: 1.6;">Dear ${admin.firstName} ${admin.lastName},</p>
-                        
-                        <p style="margin-bottom: 15px; line-height: 1.6;">Congratulations! Your organization <strong>${organization.name}</strong> has been successfully set up on the Alkaa platform. We're excited to have you onboard.</p>
-                        
-                        <p style="margin-bottom: 15px; line-height: 1.6;">As the administrator, you now have access to powerful tools to manage your workforce, streamline processes, and boost productivity.</p>
-                        
-                        <h2 style="color: #3f51b5; font-size: 18px; margin: 25px 0 15px;">Get Started in 3 Simple Steps:</h2>
-                        
-                        <ol style="margin-bottom: 25px; padding-left: 20px; line-height: 1.6;">
-                            <li style="margin-bottom: 10px;"><strong>Set your password</strong> using the button below</li>
-                            <li style="margin-bottom: 10px;"><strong>Complete your profile</strong> and organization details</li>
-                            <li style="margin-bottom: 10px;"><strong>Invite team members</strong> to join your organization</li>
-                        </ol>
-                        
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="${resetUrl}" style="background-color: #3f51b5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Set Your Password</a>
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fafafa;">
+                    <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 50%, #FF9800 100%); padding: 40px 20px; text-align: center;">
+                            <img src="${process.env.CLIENT_URL}/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 20px;" onerror="this.style.display='none';">
+                            <h1 style="color: white; margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -0.5px;">Welcome to Alkaa!</h1>
                         </div>
                         
-                        <p style="margin-bottom: 15px; line-height: 1.6;">This link will expire in 24 hours for security reasons. If you need assistance, our support team is available at <a href="mailto:support@alkaa.io" style="color: #3f51b5; text-decoration: none;">support@alkaa.io</a>.</p>
-                        
-                        <p style="margin-bottom: 25px; line-height: 1.6;">We look forward to seeing how ${organization.name} grows with Alkaa!</p>
-                        
-                        <p style="line-height: 1.6;">Best regards,<br>The Alkaa Team</p>
+                        <div style="padding: 40px 30px;">
+                            <p style="margin-bottom: 20px; line-height: 1.6; font-size: 18px; color: #1a1a1a;">Hello ${admin.firstName},</p>
+                            
+                            <p style="margin-bottom: 25px; line-height: 1.7; font-size: 16px; color: #4a4a4a;">
+                                Fantastic news! 🎉 Your organization <strong style="color: #2E7D32;">${organization.name}</strong> is now live on the Alkaa platform. 
+                                We're genuinely excited to be part of your HR journey.
+                            </p>
+                            
+                            <p style="margin-bottom: 30px; line-height: 1.7; font-size: 16px; color: #4a4a4a;">
+                                As the administrator, you now have access to a comprehensive suite of tools designed to simplify 
+                                workforce management, streamline daily operations, and help your team thrive.
+                            </p>
+                            
+                            <div style="background-color: #f8f9fa; padding: 30px; border-radius: 8px; margin: 30px 0;">
+                                <h2 style="color: #2E7D32; font-size: 20px; margin: 0 0 20px; font-weight: 500;">Your Next Steps:</h2>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <span style="display: inline-block; background-color: #2E7D32; color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 14px; font-weight: bold; margin-right: 12px;">1</span>
+                                    <span style="color: #1a1a1a; font-weight: 500;">Set up your secure password</span>
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <span style="display: inline-block; background-color: #4CAF50; color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 14px; font-weight: bold; margin-right: 12px;">2</span>
+                                    <span style="color: #1a1a1a; font-weight: 500;">Complete your organization profile</span>
+                                </div>
+                                
+                                <div style="margin-bottom: 0;">
+                                    <span style="display: inline-block; background-color: #FF9800; color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 14px; font-weight: bold; margin-right: 12px;">3</span>
+                                    <span style="color: #1a1a1a; font-weight: 500;">Start inviting your team members</span>
+                                </div>
+                            </div>
+                            
+                            <div style="text-align: center; margin: 40px 0;">
+                                <a href="${resetUrl}" style="background: linear-gradient(135deg, #2E7D32, #4CAF50); color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 16px rgba(46, 125, 50, 0.3); transition: all 0.2s;">
+                                    Set Up My Account →
+                                </a>
+                            </div>
+                            
+                            <div style="background-color: #fff3cd; padding: 20px; border-radius: 6px; border-left: 4px solid #ffc107; margin: 30px 0;">
+                                <p style="color: #856404; font-size: 14px; margin: 0; line-height: 1.6;">
+                                    <strong>Security Notice:</strong> This link expires in 24 hours. Need help getting started? 
+                                    Our support team is ready to assist at <a href="mailto:support@alkaa.online" style="color: #856404; font-weight: 500;">support@alkaa.online</a>
+                                </p>
+                            </div>
+                            
+                            <p style="margin-bottom: 25px; line-height: 1.7; font-size: 16px; color: #4a4a4a;">
+                                We're committed to making ${organization.name}'s transition to digital HR management as smooth as possible. 
+                                Here's to building something great together! 🚀
+                            </p>
+                            
+                            <p style="line-height: 1.6; font-size: 16px; color: #4a4a4a;">
+                                Warm regards,<br>
+                                <span style="color: #2E7D32; font-weight: 500;">The Alkaa Team</span>
+                            </p>
+                        </div>
                     </div>
                     
-                    <div style="text-align: center; margin-top: 20px; font-size: 12px; color: #666666;">
-                        <p>© ${new Date().getFullYear()} Alkaa. All rights reserved.</p>
-                        <p>If you didn't create an account with us, please ignore this email.</p>
+                    <div style="text-align: center; margin-top: 25px; color: #8e8e93; font-size: 12px;">
+                        <p style="margin: 0 0 5px;">© ${new Date().getFullYear()} Alkaa. Building better workplaces together.</p>
+                        <p style="margin: 0;">This email was sent to the administrator of ${organization.name}</p>
                     </div>
                 </div>
                 `;
