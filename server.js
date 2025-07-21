@@ -80,7 +80,7 @@ app.use("/api/v1/salary/", salary)
 import mainV2Router from './src/router/v2/main.router.js'
 import mainv3Router from './src/router/v3/main.router.js'
 import validateTokenMiddlewear from './src/middleware/validateToken.js'
-import apiService from './src/router/api/main.router.js'
+// import apiService from './src/router/api/main.router.js'
 
 // Conditional middleware that skips validation for specific public routes
 app.use("/api/v2/", (req, res, next) => {
@@ -113,7 +113,7 @@ app.use("/api/v2/", (req, res, next) => {
 }, mainV2Router);
 
 app.use("/api/v3/",validateTokenMiddlewear, mainv3Router)
-app.use("/service/api/",apiService)
+// app.use("/service/api/",apiService)
 
 // Import the bill controllers
 import { getBillById, processBillPayment } from './src/controller/v2/superAdmin/superAdmin.controller.js';
