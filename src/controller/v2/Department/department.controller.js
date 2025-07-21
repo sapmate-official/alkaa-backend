@@ -15,7 +15,6 @@ export const getDepartment = async (req, res) => {
                 users: true
             }
         });
-        console.log(departments);
         
         res.status(200).json(departments);
     } catch (error) {

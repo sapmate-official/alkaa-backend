@@ -114,7 +114,7 @@ The scripts use the following API endpoints:
 - ✅ No validation errors in final check
 
 ### Login Credentials After Setup
-- **Super Admin**: `superadmin-test@alkaa.com` / `superAdmin-test@2025`
+- **Super Admin**: `superadmin-test@alkaa.online` / `superAdmin-test@2025`
 - **Org Admin**: `admin@techvantage.com` / `password`
 - **All Employees**: `[employee-email]` / `password`
 
