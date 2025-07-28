@@ -424,12 +424,19 @@ model TransactionTable {
   recieverUserId     String
   amount             Float
   type               String
+  status             String?                  @default("PENDING")
+  bankTransactionId  String?
+  cashfreeTransferId String?
+  utr                String?
+  cashfreeResponse   Json?
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
-  bankTransactionId  String?
   recieverDetails    User                     @relation("ReceiverTransaction", fields: [recieverUserId], references: [id])
   senderDetails      User                     @relation("SenderTransaction", fields: [senderUserId], references: [id])
   salaryTransactions salaryTransactionTable[]
+
+  @@index([cashfreeTransferId])
+  @@index([status])
 }
 
 model salaryTransactionTable {

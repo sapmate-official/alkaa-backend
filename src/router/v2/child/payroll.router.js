@@ -1,6 +1,7 @@
 import express from "express";
 import prisma from "../../../db/connectDb.js";
 import validateToken from "../../../middleware/validateToken.js";
+import { CashfreePayoutService } from '../../controller/v3/Payroll/services/cashfreePayoutService.js';
 
 const router = express.Router();
 
@@ -1102,6 +1103,340 @@ router.get('/employee/:employeeId', validateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching employee payroll details:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Cashfree Payout Routes
+
+// Route to get pending salary records for Cashfree processing
+router.get('/pending-salaries', validateToken, async (req, res) => {
+  try {
+    // Verify user has permission to view payroll data
+    const userWithRoles = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const hasPayrollPermission = userWithRoles.roles.some(userRole => 
+      userRole.role.permissions.some(perm => 
+        perm.permission?.key === "manage_payroll" ||
+        perm.permission?.key === "view_salary_slip_of_all" ||
+        perm.permission?.key === "process_salary_payment"
+      )
+    );
+
+    if (!hasPayrollPermission) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'You do not have permission to view payroll data' 
+      });
+    }
+
+    // Fetch salary records that are eligible for Cashfree payout
+    const salaryRecords = await prisma.salaryRecord.findMany({
+      where: {
+        status: {
+          in: ['PENDING', 'PROCESSING']
+        },
+        user: {
+          orgId: req.user.orgId, // Only from user's organization
+          bankDetails: {
+            isNot: null // Only users with bank details
+          }
+        }
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            employeeId: true,
+            email: true,
+            bankDetails: {
+              select: {
+                bankName: true,
+                accountNumber: true,
+                ifscCode: true,
+                accountHolderName: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: [
+        { year: 'desc' },
+        { month: 'desc' },
+        { createdAt: 'desc' }
+      ]
+    });
+
+    res.json({
+      success: true,
+      data: salaryRecords,
+      totalRecords: salaryRecords.length,
+      pendingAmount: salaryRecords
+        .filter(record => record.status === 'PENDING')
+        .reduce((sum, record) => sum + record.netSalary, 0)
+    });
+
+  } catch (error) {
+    console.error('Error fetching pending salaries:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+});
+
+// Cashfree Payout Routes
+
+// Route to initiate automated salary payout via Cashfree
+router.post('/cashfree/initiate-payout', validateToken, async (req, res) => {
+  try {
+    const { salaryRecordId, incentive = 0, bonus = 0, remarks = '' } = req.body;
+
+    if (!salaryRecordId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Salary record ID is required' 
+      });
+    }
+
+    // Verify user has permission to process salary payments
+    const userWithRoles = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const hasPayoutPermission = userWithRoles.roles.some(userRole => 
+      userRole.role.permissions.some(perm => 
+        perm.permission?.key === "process_salary_payment" || 
+        perm.permission?.key === "manage_payroll"
+      )
+    );
+
+    if (!hasPayoutPermission) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'You do not have permission to process salary payments' 
+      });
+    }
+
+    const result = await CashfreePayoutService.initiateSalaryPayout(
+      salaryRecordId, 
+      incentive, 
+      bonus, 
+      remarks
+    );
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error initiating Cashfree payout:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+});
+
+// Route to check payout status
+router.get('/cashfree/status/:transferId', validateToken, async (req, res) => {
+  try {
+    const { transferId } = req.params;
+
+    if (!transferId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Transfer ID is required' 
+      });
+    }
+
+    const result = await CashfreePayoutService.checkPayoutStatus(transferId);
+    res.json(result);
+  } catch (error) {
+    console.error('Error checking payout status:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+});
+
+// Route to get Cashfree account balance
+router.get('/cashfree/balance', validateToken, async (req, res) => {
+  try {
+    // Check if user has admin permissions
+    const userWithRoles = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const hasAdminPermission = userWithRoles.roles.some(userRole => 
+      userRole.role.permissions.some(perm => 
+        perm.permission?.key === "view_financial_reports" ||
+        perm.permission?.key === "manage_payroll"
+      )
+    );
+
+    if (!hasAdminPermission) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'You do not have permission to view account balance' 
+      });
+    }
+
+    const result = await CashfreePayoutService.getAccountBalance();
+    res.json(result);
+  } catch (error) {
+    console.error('Error getting account balance:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+});
+
+// Webhook route for Cashfree payout status updates
+router.post('/cashfree/webhook', async (req, res) => {
+  try {
+    console.log('[CASHFREE_WEBHOOK] Received webhook data:', req.body);
+
+    const result = await CashfreePayoutService.handleWebhook(req.body);
+    
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error processing Cashfree webhook:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+});
+
+// Route to bulk initiate payouts for multiple salary records
+router.post('/cashfree/bulk-payout', validateToken, async (req, res) => {
+  try {
+    const { salaryRecords } = req.body;
+
+    if (!salaryRecords || !Array.isArray(salaryRecords)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Salary records array is required' 
+      });
+    }
+
+    // Verify user has permission
+    const userWithRoles = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const hasPayoutPermission = userWithRoles.roles.some(userRole => 
+      userRole.role.permissions.some(perm => 
+        perm.permission?.key === "process_salary_payment" || 
+        perm.permission?.key === "manage_payroll"
+      )
+    );
+
+    if (!hasPayoutPermission) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'You do not have permission to process salary payments' 
+      });
+    }
+
+    const results = [];
+    const errors = [];
+
+    // Process each salary record
+    for (const record of salaryRecords) {
+      try {
+        const result = await CashfreePayoutService.initiateSalaryPayout(
+          record.salaryRecordId,
+          record.incentive || 0,
+          record.bonus || 0,
+          record.remarks || ''
+        );
+        results.push({ salaryRecordId: record.salaryRecordId, ...result });
+      } catch (error) {
+        errors.push({ 
+          salaryRecordId: record.salaryRecordId, 
+          error: error.message 
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      totalProcessed: salaryRecords.length,
+      successful: results.length,
+      failed: errors.length,
+      results,
+      errors
+    });
+  } catch (error) {
+    console.error('Error processing bulk payout:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
   }
 });
 

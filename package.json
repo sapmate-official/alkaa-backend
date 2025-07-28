@@ -20,6 +20,7 @@
     "@prisma/client": "^6.2.1",
     "axios": "^1.9.0",
     "bcrypt": "^5.1.1",
+    "cashfree-pg": "^5.0.8",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
