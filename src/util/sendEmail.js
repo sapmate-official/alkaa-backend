@@ -500,27 +500,27 @@ export const sendSalaryProcessingEmail = async (employeeEmail, employeeName, sal
                             <table style="width: 100%; border-collapse: collapse;">
                                 <tr style="border-bottom: 1px solid #ddd;">
                                     <td style="padding: 12px 0; color: #6c757d; font-size: 15px; border-bottom: 1px solid #e9ecef;">Basic Salary</td>
-                                    <td style="padding: 12px 0; text-align: right; font-weight: 500; color: #212529; border-bottom: 1px solid #e9ecef;">${salaryData.currency || '$'}${salaryData.basicSalary.toFixed(2)}</td>
+                                    <td style="padding: 12px 0; text-align: right; font-weight: 500; color: #212529; border-bottom: 1px solid #e9ecef;">${salaryData.currency || '₹'}${salaryData.basicSalary.toFixed(2)}</td>
                                 </tr>
                                 ${salaryData.allowances ? Object.entries(salaryData.allowances).map(([key, value]) => `
                                 <tr style="border-bottom: 1px solid #ddd;">
                                     <td style="padding: 8px;">${key}</td>
-                                    <td style="padding: 8px; text-align: right;">${salaryData.currency || '$'}${parseFloat(value).toFixed(2)}</td>
+                                    <td style="padding: 8px; text-align: right;">${salaryData.currency || '₹'}${parseFloat(value).toFixed(2)}</td>
                                 </tr>
                                 `).join('') : ''}
                                 ${salaryData.deductions ? Object.entries(salaryData.deductions).map(([key, value]) => `
                                 <tr style="border-bottom: 1px solid #ddd;">
                                     <td style="padding: 8px;">${key} (Deduction)</td>
-                                    <td style="padding: 8px; text-align: right;">-${salaryData.currency || '$'}${parseFloat(value).toFixed(2)}</td>
+                                    <td style="padding: 8px; text-align: right;">-${salaryData.currency || '₹'}${parseFloat(value).toFixed(2)}</td>
                                 </tr>
                                 `).join('') : ''}
                                 <tr style="border-bottom: 1px solid #ddd;">
                                     <td style="padding: 8px; font-weight: bold;">Tax Deduction</td>
-                                    <td style="padding: 8px; text-align: right;">-${salaryData.currency || '$'}${salaryData.tax.toFixed(2)}</td>
+                                    <td style="padding: 8px; text-align: right;">-${salaryData.currency || '₹'}${salaryData.tax.toFixed(2)}</td>
                                 </tr>
                                 <tr style="border-bottom: 1px solid #ddd; font-weight: bold;">
                                     <td style="padding: 8px;">Net Salary</td>
-                                    <td style="padding: 8px; text-align: right;">${salaryData.currency || '$'}${salaryData.netSalary.toFixed(2)}</td>
+                                    <td style="padding: 8px; text-align: right;">${salaryData.currency || '₹'}${salaryData.netSalary.toFixed(2)}</td>
                                 </tr>
                             </table>
                         </div>
