@@ -4,27 +4,52 @@ import { PDFConfig } from '../config/pdfConfig.js';
 
 export class HTMLPayslipPDFGenerator {
     /**
-     * Generate payslip PDF using HTML template approach
+     * Generate payslip PDF using HTML template approach with retry logic
      */
     static async generatePayslipPDF(salaryRecord, res) {
-        try {
-            // Set response headers
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', `attachment; filename=payslip-${salaryRecord.month}-${salaryRecord.year}.pdf`);
+        let lastError;
+        
+        for (let attempt = 1; attempt <= PDFConfig.retry.maxAttempts; attempt++) {
+            try {
+                console.log(`Attempting PDF generation (attempt ${attempt}/${PDFConfig.retry.maxAttempts})`);
+                
+                // Set response headers
+                res.setHeader('Content-Type', 'application/pdf');
+                res.setHeader('Content-Disposition', `attachment; filename=payslip-${salaryRecord.month}-${salaryRecord.year}.pdf`);
 
-            // Generate HTML content
-            const htmlContent = this.generateHTMLTemplate(salaryRecord);
+                // Generate HTML content
+                const htmlContent = this.generateHTMLTemplate(salaryRecord);
 
-            // Generate PDF from HTML
-            const pdfBuffer = await this.generatePDFFromHTML(htmlContent);
+                // Generate PDF from HTML
+                const pdfBuffer = await this.generatePDFFromHTML(htmlContent);
 
-            // Send PDF buffer to response
-            res.send(pdfBuffer);
+                // Send PDF buffer to response
+                res.send(pdfBuffer);
+                
+                console.log(`PDF generation successful on attempt ${attempt}`);
+                return; // Success, exit the retry loop
 
-        } catch (error) {
-            console.error('Error generating HTML payslip PDF:', error);
-            throw error;
+            } catch (error) {
+                console.error(`PDF generation attempt ${attempt} failed:`, error.message);
+                lastError = error;
+                
+                // If it's the last attempt, throw the error
+                if (attempt === PDFConfig.retry.maxAttempts) {
+                    console.error('All PDF generation attempts failed');
+                    throw error;
+                }
+                
+                // Calculate delay with exponential backoff
+                const delay = PDFConfig.retry.delay * Math.pow(PDFConfig.retry.backoff, attempt - 1);
+                console.log(`Waiting ${delay}ms before retry...`);
+                
+                // Wait before retrying
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
         }
+        
+        // This should never be reached, but just in case
+        throw lastError || new Error('PDF generation failed after all retry attempts');
     }
 
     /**
@@ -447,28 +472,111 @@ export class HTMLPayslipPDFGenerator {
      */
     static async generatePDFFromHTML(htmlContent) {
         let browser;
+        let page;
+        
         try {
-            // Launch Puppeteer browser with configuration
-            browser = await puppeteer.launch(PDFConfig.puppeteer);
-
-            const page = await browser.newPage();
-
-            // Set content and wait for it to load
-            await page.setContent(htmlContent, {
-                waitUntil: 'networkidle0'
+            console.log('Starting Puppeteer browser launch...');
+            
+            // Launch Puppeteer browser with production-ready configuration
+            browser = await puppeteer.launch({
+                ...PDFConfig.puppeteer,
+                // Production-ready error handling
+                handleSIGINT: false,
+                handleSIGTERM: false,
+                handleSIGHUP: false,
+                // Prevent memory issues
+                args: [
+                    ...PDFConfig.puppeteer.args,
+                    '--disable-background-networking',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-renderer-backgrounding',
+                    '--disable-features=TranslateUI',
+                    '--run-all-compositor-stages-before-draw',
+                    '--disable-threaded-animation',
+                    '--disable-threaded-scrolling',
+                    '--disable-checker-imaging',
+                    '--disable-new-content-rendering-timeout'
+                ]
             });
 
-            // Generate PDF with configuration
-            const pdfBuffer = await page.pdf(PDFConfig.pdfOptions);
+            console.log('Browser launched successfully, creating new page...');
+            page = await browser.newPage();
 
+            // Set production-ready timeouts
+            await page.setDefaultTimeout(90000);
+            await page.setDefaultNavigationTimeout(90000);
+
+            // Optimize page for PDF generation
+            await page.setViewport({ width: 1200, height: 800 });
+            await page.emulateMediaType('print');
+
+            console.log('Setting page content...');
+            // Set content with optimized loading
+            await page.setContent(htmlContent, {
+                waitUntil: ['load', 'domcontentloaded'],
+                timeout: 60000
+            });
+
+            // Wait for any dynamic content to render
+            await page.evaluate(() => {
+                return new Promise((resolve) => {
+                    if (document.readyState === 'complete') {
+                        resolve();
+                    } else {
+                        window.addEventListener('load', resolve);
+                    }
+                });
+            });
+
+            console.log('Generating PDF...');
+            // Generate PDF with optimized settings
+            const pdfBuffer = await page.pdf({
+                ...PDFConfig.pdfOptions,
+                timeout: 0, // Remove timeout for PDF generation
+                omitBackground: false,
+                printBackground: true
+            });
+
+            console.log('PDF generated successfully, size:', pdfBuffer.length);
             return pdfBuffer;
 
         } catch (error) {
             console.error('Error generating PDF with Puppeteer:', error);
+            
+            // Enhanced fallback logic
+            if (error.message.includes('Target closed') || 
+                error.message.includes('Protocol error') ||
+                error.message.includes('Session closed')) {
+                
+                console.log('Browser session issue detected, attempting fallback to html-pdf library...');
+                try {
+                    return await this.generatePDFFromHTMLAlternative(htmlContent);
+                } catch (fallbackError) {
+                    console.error('Fallback PDF generation also failed:', fallbackError);
+                    throw new Error(`PDF generation failed: Browser session closed unexpectedly. Fallback also failed: ${fallbackError.message}`);
+                }
+            }
+            
             throw error;
         } finally {
+            // Enhanced cleanup with error handling
+            if (page) {
+                try {
+                    console.log('Closing page...');
+                    await page.close();
+                } catch (e) {
+                    console.warn('Warning: Error closing page:', e.message);
+                }
+            }
+            
             if (browser) {
-                await browser.close();
+                try {
+                    console.log('Closing browser...');
+                    await browser.close();
+                } catch (e) {
+                    console.warn('Warning: Error closing browser:', e.message);
+                }
             }
         }
     }
@@ -477,16 +585,36 @@ export class HTMLPayslipPDFGenerator {
      * Alternative method using html-pdf library (lighter weight)
      */
     static async generatePDFFromHTMLAlternative(htmlContent) {
-        const pdf = require('html-pdf');
-        
-        return new Promise((resolve, reject) => {
-            pdf.create(htmlContent, PDFConfig.htmlPdf).toBuffer((err, buffer) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(buffer);
-                }
+        try {
+            // Check if html-pdf is available
+            const pdf = await import('html-pdf').catch(() => null);
+            
+            if (!pdf) {
+                throw new Error('html-pdf library not available. Please install it: npm install html-pdf');
+            }
+            
+            return new Promise((resolve, reject) => {
+                const options = {
+                    ...PDFConfig.htmlPdf,
+                    // Windows-specific phantom path if needed
+                    ...(process.platform === 'win32' && {
+                        phantomPath: require('phantomjs-prebuilt').path
+                    })
+                };
+                
+                pdf.default.create(htmlContent, options).toBuffer((err, buffer) => {
+                    if (err) {
+                        console.error('html-pdf generation error:', err);
+                        reject(err);
+                    } else {
+                        console.log('html-pdf generation successful');
+                        resolve(buffer);
+                    }
+                });
             });
-        });
+        } catch (error) {
+            console.error('Error with html-pdf alternative:', error);
+            throw error;
+        }
     }
 }

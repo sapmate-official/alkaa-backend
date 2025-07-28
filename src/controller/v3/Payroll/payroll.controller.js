@@ -2,8 +2,9 @@ import { PayrollService } from "./services/payrollService.js";
 import { PayslipPDFGenerator } from "./services/pdfGenerator.js";
 import { HTMLPayslipPDFGenerator } from "./services/htmlPdfGenerator.js";
 import { PayrollPermissions, PayrollValidators } from "./validators/payrollValidators.js";
-import { formatPayslipData, formatSalaryStatistics, formatMultiplePayslipStatus, formatPayslipForFrontendPDF } from "./models/payrollModels.js";
 import { EmailService } from "./services/emailService.js";
+import { formatPayslipData, formatSalaryStatistics, formatMultiplePayslipStatus, formatPayslipForFrontendPDF } from "./models/payrollModels.js";
+
 
 /**
  * Get payslip based on provided parameters
@@ -225,10 +226,16 @@ export const downloadPayslipAsPDF = async (req, res) => {
             });
         }
 
-        // Generate and send PDF based on format preference
+        // Generate and send PDF based on format preference with fallback
         if (format === 'html' || format === 'modern') {
-            // Use HTML-based PDF generator (similar to your frontend approach)
-            await HTMLPayslipPDFGenerator.generatePayslipPDF(statisticsData.salaryRecord, res);
+            try {
+                // Use HTML-based PDF generator (similar to your frontend approach)
+                await HTMLPayslipPDFGenerator.generatePayslipPDF(statisticsData.salaryRecord, res);
+            } catch (htmlError) {
+                console.error("HTML PDF generation failed, falling back to PDFKit:", htmlError);
+                // Fallback to PDFKit if HTML generation fails
+                await PayslipPDFGenerator.generatePayslipPDF(statisticsData.salaryRecord, res);
+            }
         } else {
             // Use existing PDFKit-based generator
             await PayslipPDFGenerator.generatePayslipPDF(statisticsData.salaryRecord, res);
