@@ -153,61 +153,170 @@ export class PayrollPermissions {
  */
 export class PayrollValidators {
     /**
-     * Validate month and year parameters
+     * Validate month and year parameters with enhanced validation
      */
     static validateMonthYear(month, year) {
+        // Convert to numbers and validate
+        const validMonth = parseInt(month);
+        const validYear = parseInt(year);
+
+        // Comprehensive validation
         if (!month || !year) {
-            throw new Error("Month and year are required");
+            throw new Error("Month and year are required parameters");
         }
 
-        const monthNum = parseInt(month);
-        const yearNum = parseInt(year);
+        if (isNaN(validMonth) || isNaN(validYear)) {
+            throw new Error("Month and year must be valid numbers");
+        }
 
-        if (monthNum < 1 || monthNum > 12) {
+        if (validMonth < 1 || validMonth > 12) {
             throw new Error("Month must be between 1 and 12");
         }
 
-        if (yearNum < 2000 || yearNum > 2100) {
-            throw new Error("Invalid year");
+        const currentYear = new Date().getFullYear();
+        if (validYear < 2000 || validYear > currentYear + 1) {
+            throw new Error(`Year must be between 2000 and ${currentYear + 1}`);
         }
 
-        return { month: monthNum, year: yearNum };
+        // Check if trying to generate future salary (beyond current month)
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1; // getMonth() returns 0-11
+        const currentYearNow = now.getFullYear();
+        
+        if (validYear > currentYearNow || (validYear === currentYearNow && validMonth > currentMonth)) {
+            throw new Error("Cannot generate salary for future months");
+        }
+
+        return { month: validMonth, year: validYear };
     }
 
     /**
-     * Validate user ID
+     * Validate user ID with enhanced checks
      */
     static validateUserId(userId) {
-        if (!userId || userId === 'undefined') {
+        if (!userId || userId === 'undefined' || userId === 'null') {
             throw new Error("Valid user ID is required");
         }
+
+        if (typeof userId !== 'string' || userId.length < 10) {
+            throw new Error("Invalid user ID format");
+        }
+
         return userId;
     }
 
     /**
-     * Validate salary record ID
+     * Validate salary record ID with enhanced checks
      */
     static validateSalaryRecordId(salaryRecordId) {
         if (!salaryRecordId) {
             throw new Error("Salary record ID is required");
         }
+
+        if (typeof salaryRecordId !== 'string' || salaryRecordId.length < 10) {
+            throw new Error("Invalid salary record ID format");
+        }
+
         return salaryRecordId;
     }
 
     /**
-     * Validate payslip data for multiple checks
+     * Validate payslip data for bulk operations with enhanced validation
      */
     static validatePayslipData(payslipData) {
-        if (!Array.isArray(payslipData) || payslipData.length === 0) {
-            throw new Error("Payslip data must be a non-empty array");
+        if (!Array.isArray(payslipData)) {
+            throw new Error("Payslip data must be an array");
         }
 
-        for (const data of payslipData) {
-            if (!data.userId || !data.month || !data.year) {
-                throw new Error("Each payslip data must contain userId, month, and year");
+        if (payslipData.length === 0) {
+            throw new Error("Payslip data array cannot be empty");
+        }
+
+        if (payslipData.length > 100) {
+            throw new Error("Cannot process more than 100 payslips at once");
+        }
+
+        // Validate each item
+        const validatedData = payslipData.map((item, index) => {
+            if (!item.userId || !item.month || !item.year) {
+                throw new Error(`Invalid data at index ${index}: userId, month, and year are required`);
             }
+
+            const { month, year } = this.validateMonthYear(item.month, item.year);
+            const userId = this.validateUserId(item.userId);
+            
+            return {
+                userId: userId,
+                month: month,
+                year: year
+            };
+        });
+
+        return validatedData;
+    }
+
+    /**
+     * Validate user input to prevent injection attacks
+     */
+    static sanitizeInput(input) {
+        if (typeof input !== 'string') {
+            return input;
         }
 
-        return payslipData;
+        // Remove potentially dangerous characters
+        return input.replace(/[<>\"'%;()&+]/g, '');
+    }
+
+    /**
+     * Validate email format
+     */
+    static validateEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) {
+            throw new Error("Invalid email format");
+        }
+        return email.toLowerCase();
+    }
+
+    /**
+     * Validate salary amount
+     */
+    static validateSalaryAmount(amount) {
+        const numAmount = parseFloat(amount);
+        
+        if (isNaN(numAmount)) {
+            throw new Error("Salary amount must be a valid number");
+        }
+
+        if (numAmount < 0) {
+            throw new Error("Salary amount cannot be negative");
+        }
+
+        if (numAmount > 10000000) { // 1 crore limit
+            throw new Error("Salary amount exceeds maximum allowed limit");
+        }
+
+        return numAmount;
+    }
+
+    /**
+     * Validate file upload parameters
+     */
+    static validateFileUpload(file) {
+        if (!file) {
+            throw new Error("File is required");
+        }
+
+        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+        if (!allowedTypes.includes(file.mimetype)) {
+            throw new Error("Invalid file type. Only PDF, JPEG, and PNG are allowed");
+        }
+
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (file.size > maxSize) {
+            throw new Error("File size cannot exceed 5MB");
+        }
+
+        return file;
     }
 }

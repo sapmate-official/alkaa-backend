@@ -7,7 +7,7 @@ export const PDFConfig = {
     
     // Puppeteer configuration
     puppeteer: {
-        headless: 'new',
+        headless: true, // Always true for production
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -16,9 +16,33 @@ export const PDFConfig = {
             '--no-first-run',
             '--no-zygote',
             '--single-process',
-            '--disable-gpu'
+            '--disable-gpu',
+            '--disable-extensions',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-features=TranslateUI',
+            '--disable-ipc-flooding-protection',
+            '--disable-background-networking',
+            '--disable-default-apps',
+            '--disable-sync',
+            '--metrics-recording-only',
+            '--no-default-browser-check',
+            '--no-pings',
+            '--password-store=basic',
+            '--use-mock-keychain',
+            '--disable-component-extensions-with-background-pages',
+            '--disable-permissions-api'
         ],
-        timeout: 30000
+        timeout: 90000, // Increased timeout for stability
+        // Windows-specific optimizations
+        ...(process.platform === 'win32' && {
+            executablePath: null, // Let Puppeteer find Chrome
+            ignoreDefaultArgs: ['--disable-extensions']
+        }),
+        // Production settings
+        defaultViewport: null,
+        devtools: false
     },
     
     // PDF generation options
@@ -31,7 +55,9 @@ export const PDFConfig = {
             bottom: '20px',
             left: '20px'
         },
-        preferCSSPageSize: true
+        preferCSSPageSize: true,
+        displayHeaderFooter: false,
+        timeout: 0 // No timeout for PDF generation
     },
     
     // html-pdf configuration (alternative)
@@ -46,8 +72,9 @@ export const PDFConfig = {
         },
         type: 'pdf',
         quality: '75',
-        renderDelay: 1000,
-        timeout: 30000
+        renderDelay: 2000, // Increased for better rendering
+        timeout: 60000, // Increased timeout
+        phantomArgs: ['--disk-cache=false', '--load-images=yes']
     },
     
     // Template configuration
@@ -71,6 +98,13 @@ export const PDFConfig = {
             text: '#1f2937',
             muted: '#6b7280'
         }
+    },
+
+    // Retry configuration
+    retry: {
+        maxAttempts: 3,
+        delay: 1000, // 1 second between retries
+        backoff: 1.5 // Exponential backoff multiplier
     }
 };
 
@@ -79,11 +113,15 @@ export const PDFConfig = {
  */
 if (process.env.NODE_ENV === 'production') {
     // Production optimizations
-    PDFConfig.puppeteer.args.push('--disable-extensions');
-    PDFConfig.puppeteer.timeout = 60000;
+    PDFConfig.puppeteer.args.push(
+        '--disable-web-security',
+        '--disable-features=site-per-process'
+    );
+    PDFConfig.puppeteer.timeout = 120000; // 2 minutes for production
 }
 
 if (process.env.NODE_ENV === 'development') {
-    // Development settings
-    PDFConfig.puppeteer.headless = false; // Set to true in production
+    // Development settings can be less strict
+    PDFConfig.puppeteer.timeout = 60000;
+    PDFConfig.puppeteer.devtools = true;
 }
