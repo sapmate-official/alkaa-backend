@@ -249,7 +249,7 @@ export const sendLeaveRequestEmail = async (managerEmail, adminEmail, employeeNa
                         </p>
                     </div>
                     <div style="text-align: center; margin-top: 30px; padding: 15px; background-color: #f1f1f1; border-radius: 5px;">
-                        <p style="margin: 0; color: #888; font-size: 12px;">© 2024 Alkaa. All rights reserved.</p>
+                        <p style="margin: 0; color: #888; font-size: 12px;">© 2025 Alkaa. All rights reserved.</p>
                     </div>
                 </div>
             `
@@ -1473,7 +1473,7 @@ export const sendOnboardingInvitationEmail = async (email, firstName, onboarding
                         </p>
                     </div>
                     <div style="text-align: center; margin-top: 20px; color: #8e8e93; font-size: 12px;">
-                        <p style="margin: 0;">© 2024 Alkaa. All rights reserved.</p>
+                        <p style="margin: 0;">© 2025 Alkaa. All rights reserved.</p>
                     </div>
                 </div>
             `
@@ -1534,7 +1534,7 @@ export const sendOnboardingChangeRequestEmail = async (email, firstName, onboard
                         </p>
                     </div>
                     <div style="text-align: center; margin-top: 20px; color: #8e8e93; font-size: 12px;">
-                        <p style="margin: 0;">© 2024 Alkaa. All rights reserved.</p>
+                        <p style="margin: 0;">© 2025 Alkaa. All rights reserved.</p>
                     </div>
                 </div>
             `
@@ -1663,4 +1663,100 @@ export const sendEmployeeOnboardingSubmissionEmailToManager = async (email, firs
         console.error('Error sending onboarding submission email to manager:', error);
         return error;
     }
+}
+
+export const sendWelcomeEmailToAdmin = async (organizationObject, adminObject, resetToken) => {
+    try {
+        const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+
+        const emailData = {
+            sender:{
+                name: "Alkaa",
+                email: process.env.SENDER_EMAIL
+            },
+            to:[{
+                email: adminObject.email,
+                name: adminObject.firstName
+
+            }],
+            subject: "Welcome to Alkaa - Your Organization Setup is Complete",
+
+                htmlContent: `
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fafafa;">
+                    <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 50%, #FF9800 100%); padding: 40px 20px; text-align: center;">
+                            <img src="${process.env.CLIENT_URL}/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 20px;" onerror="this.style.display='none';">
+                            <h1 style="color: white; margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -0.5px;">Welcome to Alkaa!</h1>
+                        </div>
+                        
+                        <div style="padding: 40px 30px;">
+                            <p style="margin-bottom: 20px; line-height: 1.6; font-size: 18px; color: #1a1a1a;">Hello ${adminObject.firstName},</p>
+                            
+                            <p style="margin-bottom: 25px; line-height: 1.7; font-size: 16px; color: #4a4a4a;">
+                                Fantastic news! 🎉 Your organization <strong style="color: #2E7D32;">${organizationObject.name}</strong> is now live on the Alkaa platform.
+                                We're genuinely excited to be part of your HR journey.
+                            </p>
+                            
+                            <p style="margin-bottom: 30px; line-height: 1.7; font-size: 16px; color: #4a4a4a;">
+                                As the administrator, you now have access to a comprehensive suite of tools designed to simplify 
+                                workforce management, streamline daily operations, and help your team thrive.
+                            </p>
+                            
+                            <div style="background-color: #f8f9fa; padding: 30px; border-radius: 8px; margin: 30px 0;">
+                                <h2 style="color: #2E7D32; font-size: 20px; margin: 0 0 20px; font-weight: 500;">Your Next Steps:</h2>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <span style="display: inline-block; background-color: #2E7D32; color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 14px; font-weight: bold; margin-right: 12px;">1</span>
+                                    <span style="color: #1a1a1a; font-weight: 500;">Set up your secure password</span>
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <span style="display: inline-block; background-color: #4CAF50; color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 14px; font-weight: bold; margin-right: 12px;">2</span>
+                                    <span style="color: #1a1a1a; font-weight: 500;">Complete your organization profile</span>
+                                </div>
+                                
+                                <div style="margin-bottom: 0;">
+                                    <span style="display: inline-block; background-color: #FF9800; color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 14px; font-weight: bold; margin-right: 12px;">3</span>
+                                    <span style="color: #1a1a1a; font-weight: 500;">Start inviting your team members</span>
+                                </div>
+                            </div>
+                            
+                            <div style="text-align: center; margin: 40px 0;">
+                                <a href="${resetUrl}" style="background: linear-gradient(135deg, #2E7D32, #4CAF50); color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 16px rgba(46, 125, 50, 0.3); transition: all 0.2s;">
+                                    Set Up My Account →
+                                </a>
+                            </div>
+                            
+                            <div style="background-color: #fff3cd; padding: 20px; border-radius: 6px; border-left: 4px solid #ffc107; margin: 30px 0;">
+                                <p style="color: #856404; font-size: 14px; margin: 0; line-height: 1.6;">
+                                    <strong>Security Notice:</strong> This link expires in 24 hours. Need help getting started? 
+                                    Our support team is ready to assist at <a href="mailto:support@alkaa.online" style="color: #856404; font-weight: 500;">support@alkaa.online</a>
+                                </p>
+                            </div>
+                            
+                            <p style="margin-bottom: 25px; line-height: 1.7; font-size: 16px; color: #4a4a4a;">
+                                We're committed to making ${organizationObject.name}'s transition to digital HR management as smooth as possible. 
+                                Here's to building something great together! 🚀
+                            </p>
+                            
+                            <p style="line-height: 1.6; font-size: 16px; color: #4a4a4a;">
+                                Warm regards,<br>
+                                <span style="color: #2E7D32; font-weight: 500;">The Alkaa Team</span>
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 25px; color: #8e8e93; font-size: 12px;">
+                        <p style="margin: 0 0 5px;">© ${new Date().getFullYear()} Alkaa. Building better workplaces together.</p>
+                        <p style="margin: 0;">This email was sent to the administrator of ${organizationObject.name}</p>
+                    </div>
+                </div>
+                `
+        }
+                console.log('Sending welcome email to admin:', adminObject.email);
+                await sendBrevoEmail(emailData);
+                console.log('Welcome email sent to admin');
+            } catch (emailError) {
+                console.warn('Failed to send welcome email:', emailError.message);
+            }
 }

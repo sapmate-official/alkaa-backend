@@ -187,6 +187,7 @@ export const loginSuperAdmin = async (req, res) => {
             return res.status(401).send({
                 message: "No super admin exists with this Email",
             });
+            return;
         }
         
         console.log("[loginSuperAdmin] Validating password");
@@ -244,6 +245,7 @@ export const loginSuperAdmin = async (req, res) => {
     } catch (error) {
         console.error("[loginSuperAdmin] Error:", error);
         res.status(500).json({ error: error.message });
+        return;
     }
 };
 
