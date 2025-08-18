@@ -1,5 +1,12 @@
 import { listOfEmployees, getEmployeeById } from './employee.queries.js';
-import { createEmployee, updateEmployee, deleteEmployee } from './employee.mutations.js';
+import { 
+    createEmployee, 
+    updateEmployee, 
+    deleteEmployee,
+    assignEmployeeToDepartments,
+    removeEmployeeFromDepartments,
+    setEmployeePrimaryDepartment
+} from './employee.mutations.js';
 import { generateEmployeeId, checkEmployeeId } from './employee.utils.js';
 
 export {
@@ -11,6 +18,11 @@ export {
     createEmployee,
     updateEmployee,
     deleteEmployee,
+    
+    // NEW: Multi-department operations
+    assignEmployeeToDepartments,
+    removeEmployeeFromDepartments,
+    setEmployeePrimaryDepartment,
     
     // Utility operations
     generateEmployeeId,

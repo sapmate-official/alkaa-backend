@@ -1,7 +1,7 @@
 import prisma from "../../../../db/connectDb.js";
 import { sendNewEmployeeWelcomeEmail } from "../../../../util/sendEmail.js";
-//working solution
-// Create new employee
+import { logUserDepartmentAssignment } from "../../../../util/activityLogger.js";
+
 const createEmployee = async (req, res) => {
     try {
         console.log('Creating new employee with request body:', req.body);
@@ -30,7 +30,8 @@ const createEmployee = async (req, res) => {
             pfPercentage,
             taxPercentage,
             insuranceFixed,
-            departmentId,
+            departmentId, // Legacy support: primary department
+            departmentIds, // NEW: Array of departments for multi-department assignment
             roleIds,
             managerId,
         } = req.body.data;
@@ -70,8 +71,8 @@ const createEmployee = async (req, res) => {
         // Basic validation
         console.log('Validating required fields...');
         if (!firstName || !lastName || !email || !mobileNumber || !employeeId  || !roleIds.length>0 || !orgId || !hiredDate || !emergencyContact ) {
-            console.log(firstName, lastName, email, mobileNumber, employeeId, departmentId,roleIds,orgId,emergencyContact);
-            console.log('Validation failed: Missing required fields', firstName?true:false, lastName?true:false, email?true:false, mobileNumber?true:false, employeeId?true:false, departmentId?true:false,roleIds?true:false,orgId?true:false);
+            console.log(firstName, lastName, email, mobileNumber, employeeId, departmentId, departmentIds, roleIds, orgId, emergencyContact);
+            console.log('Validation failed: Missing required fields', firstName?true:false, lastName?true:false, email?true:false, mobileNumber?true:false, employeeId?true:false, departmentId?true:false, departmentIds?true:false, roleIds?true:false,orgId?true:false);
             return res.status(400).json({ error: 'Required fields are missing' });
         }
 
@@ -80,9 +81,23 @@ const createEmployee = async (req, res) => {
             return res.status(400).json({ error: 'Invalid email format' });
         }
 
+        // NEW: Handle department assignment logic
+        // Priority: departmentIds array > single departmentId > no department
+        let finalDepartmentIds = [];
+        let primaryDepartmentId = null;
+
+        if (departmentIds && Array.isArray(departmentIds) && departmentIds.length > 0) {
+            finalDepartmentIds = departmentIds;
+            primaryDepartmentId = departmentIds[0]; // First department is primary
+        } else if (departmentId) {
+            finalDepartmentIds = [departmentId];
+            primaryDepartmentId = departmentId;
+        }
+
         console.log('Creating employee in database with data:', {
             orgId,
-            departmentId,
+            primaryDepartmentId,
+            finalDepartmentIds,
             managerId,
             email,
             employeeId,
@@ -104,7 +119,7 @@ const createEmployee = async (req, res) => {
         const employee = await prisma.user.create({
             data: {
                 orgId,
-                departmentId:departmentId?departmentId:null,
+                departmentId: primaryDepartmentId, // Legacy field for backward compatibility
                 managerId,
                 email,
                 firstName,
@@ -160,6 +175,18 @@ const createEmployee = async (req, res) => {
                         }
                     }
                 },
+                // NEW: Include multi-department assignments
+                userDepartments: {
+                    include: {
+                        department: {
+                            select: {
+                                id: true,
+                                name: true,
+                                code: true
+                            }
+                        }
+                    }
+                },
                 roles: {
                     include: {
                         role: true
@@ -176,6 +203,32 @@ const createEmployee = async (req, res) => {
                 }
             }
         });
+
+        // NEW: Create UserDepartment records for multi-department assignment
+        if (finalDepartmentIds.length > 0) {
+            await Promise.all(finalDepartmentIds.map(async (deptId, index) => {
+                const userDepartmentRecord = await prisma.userDepartment.create({
+                    data: {
+                        userId: employee.id,
+                        departmentId: deptId,
+                        isPrimary: index === 0, // First department is primary
+                        assignedAt: new Date(),
+                        assignedBy: req.user?.id // Assuming auth middleware provides user
+                    }
+                });
+
+                // Log department assignment activity
+                await logUserDepartmentAssignment(
+                    employee.id,
+                    deptId,
+                    'ASSIGN',
+                    req.user?.id,
+                    { isPrimary: index === 0 }
+                );
+
+                return userDepartmentRecord;
+            }));
+        }
         const verificationToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
         
         // Fetch team members from the same department
@@ -199,7 +252,8 @@ const createEmployee = async (req, res) => {
         // Format team members array
         const formattedTeamMembers = teamMembers.map(member => ({
             name: `${member.firstName} ${member.lastName}`,
-            role: member.roles.length > 0 ? member.roles[0].role.name : 'Team Member'
+            role: member.roles.length > 0 ? member.roles[0].role.name : 'Team Member',
+            department: member.department?.name || 'No Department'
         }));
         
         // Only send email if manager exists
@@ -217,6 +271,11 @@ const createEmployee = async (req, res) => {
                 {
                     employeeId: employee.employeeId,
                     department: employee.department?.name || 'Not Assigned',
+                    departments: finalDepartmentIds.length > 1 ? 
+                        finalDepartmentIds.map(id => {
+                            const dept = employee.userDepartments?.find(ud => ud.departmentId === id);
+                            return dept?.department?.name || 'Unknown';
+                        }).join(', ') : undefined,
                     hiredDate: employee.hiredDate,
                     verificationToken: verificationToken
                 },
@@ -259,7 +318,8 @@ const updateEmployee = async (req, res) => {
         }
 
         const {
-            departmentId,
+            departmentId, // Legacy support
+            departmentIds, // NEW: Multi-department update
             email,
             firstName,
             lastName,
@@ -271,32 +331,54 @@ const updateEmployee = async (req, res) => {
             salaryDetails
         } = req.body;
 
+        // NEW: Handle department updates
+        let updateData = {
+            email,
+            firstName,
+            lastName,
+            employeeId,
+            mobileNumber,
+            emergencyContact,
+            status,
+            bankDetails: bankDetails ? {
+                upsert: {
+                    create: bankDetails,
+                    update: bankDetails
+                }
+            } : undefined,
+            salaryParameter: salaryDetails ? {
+                upsert: {
+                    create: salaryDetails,
+                    update: salaryDetails
+                }
+            } : undefined
+        };
+
+        // Handle department updates
+        if (departmentIds && Array.isArray(departmentIds) && departmentIds.length > 0) {
+            // Multi-department update: Set primary department for legacy compatibility
+            updateData.departmentId = departmentIds[0];
+        } else if (departmentId !== undefined) {
+            // Legacy single department update
+            updateData.departmentId = departmentId;
+        }
+
         const employee = await prisma.user.update({
             where: { id },
-            data: {
-                departmentId,
-                email,
-                firstName,
-                lastName,
-                employeeId,
-                mobileNumber,
-                emergencyContact,
-                status,
-                bankDetails: bankDetails ? {
-                    upsert: {
-                        create: bankDetails,
-                        update: bankDetails
-                    }
-                } : undefined,
-                salaryParameter: salaryDetails ? {
-                    upsert: {
-                        create: salaryDetails,
-                        update: salaryDetails
-                    }
-                } : undefined
-            },
+            data: updateData,
             include: {
                 department: true,
+                userDepartments: {
+                    include: {
+                        department: {
+                            select: {
+                                id: true,
+                                name: true,
+                                code: true
+                            }
+                        }
+                    }
+                },
                 roles: {
                     include: {
                         role: true
@@ -307,8 +389,285 @@ const updateEmployee = async (req, res) => {
             }
         });
 
+        // NEW: Handle multi-department assignment updates
+        if (departmentIds && Array.isArray(departmentIds) && departmentIds.length > 0) {
+            // Remove existing department assignments
+            await prisma.userDepartment.deleteMany({
+                where: { userId: id }
+            });
+
+            // Create new department assignments
+            await Promise.all(departmentIds.map(async (deptId, index) => {
+                const userDepartmentRecord = await prisma.userDepartment.create({
+                    data: {
+                        userId: id,
+                        departmentId: deptId,
+                        isPrimary: index === 0, // First department is primary
+                        assignedAt: new Date(),
+                        assignedBy: req.user?.id
+                    }
+                });
+
+                // Log department assignment activity
+                await logUserDepartmentAssignment(
+                    id,
+                    deptId,
+                    'UPDATE',
+                    req.user?.id,
+                    { isPrimary: index === 0 }
+                );
+
+                return userDepartmentRecord;
+            }));
+        }
+
         res.json(employee);
     } catch (error) {
+        console.error('Error updating employee:', error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// NEW: Assign employee to additional departments
+const assignEmployeeToDepartments = async (req, res) => {
+    try {
+        const { id } = req.params; // Employee ID
+        const { departmentIds, replacePrimary } = req.body;
+
+        if (!departmentIds || !Array.isArray(departmentIds) || departmentIds.length === 0) {
+            return res.status(400).json({ error: 'Department IDs array is required' });
+        }
+
+        // Verify employee exists
+        const employee = await prisma.user.findUnique({
+            where: { id },
+            include: {
+                userDepartments: true
+            }
+        });
+
+        if (!employee) {
+            return res.status(404).json({ error: 'Employee not found' });
+        }
+
+        // Get current department assignments
+        const currentDeptIds = employee.userDepartments.map(ud => ud.departmentId);
+        const newDeptIds = departmentIds.filter(deptId => !currentDeptIds.includes(deptId));
+
+        // Create new department assignments
+        const newAssignments = await Promise.all(newDeptIds.map(async (deptId, index) => {
+            const isFirstNew = index === 0 && replacePrimary;
+            
+            const userDepartmentRecord = await prisma.userDepartment.create({
+                data: {
+                    userId: id,
+                    departmentId: deptId,
+                    isPrimary: isFirstNew, // Only if replacing primary
+                    assignedAt: new Date(),
+                    assignedBy: req.user?.id
+                }
+            });
+
+            // Log assignment activity
+            await logUserDepartmentAssignment(
+                id,
+                deptId,
+                'ASSIGN',
+                req.user?.id,
+                { isPrimary: isFirstNew }
+            );
+
+            return userDepartmentRecord;
+        }));
+
+        // If replacing primary, update existing assignments
+        if (replacePrimary && newDeptIds.length > 0) {
+            await prisma.userDepartment.updateMany({
+                where: {
+                    userId: id,
+                    departmentId: { notIn: newDeptIds }
+                },
+                data: { isPrimary: false }
+            });
+
+            // Update legacy departmentId field
+            await prisma.user.update({
+                where: { id },
+                data: { departmentId: newDeptIds[0] }
+            });
+        }
+
+        // Fetch updated employee data
+        const updatedEmployee = await prisma.user.findUnique({
+            where: { id },
+            include: {
+                userDepartments: {
+                    include: {
+                        department: {
+                            select: {
+                                id: true,
+                                name: true,
+                                code: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        res.status(201).json({
+            message: 'Employee assigned to departments successfully',
+            newAssignments: newAssignments.length,
+            employee: updatedEmployee
+        });
+
+    } catch (error) {
+        console.error('Error assigning employee to departments:', error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// NEW: Remove employee from departments
+const removeEmployeeFromDepartments = async (req, res) => {
+    try {
+        const { id } = req.params; // Employee ID
+        const { departmentIds } = req.body;
+
+        if (!departmentIds || !Array.isArray(departmentIds) || departmentIds.length === 0) {
+            return res.status(400).json({ error: 'Department IDs array is required' });
+        }
+
+        // Verify employee exists
+        const employee = await prisma.user.findUnique({
+            where: { id },
+            include: {
+                userDepartments: true
+            }
+        });
+
+        if (!employee) {
+            return res.status(404).json({ error: 'Employee not found' });
+        }
+
+        // Check if removing primary department
+        const primaryDept = employee.userDepartments.find(ud => ud.isPrimary);
+        const removingPrimary = primaryDept && departmentIds.includes(primaryDept.departmentId);
+
+        // Remove department assignments
+        const removedCount = await prisma.userDepartment.deleteMany({
+            where: {
+                userId: id,
+                departmentId: { in: departmentIds }
+            }
+        });
+
+        // Log removal activities
+        await Promise.all(departmentIds.map(deptId => 
+            logUserDepartmentAssignment(
+                id,
+                deptId,
+                'UNASSIGN',
+                req.user?.id,
+                { wasPrimary: removingPrimary && deptId === primaryDept?.departmentId }
+            )
+        ));
+
+        // If primary department was removed, assign new primary
+        if (removingPrimary) {
+            const remainingDepartments = await prisma.userDepartment.findMany({
+                where: { userId: id }
+            });
+
+            if (remainingDepartments.length > 0) {
+                // Set first remaining department as primary
+                await prisma.userDepartment.update({
+                    where: { id: remainingDepartments[0].id },
+                    data: { isPrimary: true }
+                });
+
+                // Update legacy departmentId field
+                await prisma.user.update({
+                    where: { id },
+                    data: { departmentId: remainingDepartments[0].departmentId }
+                });
+            } else {
+                // No departments left - clear legacy field
+                await prisma.user.update({
+                    where: { id },
+                    data: { departmentId: null }
+                });
+            }
+        }
+
+        res.json({
+            message: 'Employee removed from departments successfully',
+            removedCount: removedCount.count
+        });
+
+    } catch (error) {
+        console.error('Error removing employee from departments:', error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// NEW: Set primary department for employee
+const setEmployeePrimaryDepartment = async (req, res) => {
+    try {
+        const { id } = req.params; // Employee ID
+        const { departmentId } = req.body;
+
+        if (!departmentId) {
+            return res.status(400).json({ error: 'Department ID is required' });
+        }
+
+        // Verify employee is assigned to this department
+        const existingAssignment = await prisma.userDepartment.findFirst({
+            where: {
+                userId: id,
+                departmentId: departmentId
+            }
+        });
+
+        if (!existingAssignment) {
+            return res.status(400).json({ 
+                error: 'Employee is not assigned to this department' 
+            });
+        }
+
+        // Update primary assignments
+        await prisma.$transaction([
+            // Remove primary flag from all current assignments
+            prisma.userDepartment.updateMany({
+                where: { userId: id },
+                data: { isPrimary: false }
+            }),
+            // Set new primary department
+            prisma.userDepartment.update({
+                where: { id: existingAssignment.id },
+                data: { isPrimary: true }
+            }),
+            // Update legacy departmentId field
+            prisma.user.update({
+                where: { id },
+                data: { departmentId: departmentId }
+            })
+        ]);
+
+        // Log activity
+        await logUserDepartmentAssignment(
+            id,
+            departmentId,
+            'UPDATE',
+            req.user?.id,
+            { setPrimary: true }
+        );
+
+        res.json({
+            message: 'Primary department updated successfully'
+        });
+
+    } catch (error) {
+        console.error('Error setting primary department:', error);
         res.status(500).json({ error: error.message });
     }
 };
@@ -334,5 +693,9 @@ const deleteEmployee = async (req, res) => {
 export {
     createEmployee,
     updateEmployee,
-    deleteEmployee
+    deleteEmployee,
+    // NEW: Multi-department management functions
+    assignEmployeeToDepartments,
+    removeEmployeeFromDepartments,
+    setEmployeePrimaryDepartment
 };

@@ -330,7 +330,29 @@ export const getLeaveRequestByManagerId = async (req, res) => {
                     }
                 },
                 include: {
-                    user: true,
+                    user: {
+                        include: {
+                            department: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    code: true
+                                }
+                            },
+                            // NEW: Include multi-department information
+                            userDepartments: {
+                                include: {
+                                    department: {
+                                        select: {
+                                            id: true,
+                                            name: true,
+                                            code: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
                     leaveType: true
                 }
             });
@@ -342,12 +364,60 @@ export const getLeaveRequestByManagerId = async (req, res) => {
                     }
                 },
                 include: {
-                    user: true,
+                    user: {
+                        include: {
+                            department: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    code: true
+                                }
+                            },
+                            // NEW: Include multi-department information
+                            userDepartments: {
+                                include: {
+                                    department: {
+                                        select: {
+                                            id: true,
+                                            name: true,
+                                            code: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
                     leaveType: true
                 }
             });
         }
-        res.status(200).json(leaveRequests);
+
+        // NEW: Enhance response with multi-department data
+        const enhancedLeaveRequests = leaveRequests.map(request => ({
+            ...request,
+            user: {
+                ...request.user,
+                // Legacy department (for backward compatibility)
+                department: request.user.department,
+                // NEW: Multi-department data
+                departments: request.user.userDepartments?.map(ud => ({
+                    id: ud.department.id,
+                    name: ud.department.name,
+                    code: ud.department.code,
+                    isPrimary: ud.isPrimary,
+                    role: ud.role
+                })) || (request.user.department ? [{
+                    id: request.user.department.id,
+                    name: request.user.department.name,
+                    code: request.user.department.code,
+                    isPrimary: true,
+                    role: null
+                }] : []),
+                primaryDepartment: request.user.userDepartments?.find(ud => ud.isPrimary)?.department || request.user.department
+            }
+        }));
+
+        res.status(200).json(enhancedLeaveRequests);
     } catch (error) {
         console.log(error)
         res.status(500).json({ error: error.message });

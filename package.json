@@ -10,7 +10,8 @@
     "vercel-build": "prisma generate && echo 'Build completed'",
     "build": "prisma generate",
     "seed:org": "node src/seed/runSeeder.js",
-    "seed:organization": "node src/seed/OrganizationSeeder.js"
+    "seed:organization": "node src/seed/OrganizationSeeder.js",
+    "migrate-multi-dept": "node migrate-multi-dept.js"
   },
   "author": "",
   "license": "ISC",

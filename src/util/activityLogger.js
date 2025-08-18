@@ -271,6 +271,82 @@ export const logAuthActivity = async (userId, orgId, action, req = null) => {
 };
 
 /**
+ * Log user department assignment/unassignment actions
+ */
+export const logUserDepartmentAssignment = async (userId, departmentId, action, actorId, metadata = null, req = null) => {
+    try {
+        // Get user and department information for better logging
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                firstName: true,
+                lastName: true,
+                employeeId: true,
+                orgId: true
+            }
+        });
+
+        const department = await prisma.department.findUnique({
+            where: { id: departmentId },
+            select: {
+                name: true,
+                code: true
+            }
+        });
+
+        if (!user) {
+            console.error('User not found for department assignment logging:', userId);
+            return;
+        }
+
+        let description = '';
+        switch (action) {
+            case 'ASSIGN':
+                description = `Assigned to department: ${department?.name || departmentId}`;
+                if (metadata?.isPrimary) {
+                    description += ' (Primary Department)';
+                }
+                break;
+            case 'UNASSIGN':
+                description = `Unassigned from department: ${department?.name || departmentId}`;
+                if (metadata?.wasPrimary) {
+                    description += ' (Was Primary Department)';
+                }
+                break;
+            case 'UPDATE':
+                description = `Department assignment updated: ${department?.name || departmentId}`;
+                if (metadata?.setPrimary) {
+                    description += ' (Set as Primary)';
+                }
+                break;
+            default:
+                description = `Department ${action.toLowerCase()}: ${department?.name || departmentId}`;
+        }
+
+        await logActivity({
+            orgId: user.orgId,
+            actorId,
+            targetId: userId,
+            action,
+            entity: 'USER_DEPARTMENT',
+            entityId: `${userId}-${departmentId}`,
+            description,
+            metadata: {
+                ...metadata,
+                departmentName: department?.name,
+                departmentCode: department?.code,
+                employeeId: user.employeeId
+            },
+            ipAddress: req?.ip,
+            userAgent: req?.headers?.['user-agent']
+        });
+    } catch (error) {
+        console.error('Failed to log user department assignment:', error);
+        // Don't throw error to avoid breaking main functionality
+    }
+};
+
+/**
  * Log general user activity
  */
 export const logUserActivity = async (actorId, orgId, action, entity, entityId, description, metadata = null, req = null) => {
@@ -325,5 +401,6 @@ export default {
     logUserStatusChange,
     logAuthActivity,
     logUserDeletion,
-    logUserActivity
+    logUserActivity,
+    logUserDepartmentAssignment
 };

@@ -1,31 +1,67 @@
 import prisma from '../../../db/connectDb.js';
 import { validationResult } from 'express-validator';
 import { sendPasswordResetEmail, sendNewEmployeeWelcomeEmail, sendDepartmentChangeEmail } from '../../../util/sendEmail.js';
-import { logProfileChange, logUserCreation, logUserStatusChange, logAuthActivity, logRoleChange, logUserDeletion, logDepartmentChange } from '../../../util/activityLogger.js';
+import { logProfileChange, logUserCreation, logUserStatusChange, logAuthActivity, logRoleChange, logUserDeletion, logDepartmentChange, logUserActivity } from '../../../util/activityLogger.js';
 import bcrypt from 'bcrypt';
 
 export const getUser = async (req, res) => {
     try {
         const { orgId } = req.query;
-        const users = await prisma.user.findMany({ where: { orgId } ,
-        include:{
-            organization:true,
-            department:true,
-            roles:{
-                include:{
-                    role:{
-                        include:{
-                            permissions:{
-                                include:{
-                                    permission:true
+        const users = await prisma.user.findMany({ 
+            where: { orgId },
+            include: {
+                organization: true,
+                department: true,
+                // NEW: Include multi-department data
+                userDepartments: {
+                    include: {
+                        department: {
+                            select: {
+                                id: true,
+                                name: true,
+                                code: true,
+                                description: true
+                            }
+                        }
+                    },
+                    orderBy: [
+                        { isPrimary: 'desc' },
+                        { assignedAt: 'desc' }
+                    ]
+                },
+                roles: {
+                    include: {
+                        role: {
+                            include: {
+                                permissions: {
+                                    include: {
+                                        permission: true
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }});
-        res.status(200).json(users);
+        });
+        
+        // Format response to include both legacy and new structure
+        const formattedUsers = users.map(user => ({
+            ...user,
+            // Add computed fields for easier frontend consumption
+            departments: user.userDepartments.map(ud => ({
+                id: ud.id,
+                departmentId: ud.department.id,
+                departmentName: ud.department.name,
+                departmentCode: ud.department.code,
+                isPrimary: ud.isPrimary,
+                role: ud.role,
+                assignedAt: ud.assignedAt
+            })),
+            primaryDepartment: user.userDepartments.find(ud => ud.isPrimary)?.department || user.department
+        }));
+        
+        res.status(200).json(formattedUsers);
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });
     }
@@ -142,30 +178,51 @@ export const createUser = async (req, res) => {
         if (panNumber)
             userData.panNumber = panNumber;
 
-        // Create user
-        const newUser = await prisma.user.create({
-            data: userData,
-            include: {
-                department: {
-                    include:{
-                        departmentHead:{
-                            select:{
-                                firstName:true,
-                                lastName:true,
-                                email:true
+        // Create user and UserDepartment record in transaction
+        const result = await prisma.$transaction(async (prisma) => {
+            // Create user
+            const newUser = await prisma.user.create({
+                data: userData,
+                include: {
+                    department: {
+                        include:{
+                            departmentHead:{
+                                select:{
+                                    firstName:true,
+                                    lastName:true,
+                                    email:true
+                                }
                             }
                         }
-                    }
-                },
-                manager: {
-                    select:{
-                        firstName:true,
-                        lastName:true,
-                        email:true
+                    },
+                    manager: {
+                        select:{
+                            firstName:true,
+                            lastName:true,
+                            email:true
+                        }
                     }
                 }
+            });
+
+            // NEW: Create UserDepartment record if department is assigned
+            if (newUser.departmentId) {
+                await prisma.userDepartment.create({
+                    data: {
+                        userId: newUser.id,
+                        departmentId: newUser.departmentId,
+                        isPrimary: true, // First department is always primary
+                        assignedBy: req.user?.id, // The user who created this user
+                        assignedAt: new Date(),
+                        role: null // No specific role initially
+                    }
+                });
             }
+
+            return newUser;
         });
+
+        const newUser = result;
 
         // Generate verification token and update user
         const verificationToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -406,30 +463,69 @@ export const updateUser = async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
         
-        const updatedUser = await prisma.user.update({
-            where: { id },
-            data: updateData,
-            include: {
-                department: { 
-                    select: { 
-                        id: true, 
-                        name: true 
-                    } 
-                },
-                manager: { 
-                    select: { 
-                        id: true, 
-                        firstName: true, 
-                        lastName: true, 
-                        email: true 
-                    } 
-                },
-                organization: {
-                    select: {
-                        name: true
+        // Check if department is changing
+        const departmentChanging = updateData.departmentId !== undefined && 
+                                   updateData.departmentId !== originalUser.departmentId;
+        
+        // Update user and handle department changes in transaction
+        const updatedUser = await prisma.$transaction(async (prisma) => {
+            // Update the user
+            const user = await prisma.user.update({
+                where: { id },
+                data: updateData,
+                include: {
+                    department: { 
+                        select: { 
+                            id: true, 
+                            name: true 
+                        } 
+                    },
+                    manager: { 
+                        select: { 
+                            id: true, 
+                            firstName: true, 
+                            lastName: true, 
+                            email: true 
+                        } 
+                    },
+                    organization: {
+                        select: {
+                            name: true
+                        }
                     }
                 }
+            });
+
+            // NEW: Handle UserDepartment changes if department changed
+            if (departmentChanging) {
+                const actorId = req.user?.id;
+
+                // Remove old department assignment if exists
+                if (originalUser.departmentId) {
+                    await prisma.userDepartment.deleteMany({
+                        where: {
+                            userId: id,
+                            departmentId: originalUser.departmentId
+                        }
+                    });
+                }
+
+                // Add new department assignment if new department is provided
+                if (updateData.departmentId) {
+                    await prisma.userDepartment.create({
+                        data: {
+                            userId: id,
+                            departmentId: updateData.departmentId,
+                            isPrimary: true, // Make this the primary department
+                            assignedBy: actorId,
+                            assignedAt: new Date(),
+                            role: null
+                        }
+                    });
+                }
             }
+
+            return user;
         });
         
         // Log activity changes
@@ -1499,6 +1595,490 @@ export const updateUserDepartment = async (req, res) => {
             return res.status(400).json({ error: 'Invalid department ID' });
         }
         
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+// NEW MULTI-DEPARTMENT API ENDPOINTS
+
+/**
+ * Get all departments for a specific user
+ * GET /user/:id/departments
+ */
+export const getUserDepartments = async (req, res) => {
+    const { id } = req.params;
+    
+    try {
+        const userWithDepartments = await prisma.user.findUnique({
+            where: { id },
+            include: {
+                userDepartments: {
+                    include: {
+                        department: {
+                            include: {
+                                departmentHead: {
+                                    select: {
+                                        id: true,
+                                        firstName: true,
+                                        lastName: true,
+                                        email: true
+                                    }
+                                },
+                                parentDepartment: {
+                                    select: {
+                                        id: true,
+                                        name: true
+                                    }
+                                }
+                            }
+                        },
+                        assignedByUser: {
+                            select: {
+                                id: true,
+                                firstName: true,
+                                lastName: true,
+                                email: true
+                            }
+                        }
+                    },
+                    orderBy: [
+                        { isPrimary: 'desc' },
+                        { assignedAt: 'desc' }
+                    ]
+                },
+                // Keep backward compatibility - include single department
+                department: {
+                    select: {
+                        id: true,
+                        name: true,
+                        code: true
+                    }
+                }
+            }
+        });
+        
+        if (!userWithDepartments) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        const response = {
+            userId: id,
+            legacyDepartment: userWithDepartments.department, // For backward compatibility
+            departments: userWithDepartments.userDepartments.map(ud => ({
+                id: ud.id,
+                departmentId: ud.department.id,
+                departmentName: ud.department.name,
+                departmentCode: ud.department.code,
+                isPrimary: ud.isPrimary,
+                role: ud.role,
+                assignedAt: ud.assignedAt,
+                assignedBy: ud.assignedByUser,
+                departmentHead: ud.department.departmentHead,
+                parentDepartment: ud.department.parentDepartment
+            })),
+            primaryDepartment: userWithDepartments.userDepartments.find(ud => ud.isPrimary)
+        };
+        
+        res.status(200).json(response);
+    } catch (error) {
+        console.error('Error fetching user departments:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+/**
+ * Assign user to multiple departments
+ * POST /user/:id/departments
+ */
+export const assignUserToDepartments = async (req, res) => {
+    const { id: userId } = req.params;
+    const { departments, primaryDepartmentId } = req.body;
+    
+    // Validate input
+    if (!departments || !Array.isArray(departments) || departments.length === 0) {
+        return res.status(400).json({ 
+            error: 'departments array is required and must contain at least one department' 
+        });
+    }
+    
+    try {
+        // Verify user exists
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, orgId: true, firstName: true, lastName: true }
+        });
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // Validate departments exist and belong to user's organization
+        const departmentIds = departments.map(d => d.departmentId);
+        const validDepartments = await prisma.department.findMany({
+            where: {
+                id: { in: departmentIds },
+                orgId: user.orgId
+            }
+        });
+        
+        if (validDepartments.length !== departmentIds.length) {
+            return res.status(400).json({ 
+                error: 'One or more departments not found or not in user organization' 
+            });
+        }
+        
+        // Validate primary department is in the list
+        if (primaryDepartmentId && !departmentIds.includes(primaryDepartmentId)) {
+            return res.status(400).json({ 
+                error: 'Primary department must be included in departments list' 
+            });
+        }
+        
+        const actorId = req.user?.id;
+        const assignments = [];
+        
+        // Create department assignments in transaction
+        await prisma.$transaction(async (prisma) => {
+            // Remove existing assignments
+            await prisma.userDepartment.deleteMany({
+                where: { userId }
+            });
+            
+            // Create new assignments
+            for (const dept of departments) {
+                const assignment = await prisma.userDepartment.create({
+                    data: {
+                        userId,
+                        departmentId: dept.departmentId,
+                        isPrimary: dept.departmentId === (primaryDepartmentId || departments[0].departmentId),
+                        role: dept.role || null,
+                        assignedBy: actorId,
+                        assignedAt: new Date()
+                    },
+                    include: {
+                        department: {
+                            select: {
+                                id: true,
+                                name: true,
+                                code: true
+                            }
+                        }
+                    }
+                });
+                assignments.push(assignment);
+            }
+            
+            // Update legacy departmentId to primary department for backward compatibility
+            const primaryDeptId = primaryDepartmentId || departments[0].departmentId;
+            await prisma.user.update({
+                where: { id: userId },
+                data: { departmentId: primaryDeptId }
+            });
+        });
+        
+        // Log activity for each department assignment
+        for (const assignment of assignments) {
+            await logUserActivity(
+                actorId,
+                user.orgId,
+                'ASSIGN',
+                'USER_DEPARTMENT',
+                assignment.id,
+                `Assigned ${user.firstName} ${user.lastName} to department ${assignment.department.name}${assignment.isPrimary ? ' (Primary)' : ''}`,
+                { 
+                    departmentId: assignment.departmentId,
+                    departmentName: assignment.department.name,
+                    isPrimary: assignment.isPrimary,
+                    role: assignment.role
+                },
+                req
+            );
+        }
+        
+        res.status(201).json({
+            message: 'User assigned to departments successfully',
+            userId,
+            assignments: assignments.map(a => ({
+                id: a.id,
+                departmentId: a.departmentId,
+                departmentName: a.department.name,
+                isPrimary: a.isPrimary,
+                role: a.role,
+                assignedAt: a.assignedAt
+            }))
+        });
+        
+    } catch (error) {
+        console.error('Error assigning user to departments:', error);
+        if (error.code === 'P2002') {
+            return res.status(409).json({ error: 'User already assigned to one of the departments' });
+        }
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+/**
+ * Update user's department assignments
+ * PUT /user/:id/departments
+ */
+export const updateUserDepartments = async (req, res) => {
+    const { id: userId } = req.params;
+    const { departments, primaryDepartmentId } = req.body;
+    
+    if (!departments || !Array.isArray(departments)) {
+        return res.status(400).json({ 
+            error: 'departments array is required' 
+        });
+    }
+    
+    try {
+        // Get current assignments for comparison
+        const currentAssignments = await prisma.userDepartment.findMany({
+            where: { userId },
+            include: {
+                department: { select: { name: true } }
+            }
+        });
+        
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, orgId: true, firstName: true, lastName: true }
+        });
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // Track changes for activity logging
+        const changes = {
+            added: [],
+            removed: [],
+            updated: []
+        };
+        
+        const actorId = req.user?.id;
+        
+        await prisma.$transaction(async (prisma) => {
+            // Process each department in the request
+            for (const dept of departments) {
+                const existing = currentAssignments.find(ca => ca.departmentId === dept.departmentId);
+                
+                if (existing) {
+                    // Update existing assignment
+                    const updateData = {};
+                    if (dept.role !== existing.role) updateData.role = dept.role;
+                    if ((dept.departmentId === primaryDepartmentId) !== existing.isPrimary) {
+                        updateData.isPrimary = dept.departmentId === primaryDepartmentId;
+                    }
+                    
+                    if (Object.keys(updateData).length > 0) {
+                        await prisma.userDepartment.update({
+                            where: { id: existing.id },
+                            data: updateData
+                        });
+                        changes.updated.push({
+                            departmentId: dept.departmentId,
+                            departmentName: existing.department.name,
+                            changes: updateData
+                        });
+                    }
+                } else {
+                    // Add new assignment
+                    const newAssignment = await prisma.userDepartment.create({
+                        data: {
+                            userId,
+                            departmentId: dept.departmentId,
+                            isPrimary: dept.departmentId === primaryDepartmentId,
+                            role: dept.role || null,
+                            assignedBy: actorId,
+                            assignedAt: new Date()
+                        },
+                        include: {
+                            department: { select: { name: true } }
+                        }
+                    });
+                    changes.added.push({
+                        departmentId: dept.departmentId,
+                        departmentName: newAssignment.department.name,
+                        isPrimary: newAssignment.isPrimary,
+                        role: newAssignment.role
+                    });
+                }
+            }
+            
+            // Remove departments not in the request
+            const requestDeptIds = departments.map(d => d.departmentId);
+            const toRemove = currentAssignments.filter(ca => !requestDeptIds.includes(ca.departmentId));
+            
+            for (const assignment of toRemove) {
+                await prisma.userDepartment.delete({
+                    where: { id: assignment.id }
+                });
+                changes.removed.push({
+                    departmentId: assignment.departmentId,
+                    departmentName: assignment.department.name
+                });
+            }
+            
+            // Update legacy departmentId field
+            if (primaryDepartmentId) {
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: { departmentId: primaryDepartmentId }
+                });
+            }
+        });
+        
+        // Log activities
+        for (const change of changes.added) {
+            await logUserActivity(
+                actorId,
+                user.orgId,
+                'ASSIGN',
+                'USER_DEPARTMENT',
+                change.departmentId,
+                `Added ${user.firstName} ${user.lastName} to department ${change.departmentName}`,
+                change,
+                req
+            );
+        }
+        
+        for (const change of changes.removed) {
+            await logUserActivity(
+                actorId,
+                user.orgId,
+                'UNASSIGN',
+                'USER_DEPARTMENT',
+                change.departmentId,
+                `Removed ${user.firstName} ${user.lastName} from department ${change.departmentName}`,
+                change,
+                req
+            );
+        }
+        
+        for (const change of changes.updated) {
+            await logUserActivity(
+                actorId,
+                user.orgId,
+                'UPDATE',
+                'USER_DEPARTMENT',
+                change.departmentId,
+                `Updated ${user.firstName} ${user.lastName}'s assignment in department ${change.departmentName}`,
+                change,
+                req
+            );
+        }
+        
+        res.status(200).json({
+            message: 'User department assignments updated successfully',
+            userId,
+            changes
+        });
+        
+    } catch (error) {
+        console.error('Error updating user departments:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+/**
+ * Remove user from specific department
+ * DELETE /user/:id/departments/:departmentId
+ */
+export const removeUserFromDepartment = async (req, res) => {
+    const { id: userId, departmentId } = req.params;
+    
+    try {
+        const assignment = await prisma.userDepartment.findUnique({
+            where: {
+                userId_departmentId: {
+                    userId,
+                    departmentId
+                }
+            },
+            include: {
+                user: {
+                    select: {
+                        firstName: true,
+                        lastName: true,
+                        orgId: true
+                    }
+                },
+                department: {
+                    select: {
+                        name: true
+                    }
+                }
+            }
+        });
+        
+        if (!assignment) {
+            return res.status(404).json({ error: 'User department assignment not found' });
+        }
+        
+        // Check if this is the primary department
+        if (assignment.isPrimary) {
+            // Check if user has other departments
+            const otherDepartments = await prisma.userDepartment.findMany({
+                where: {
+                    userId,
+                    departmentId: { not: departmentId }
+                }
+            });
+            
+            if (otherDepartments.length > 0) {
+                // Make another department primary
+                await prisma.userDepartment.update({
+                    where: { id: otherDepartments[0].id },
+                    data: { isPrimary: true }
+                });
+                
+                // Update legacy departmentId
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: { departmentId: otherDepartments[0].departmentId }
+                });
+            } else {
+                // This is the last department, clear legacy departmentId
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: { departmentId: null }
+                });
+            }
+        }
+        
+        // Remove the assignment
+        await prisma.userDepartment.delete({
+            where: { id: assignment.id }
+        });
+        
+        // Log activity
+        const actorId = req.user?.id;
+        await logUserActivity(
+            actorId,
+            assignment.user.orgId,
+            'UNASSIGN',
+            'USER_DEPARTMENT',
+            departmentId,
+            `Removed ${assignment.user.firstName} ${assignment.user.lastName} from department ${assignment.department.name}`,
+            {
+                departmentId,
+                departmentName: assignment.department.name,
+                wasPrimary: assignment.isPrimary
+            },
+            req
+        );
+        
+        res.status(200).json({
+            message: 'User removed from department successfully',
+            userId,
+            departmentId,
+            departmentName: assignment.department.name,
+            wasPrimary: assignment.isPrimary
+        });
+        
+    } catch (error) {
+        console.error('Error removing user from department:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 };

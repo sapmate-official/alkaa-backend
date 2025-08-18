@@ -1400,85 +1400,105 @@ export const completeOnboarding = [
                     Math.floor(Math.random() * 9000 + 1000).toString();
             }
 
-            // Create user from candidate (matching the createEmployee logic exactly)
-            const user = await prisma.user.create({
-                data: {
-                    orgId: candidate.orgId,
-                    departmentId: departmentId || null,
-                    managerId: managerId || null,
-                    email: candidate.email,
-                    firstName: formData.firstName || candidate.firstName,
-                    lastName: formData.lastName || candidate.lastName,
-                    employeeId,
-                    mobileNumber: formData.mobileNumber || candidate.mobileNumber,
-                    hiredDate: candidate.hiredDate || new Date(),
-                    dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : null,
-                    address: formData.address,
-                    adharNumber: formData.adharNumber,
-                    emergencyContact: formData.emergencyContact,
-                    panNumber: formData.panNumber,
-                    status: 'inactive', // Same as createEmployee
-                    annualPackage: annualPackage || 0,
-                    monthlySalary: monthlySalary || 0,
-                    roles: {
-                        create: [{
-                            role: { connect: { id: roleId } }
-                        }]
-                    },
-                    // Create bank details if provided (same structure as createEmployee)
-                    ...(formData?.bankDetails?.accountNumber && formData?.bankDetails?.ifscCode && 
-                        formData?.bankDetails?.bankName && formData?.bankDetails?.accountHolderName ? {
-                        bankDetails: {
-                            create: {
-                                accountHolder: formData.bankDetails.accountHolderName,
-                                accountNumber: formData.bankDetails.accountNumber,
-                                ifscCode: formData.bankDetails.ifscCode,
-                                bankName: formData.bankDetails.bankName
-                            }
-                        }
-                    } : {}),
-                    // Create salary parameters if salary is provided (same as createEmployee)
-                    ...(annualPackage || monthlySalary ? {
-                        salaryParameter: {
-                            create: {
-                                hraPercentage: 40,
-                                daPercentage: 10,
-                                taPercentage: 10,
-                                pfPercentage: 12,
-                                taxPercentage: 10,
-                                insuranceFixed: 1000
-                            }
-                        }
-                    } : {})
-                },
-                include: {
-                    department: {
-                        include: {
-                            departmentHead: {
-                                select: {
-                                    firstName: true,
-                                    lastName: true,
-                                    email: true
+            // Create user from candidate in transaction (matching the createEmployee logic exactly)
+            const result = await prisma.$transaction(async (prisma) => {
+                const user = await prisma.user.create({
+                    data: {
+                        orgId: candidate.orgId,
+                        departmentId: departmentId || null,
+                        managerId: managerId || null,
+                        email: candidate.email,
+                        firstName: formData.firstName || candidate.firstName,
+                        lastName: formData.lastName || candidate.lastName,
+                        employeeId,
+                        mobileNumber: formData.mobileNumber || candidate.mobileNumber,
+                        hiredDate: candidate.hiredDate || new Date(),
+                        dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : null,
+                        address: formData.address,
+                        adharNumber: formData.adharNumber,
+                        emergencyContact: formData.emergencyContact,
+                        panNumber: formData.panNumber,
+                        status: 'inactive', // Same as createEmployee
+                        annualPackage: annualPackage || 0,
+                        monthlySalary: monthlySalary || 0,
+                        roles: {
+                            create: [{
+                                role: { connect: { id: roleId } }
+                            }]
+                        },
+                        // Create bank details if provided (same structure as createEmployee)
+                        ...(formData?.bankDetails?.accountNumber && formData?.bankDetails?.ifscCode && 
+                            formData?.bankDetails?.bankName && formData?.bankDetails?.accountHolderName ? {
+                            bankDetails: {
+                                create: {
+                                    accountHolder: formData.bankDetails.accountHolderName,
+                                    accountNumber: formData.bankDetails.accountNumber,
+                                    ifscCode: formData.bankDetails.ifscCode,
+                                    bankName: formData.bankDetails.bankName
                                 }
                             }
-                        }
+                        } : {}),
+                        // Create salary parameters if salary is provided (same as createEmployee)
+                        ...(annualPackage || monthlySalary ? {
+                            salaryParameter: {
+                                create: {
+                                    hraPercentage: 40,
+                                    daPercentage: 10,
+                                    taPercentage: 10,
+                                    pfPercentage: 12,
+                                    taxPercentage: 10,
+                                    insuranceFixed: 1000
+                                }
+                            }
+                        } : {})
                     },
-                    roles: {
-                        include: {
-                            role: true
-                        }
-                    },
-                    bankDetails: true,
-                    salaryParameter: true,
-                    manager: {
-                        select: {
-                            firstName: true,
-                            lastName: true,
-                            email: true
+                    include: {
+                        department: {
+                            include: {
+                                departmentHead: {
+                                    select: {
+                                        firstName: true,
+                                        lastName: true,
+                                        email: true
+                                    }
+                                }
+                            }
+                        },
+                        roles: {
+                            include: {
+                                role: true
+                            }
+                        },
+                        bankDetails: true,
+                        salaryParameter: true,
+                        manager: {
+                            select: {
+                                firstName: true,
+                                lastName: true,
+                                email: true
+                            }
                         }
                     }
+                });
+
+                // NEW: Create UserDepartment record if department is assigned
+                if (user.departmentId) {
+                    await prisma.userDepartment.create({
+                        data: {
+                            userId: user.id,
+                            departmentId: user.departmentId,
+                            isPrimary: true, // First department is always primary
+                            assignedBy: req.user?.id, // The user who approved the onboarding
+                            assignedAt: new Date(),
+                            role: null // No specific role initially
+                        }
+                    });
                 }
+
+                return user;
             });
+
+            const user = result;
 
             // Generate verification token (same as createEmployee)
             const verificationToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);

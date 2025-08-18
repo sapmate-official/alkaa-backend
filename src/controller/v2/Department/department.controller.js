@@ -12,11 +12,68 @@ export const getDepartment = async (req, res) => {
                 departmentHead: true,
                 parentDepartment: true,
                 subDepartments: true,
-                users: true
+                users: true, // Legacy direct users
+                // NEW: Include multi-department assignments
+                userDepartments: {
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                firstName: true,
+                                lastName: true,
+                                email: true,
+                                employeeId: true,
+                                status: true
+                            }
+                        }
+                    }
+                }
             }
         });
+
+        // NEW: Enhance response with multi-department statistics
+        const enhancedDepartments = departments.map(dept => {
+            const totalUsers = new Set([
+                ...dept.users.map(u => u.id), // Legacy users
+                ...dept.userDepartments.map(ud => ud.user.id) // Multi-department users
+            ]).size;
+
+            const primaryUsers = dept.userDepartments.filter(ud => ud.isPrimary).length;
+            const secondaryUsers = dept.userDepartments.filter(ud => !ud.isPrimary).length;
+
+            return {
+                ...dept,
+                // Legacy count for backward compatibility
+                userCount: dept.users.length,
+                // NEW: Multi-department statistics
+                statistics: {
+                    totalUniqueUsers: totalUsers,
+                    primaryAssignments: primaryUsers,
+                    secondaryAssignments: secondaryUsers,
+                    legacyUsers: dept.users.length,
+                    totalAssignments: dept.userDepartments.length
+                },
+                // NEW: User breakdown by assignment type
+                userBreakdown: {
+                    primaryUsers: dept.userDepartments.filter(ud => ud.isPrimary).map(ud => ({
+                        ...ud.user,
+                        assignedAt: ud.assignedAt,
+                        role: ud.role
+                    })),
+                    secondaryUsers: dept.userDepartments.filter(ud => !ud.isPrimary).map(ud => ({
+                        ...ud.user,
+                        assignedAt: ud.assignedAt,
+                        role: ud.role
+                    })),
+                    legacyUsers: dept.users.map(user => ({
+                        ...user,
+                        assignmentType: 'legacy'
+                    }))
+                }
+            };
+        });
         
-        res.status(200).json(departments);
+        res.status(200).json(enhancedDepartments);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -40,13 +97,103 @@ export const getDepartmentById = [
                     departmentHead: true,
                     parentDepartment: true,
                     subDepartments: true,
-                    users: true
+                    users: true, // Legacy direct users
+                    // NEW: Include multi-department assignments with detailed user info
+                    userDepartments: {
+                        include: {
+                            user: {
+                                include: {
+                                    roles: {
+                                        include: {
+                                            role: {
+                                                select: {
+                                                    id: true,
+                                                    name: true,
+                                                    description: true
+                                                }
+                                            }
+                                        }
+                                    },
+                                    // Include other departments for this user
+                                    userDepartments: {
+                                        include: {
+                                            department: {
+                                                select: {
+                                                    id: true,
+                                                    name: true,
+                                                    code: true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             });
             if (!department) {
                 return res.status(404).json({ error: "Department not found" });
             }
-            res.status(200).json(department);
+
+            // NEW: Enhance response with detailed multi-department analysis
+            const enhancedDepartment = {
+                ...department,
+                // Legacy user count for backward compatibility
+                userCount: department.users.length,
+                // NEW: Enhanced statistics
+                statistics: {
+                    totalUniqueUsers: new Set([
+                        ...department.users.map(u => u.id),
+                        ...department.userDepartments.map(ud => ud.user.id)
+                    ]).size,
+                    primaryAssignments: department.userDepartments.filter(ud => ud.isPrimary).length,
+                    secondaryAssignments: department.userDepartments.filter(ud => !ud.isPrimary).length,
+                    totalAssignments: department.userDepartments.length,
+                    multiDepartmentUsers: department.userDepartments.filter(ud => 
+                        ud.user.userDepartments.length > 1
+                    ).length
+                },
+                // NEW: Detailed user analysis
+                userAnalysis: {
+                    primaryUsers: department.userDepartments.filter(ud => ud.isPrimary).map(ud => ({
+                        id: ud.user.id,
+                        name: `${ud.user.firstName} ${ud.user.lastName}`,
+                        email: ud.user.email,
+                        employeeId: ud.user.employeeId,
+                        assignedAt: ud.assignedAt,
+                        role: ud.role,
+                        isMultiDepartment: ud.user.userDepartments.length > 1,
+                        otherDepartments: ud.user.userDepartments
+                            .filter(uud => uud.departmentId !== id)
+                            .map(uud => ({
+                                id: uud.department.id,
+                                name: uud.department.name,
+                                isPrimary: uud.isPrimary
+                            })),
+                        systemRoles: ud.user.roles.map(ur => ur.role)
+                    })),
+                    secondaryUsers: department.userDepartments.filter(ud => !ud.isPrimary).map(ud => ({
+                        id: ud.user.id,
+                        name: `${ud.user.firstName} ${ud.user.lastName}`,
+                        email: ud.user.email,
+                        employeeId: ud.user.employeeId,
+                        assignedAt: ud.assignedAt,
+                        role: ud.role,
+                        primaryDepartment: ud.user.userDepartments.find(uud => uud.isPrimary)?.department || null,
+                        otherDepartments: ud.user.userDepartments
+                            .filter(uud => uud.departmentId !== id)
+                            .map(uud => ({
+                                id: uud.department.id,
+                                name: uud.department.name,
+                                isPrimary: uud.isPrimary
+                            })),
+                        systemRoles: ud.user.roles.map(ur => ur.role)
+                    }))
+                }
+            };
+
+            res.status(200).json(enhancedDepartment);
         } catch (error) {
             res.status(500).json({ error: error.message });
         }

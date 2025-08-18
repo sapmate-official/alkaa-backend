@@ -57,27 +57,51 @@ model Organization_admin {
 }
 
 model Department {
-  id               String                @id @default(cuid())
-  orgId            String
-  name             String
-  description      String?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  budget           Float?
-  code             String?
-  headId           String?
-  location         String?
-  parentId         String?
-  status           Boolean               @default(true)
-  departmentHead   User?                 @relation("DepartmentHead", fields: [headId], references: [id])
-  organization     Organization          @relation(fields: [orgId], references: [id])
-  parentDepartment Department?           @relation("DepartmentHierarchy", fields: [parentId], references: [id])
-  subDepartments   Department[]          @relation("DepartmentHierarchy")
-  users            User[]                @relation("UserDepartment")
+  id                   String                @id @default(cuid())
+  orgId                String
+  name                 String
+  description          String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  budget               Float?
+  code                 String?
+  headId               String?
+  location             String?
+  parentId             String?
+  status               Boolean               @default(true)
+  departmentHead       User?                 @relation("DepartmentHead", fields: [headId], references: [id])
+  organization         Organization          @relation(fields: [orgId], references: [id])
+  parentDepartment     Department?           @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  subDepartments       Department[]          @relation("DepartmentHierarchy")
+  users                User[]                @relation("UserDepartment")
   onboardingCandidates OnboardingCandidate[]
+  // NEW: Multi-department relations
+  userDepartments      UserDepartment[]
 
   @@unique([orgId, name])
   @@unique([orgId, code])
+}
+
+// NEW: Multi-department junction table
+model UserDepartment {
+  id           String   @id @default(cuid())
+  userId       String
+  departmentId String
+  isPrimary    Boolean  @default(false)
+  assignedAt   DateTime @default(now())
+  assignedBy   String?
+  role         String? // Role within this specific department
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  assignedByUser User?      @relation("DepartmentAssignments", fields: [assignedBy], references: [id])
+
+  @@unique([userId, departmentId])
+  @@index([userId])
+  @@index([departmentId])
+  @@index([isPrimary])
 }
 
 model Role {
@@ -142,53 +166,56 @@ model RolePermission {
 }
 
 model User {
-  id                          String               @id @default(cuid())
-  orgId                       String
-  departmentId                String?
-  managerId                   String?
-  email                       String
-  hashedPassword              String?
-  refreshToken                String?
-  status                      UserStatus           @default(active)
-  verificationToken           String?              @unique
-  verificationTokenExpiry     DateTime?
-  annualPackage               Float?               @default(0.0)
-  monthlySalary               Float?               @default(0.0)
-  hiredDate                   DateTime?            @default(now())
-  dateOfBirth                 DateTime?
-  address                     String?
-  adharNumber                 String?
-  panNumber                   String?
-  mobileNumber                String?
-  createdAt                   DateTime             @default(now())
-  updatedAt                   DateTime             @updatedAt
-  employeeId                  String?
-  terminationDate             DateTime?
-  firstName                   String?              @default("unknown")
-  lastName                    String?              @default("unknown")
-  emergencyContact            String?
-  activityLogs                ActivityLog[]        @relation("ActivityActor")
-  targetedActivities          ActivityLog[]        @relation("ActivityTarget")
-  attendanceRecords           AttendanceRecord[]
-  bankDetails                 BankDetails?
-  createdOnboardingCandidates OnboardingCandidate[] @relation("CreatedCandidates")
+  id                           String                @id @default(cuid())
+  orgId                        String
+  departmentId                 String?
+  managerId                    String?
+  email                        String
+  hashedPassword               String?
+  refreshToken                 String?
+  status                       UserStatus            @default(active)
+  verificationToken            String?               @unique
+  verificationTokenExpiry      DateTime?
+  annualPackage                Float?                @default(0.0)
+  monthlySalary                Float?                @default(0.0)
+  hiredDate                    DateTime?             @default(now())
+  dateOfBirth                  DateTime?
+  address                      String?
+  adharNumber                  String?
+  panNumber                    String?
+  mobileNumber                 String?
+  createdAt                    DateTime              @default(now())
+  updatedAt                    DateTime              @updatedAt
+  employeeId                   String?
+  terminationDate              DateTime?
+  firstName                    String?               @default("unknown")
+  lastName                     String?               @default("unknown")
+  emergencyContact             String?
+  activityLogs                 ActivityLog[]         @relation("ActivityActor")
+  targetedActivities           ActivityLog[]         @relation("ActivityTarget")
+  attendanceRecords            AttendanceRecord[]
+  bankDetails                  BankDetails?
+  createdOnboardingCandidates  OnboardingCandidate[] @relation("CreatedCandidates")
   reviewedOnboardingCandidates OnboardingCandidate[] @relation("ReviewedCandidates")
-  managedCandidates           OnboardingCandidate[] @relation("CandidateManager")
-  Department                  Department[]         @relation("DepartmentHead")
-  leaveBalances               LeaveBalance[]
-  leaveRequests               LeaveRequest[]
-  notifications               Notification[]
-  Organization_admin          Organization_admin[]
-  PushSubscription            PushSubscription[]
-  salaryParameter             SalaryParameter?
-  salaryRecords               SalaryRecord[]
-  receivedTransactions        TransactionTable[]   @relation("ReceiverTransaction")
-  sentTransactions            TransactionTable[]   @relation("SenderTransaction")
-  department                  Department?          @relation("UserDepartment", fields: [departmentId], references: [id])
-  manager                     User?                @relation("UserManager", fields: [managerId], references: [id])
-  subordinates                User[]               @relation("UserManager")
-  organization                Organization         @relation(fields: [orgId], references: [id])
-  roles                       UserRole[]
+  managedCandidates            OnboardingCandidate[] @relation("CandidateManager")
+  Department                   Department[]          @relation("DepartmentHead")
+  leaveBalances                LeaveBalance[]
+  leaveRequests                LeaveRequest[]
+  notifications                Notification[]
+  Organization_admin           Organization_admin[]
+  PushSubscription             PushSubscription[]
+  salaryParameter              SalaryParameter?
+  salaryRecords                SalaryRecord[]
+  receivedTransactions         TransactionTable[]    @relation("ReceiverTransaction")
+  sentTransactions             TransactionTable[]    @relation("SenderTransaction")
+  department                   Department?           @relation("UserDepartment", fields: [departmentId], references: [id])
+  manager                      User?                 @relation("UserManager", fields: [managerId], references: [id])
+  subordinates                 User[]                @relation("UserManager")
+  organization                 Organization          @relation(fields: [orgId], references: [id])
+  roles                        UserRole[]
+  // NEW: Multi-department relations
+  userDepartments              UserDepartment[]
+  assignedDepartments          UserDepartment[]      @relation("DepartmentAssignments")
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -459,7 +486,7 @@ model UserDailyReport {
   id            String           @id @default(cuid())
   attendanceId  String
   reportContent Json
-  attendance    AttendanceRecord @relation(fields: [attendanceId], references: [id],onDelete: Cascade)
+  attendance    AttendanceRecord @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
 
   @@index([id, attendanceId])
 }
@@ -548,34 +575,34 @@ model ActivityLog {
 }
 
 model OnboardingCandidate {
-  id              String           @id @default(cuid())
-  email           String           @unique
-  firstName       String
-  lastName        String?
-  mobileNumber    String?
-  status          OnboardingStatus @default(INVITED)
-  formData        Json?
+  id                String           @id @default(cuid())
+  email             String           @unique
+  firstName         String
+  lastName          String?
+  mobileNumber      String?
+  status            OnboardingStatus @default(INVITED)
+  formData          Json?
   verificationToken String?
-  tokenExpiry     DateTime?
-  orgId           String
-  createdById     String
-  managerId       String?          // Add manager assignment
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  formSubmittedAt DateTime?
-  reviewedById    String?
-  reviewedAt      DateTime?
-  rejectionReason String?
-  departmentId    String?
-  annualPackage   Float?
-  monthlySalary   Float?           // Add monthly salary field
-  hiredDate       DateTime?
-  
-  organization    Organization     @relation(fields: [orgId], references: [id])
-  createdBy       User             @relation("CreatedCandidates", fields: [createdById], references: [id])
-  reviewedBy      User?            @relation("ReviewedCandidates", fields: [reviewedById], references: [id])
-  manager         User?            @relation("CandidateManager", fields: [managerId], references: [id])
-  department      Department?      @relation(fields: [departmentId], references: [id])
+  tokenExpiry       DateTime?
+  orgId             String
+  createdById       String
+  managerId         String? // Add manager assignment
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  formSubmittedAt   DateTime?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  rejectionReason   String?
+  departmentId      String?
+  annualPackage     Float?
+  monthlySalary     Float? // Add monthly salary field
+  hiredDate         DateTime?
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  createdBy    User         @relation("CreatedCandidates", fields: [createdById], references: [id])
+  reviewedBy   User?        @relation("ReviewedCandidates", fields: [reviewedById], references: [id])
+  manager      User?        @relation("CandidateManager", fields: [managerId], references: [id])
+  department   Department?  @relation(fields: [departmentId], references: [id])
 
   @@index([orgId])
   @@index([verificationToken])
@@ -679,6 +706,7 @@ enum ActivityEntity {
   USER
   ORGANIZATION
   DEPARTMENT
+  USER_DEPARTMENT
   ROLE
   PERMISSION
   ATTENDANCE

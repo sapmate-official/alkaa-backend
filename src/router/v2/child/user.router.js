@@ -1,5 +1,23 @@
 import express from "express";
-import { createUser, deleteUser, fetchAllSubordinates, fetchAllUsersFromOrg, fetchManagers, getUser, getUserById, hardDeleteUser, hardDeleteUserFromOrg, updateUser,updateUserDepartment,updateUserRole } from "../../../controller/v2/user/User.controller.js";
+import { 
+    createUser, 
+    deleteUser, 
+    fetchAllSubordinates, 
+    fetchAllUsersFromOrg, 
+    fetchManagers, 
+    getUser, 
+    getUserById, 
+    hardDeleteUser, 
+    hardDeleteUserFromOrg, 
+    updateUser,
+    updateUserDepartment,
+    updateUserRole,
+    // NEW MULTI-DEPARTMENT ENDPOINTS
+    getUserDepartments,
+    assignUserToDepartments,
+    updateUserDepartments,
+    removeUserFromDepartment
+} from "../../../controller/v2/user/User.controller.js";
 import validateToken from "../../../middleware/validateToken.js";
 
 const router = express.Router();
@@ -22,4 +40,11 @@ router.delete("/org/:orgId/user/:userId", validateToken, hardDeleteUserFromOrg);
 //extra routes
 router.put("/:userId/role/:prevRole/:roleId",updateUserRole);
 router.put("/:userId/department/:departmentId", validateToken,updateUserDepartment);
+
+// NEW MULTI-DEPARTMENT ROUTES
+router.get("/:id/departments", validateToken, getUserDepartments); // Get user's departments
+router.post("/:id/departments", validateToken, assignUserToDepartments); // Assign to multiple departments  
+router.put("/:id/departments", validateToken, updateUserDepartments); // Update department assignments
+router.delete("/:id/departments/:departmentId", validateToken, removeUserFromDepartment); // Remove from specific department
+
 export default router;

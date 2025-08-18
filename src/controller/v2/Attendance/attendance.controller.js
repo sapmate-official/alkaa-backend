@@ -522,6 +522,18 @@ export const getEmployeeRecords = async(req, res) => {
                                         name:true
                                     }
                                 },
+                                // NEW: Include multi-department information
+                                userDepartments: {
+                                    include: {
+                                        department: {
+                                            select: {
+                                                id: true,
+                                                name: true,
+                                                code: true
+                                            }
+                                        }
+                                    }
+                                },
                                 roles:{
                                     select:{
                                         role:{
@@ -542,10 +554,18 @@ export const getEmployeeRecords = async(req, res) => {
             employees.attendanceRecords.forEach(records=>{
                 console.log(records.user);
                 
+                // NEW: Enhanced user info with multi-department support
+                const primaryDept = records?.user?.userDepartments?.find(ud => ud.isPrimary);
+                const allDepts = records?.user?.userDepartments?.map(ud => ud.department.name).join(', ');
+                
                 records.user = {
                     name: `${records?.user?.firstName} ${records?.user?.lastName}`,
                     email: records?.user?.email,
-                    department: records?.user?.department?.name,
+                    // Legacy department (primary or single)
+                    department: records?.user?.department?.name || primaryDept?.department?.name,
+                    // NEW: All departments for multi-department users
+                    departments: allDepts || records?.user?.department?.name,
+                    isPrimaryDepartment: !!primaryDept,
                     role: records?.user?.roles[0]?.role?.name,
                 }
             })
@@ -948,6 +968,8 @@ export const getAllUserLiveAttendance = async (req, res) => {
         console.log('Fetching all users live attendance...');
         
         const userId = req.user.id;
+        const { departmentId } = req.query; // NEW: Optional department filter
+        
         //check for this user has permission to view all users attendance
         const userWithRoles = await prisma.user.findUnique({
             where: { id: userId },
@@ -964,9 +986,16 @@ export const getAllUserLiveAttendance = async (req, res) => {
                             }
                         }
                     }
+                },
+                // NEW: Include user's departments for permission checking
+                userDepartments: {
+                    include: {
+                        department: true
+                    }
                 }
             }
         });
+        
         // Check for view_all_user_attendance permission
         const hasViewAllPermission = userWithRoles?.roles.some(userRole => 
             userRole.role.permissions.some(permission => 
@@ -974,9 +1003,17 @@ export const getAllUserLiveAttendance = async (req, res) => {
             )
         );
 
-        if (!hasViewAllPermission) {
+        // NEW: Check for department-specific permission
+        const hasViewDepartmentPermission = userWithRoles?.roles.some(userRole => 
+            userRole.role.permissions.some(permission => 
+                permission.permission.key === 'view_department_attendance'
+            )
+        );
+
+        if (!hasViewAllPermission && !hasViewDepartmentPermission) {
             return res.status(403).json({error:"Access denied. You can only view your own attendance records."});
         }
+        
         const today = new Date();
         const startOfDay = new Date(today);
         startOfDay.setHours(0, 0, 0, 0);
@@ -992,12 +1029,44 @@ export const getAllUserLiveAttendance = async (req, res) => {
             return res.status(404).json({ error: "User not found" });
         }
         
-        // Get all active users
+        // NEW: Build user filter based on permissions and department
+        let userFilter = { 
+            orgId: currentUser.orgId,
+            status: { not: 'inactive' }
+        };
+
+        if (departmentId && hasViewAllPermission) {
+            // Admin filtering by specific department
+            userFilter.OR = [
+                { departmentId: departmentId }, // Legacy single department
+                {
+                    userDepartments: {
+                        some: {
+                            departmentId: departmentId
+                        }
+                    }
+                }
+            ];
+        } else if (!hasViewAllPermission && hasViewDepartmentPermission) {
+            // User can only view their own departments
+            const userDeptIds = userWithRoles.userDepartments.map(ud => ud.departmentId);
+            if (userDeptIds.length > 0) {
+                userFilter.OR = [
+                    { departmentId: { in: userDeptIds } }, // Legacy
+                    {
+                        userDepartments: {
+                            some: {
+                                departmentId: { in: userDeptIds }
+                            }
+                        }
+                    }
+                ];
+            }
+        }
+        
+        // Get filtered users
         const users = await prisma.user.findMany({
-            where: {
-                status: 'active',
-                orgId: currentUser.orgId
-            },
+            where: userFilter,
             select: {
                 id: true,
                 firstName: true,
@@ -1006,6 +1075,21 @@ export const getAllUserLiveAttendance = async (req, res) => {
                 department: {
                     select: {
                         name: true
+                    }
+                },
+                // NEW: Include multi-department data
+                userDepartments: {
+                    include: {
+                        department: {
+                            select: {
+                                id: true,
+                                name: true,
+                                code: true
+                            }
+                        }
+                    },
+                    where: {
+                        isPrimary: true
                     }
                 },
                 roles: {

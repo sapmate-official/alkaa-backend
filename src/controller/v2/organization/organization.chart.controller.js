@@ -34,6 +34,40 @@ export const getOrganizationChart = async (req, res) => {
                                 name: true
                             }
                         },
+                        // NEW: Include users via UserDepartment for multi-department support
+                        userDepartments: {
+                            include: {
+                                user: {
+                                    select: {
+                                        id: true,
+                                        firstName: true,
+                                        lastName: true,
+                                        email: true,
+                                        employeeId: true,
+                                        departmentId: true,
+                                        managerId: true,
+                                        manager: {
+                                            select: {
+                                                id: true,
+                                                firstName: true,
+                                                lastName: true
+                                            }
+                                        },
+                                        subordinates: {
+                                            select: {
+                                                id: true,
+                                                firstName: true,
+                                                lastName: true
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            where: {
+                                isPrimary: true // Only show users where this is their primary department
+                            }
+                        },
+                        // Legacy: Keep direct users relationship for backward compatibility
                         users: {
                             select: {
                                 id: true,
@@ -74,6 +108,17 @@ export const getOrganizationChart = async (req, res) => {
                             select: {
                                 id: true,
                                 name: true
+                            }
+                        },
+                        // NEW: Include multi-department assignments
+                        userDepartments: {
+                            include: {
+                                department: {
+                                    select: {
+                                        id: true,
+                                        name: true
+                                    }
+                                }
                             }
                         },
                         manager: {
@@ -126,6 +171,22 @@ function buildHierarchicalStructure(organization) {
     
     // Process departments
     departments.forEach(dept => {
+        // NEW: Combine legacy users and userDepartments users, prioritizing primary assignments
+        const primaryUsers = dept.userDepartments?.map(ud => ({
+            ...ud.user,
+            isPrimaryDepartment: true
+        })) || [];
+        
+        // Add legacy users that aren't already included via userDepartments
+        const legacyUsers = dept.users?.filter(user => 
+            !primaryUsers.some(pu => pu.id === user.id)
+        ).map(user => ({
+            ...user,
+            isPrimaryDepartment: user.departmentId === dept.id
+        })) || [];
+
+        const allDeptUsers = [...primaryUsers, ...legacyUsers];
+
         departmentMap.set(dept.id, {
             id: dept.id,
             name: dept.name,
@@ -136,12 +197,16 @@ function buildHierarchicalStructure(organization) {
             parentId: dept.parentId,
             headId: dept.headId,
             head: dept.departmentHead,
-            users: dept.users,
+            users: allDeptUsers,
             children: []
         });
     });
       // Process users
     users.forEach(user => {
+        // NEW: Enhanced user data with multi-department info
+        const userDepartments = user.userDepartments || [];
+        const primaryDepartment = userDepartments.find(ud => ud.isPrimary)?.department || user.department;
+        
         userMap.set(user.id, {
             id: user.id,
             firstName: user.firstName,
@@ -151,6 +216,11 @@ function buildHierarchicalStructure(organization) {
             type: 'user',
             departmentId: user.departmentId,
             department: user.department,
+            // NEW: Multi-department data
+            userDepartments: userDepartments,
+            primaryDepartment: primaryDepartment,
+            allDepartments: userDepartments.map(ud => ud.department).filter(Boolean),
+            isMultiDepartment: userDepartments.length > 1,
             managerId: user.managerId,
             manager: user.manager,
             subordinates: user.subordinates,
