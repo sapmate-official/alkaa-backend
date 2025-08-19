@@ -116,16 +116,16 @@ export const checkIn = async (req, res) => {
         const user = req.user;
         console.log('User details:', user);
         
-        // Use client-provided timestamp
+        // Use client-provided timestamp with timezone validation
         const checkInDateTime = new Date(checkInTime);
         const attendanceDate = new Date(date);
         const serverTime = new Date();
         
         console.log('Timestamps:', { 
             clientCheckIn: checkInDateTime, 
+            clientTimezone: clientTimezone,
             attendanceDate, 
-            serverTime,
-            timezone: clientTimezone 
+            serverTime 
         });
 
         // Validate that the client time is reasonable (within 24 hours of server time)
@@ -133,7 +133,10 @@ export const checkIn = async (req, res) => {
         if (timeDifferenceHours > 24) {
             console.log('Time difference too large:', timeDifferenceHours, 'hours');
             return res.status(400).json({ 
-                message: "Client time appears to be incorrect. Please check your device's time settings." 
+                message: "Client time appears to be incorrect. Please check your device's time settings.",
+                serverTime: serverTime.toISOString(),
+                clientTime: checkInDateTime.toISOString(),
+                timezoneReceived: clientTimezone
             });
         }
 
@@ -166,9 +169,9 @@ export const checkIn = async (req, res) => {
             data: {
                 userId: user.id,
                 date: attendanceDate,
-                checkInTime: checkInDateTime, // Use client timestamp
+                checkInTime: checkInDateTime, // Store client timestamp as-is (already in UTC)
                 checkInLocation,
-                notes,
+                notes: `${notes || ''} | Client timezone: ${clientTimezone}`.trim(),
                 sessionNumber: nextSessionNumber,
                 status: 'PRESENT',
                 ipAddress: req.ip,
@@ -218,7 +221,10 @@ export const checkOut = async (req, res) => {
         const timeDifferenceHours = Math.abs(serverTime - checkOutDateTime) / (1000 * 60 * 60);
         if (timeDifferenceHours > 24) {
             return res.status(400).json({ 
-                message: "Client time appears to be incorrect. Please check your device's time settings." 
+                message: "Client time appears to be incorrect. Please check your device's time settings.",
+                serverTime: serverTime.toISOString(),
+                clientTime: checkOutDateTime.toISOString(),
+                timezoneReceived: clientTimezone
             });
         }
 
@@ -310,9 +316,9 @@ export const checkOut = async (req, res) => {
         const updatedSession = await prisma.attendanceRecord.update({
             where: { id: sessionToUpdate.id },
             data: {
-                checkOutTime: checkOutDateTime, // Use client timestamp
+                checkOutTime: checkOutDateTime, // Store client timestamp as-is (already in UTC)
                 checkOutLocation,
-                notes: notes ? `${sessionToUpdate.notes || ''} ${notes}`.trim() : sessionToUpdate.notes,
+                notes: notes ? `${sessionToUpdate.notes || ''} ${notes} | Client timezone: ${clientTimezone}`.trim() : `${sessionToUpdate.notes || ''} | Client timezone: ${clientTimezone}`.trim(),
                 status,
                 duration: sessionDuration,
                 ipAddress: req.ip,
@@ -734,7 +740,10 @@ export const postPastCheckOut = async(req, res) => {
         const timeDifferenceHours = Math.abs(serverTime - checkOutDateTime) / (1000 * 60 * 60);
         if (timeDifferenceHours > 168) { // Allow 1 week difference for past entries
             return res.status(400).json({ 
-                error: "Client time appears to be incorrect. Please check your device's time settings." 
+                error: "Client time appears to be incorrect. Please check your device's time settings.",
+                serverTime: serverTime.toISOString(),
+                clientTime: checkOutDateTime.toISOString(),
+                timezoneReceived: clientTimezone
             });
         }
 
@@ -751,8 +760,8 @@ export const postPastCheckOut = async(req, res) => {
                 id: attendanceId
             },
             data: {
-                checkOutTime: checkOutDateTime, // Use client timestamp
-                notes: notes ? `${attendance.notes || ''} | Late checkout reason: ${notes}`.trim() : attendance.notes,
+                checkOutTime: checkOutDateTime, // Store client timestamp as-is (already in UTC)
+                notes: notes ? `${attendance.notes || ''} | Late checkout reason: ${notes} | Client timezone: ${clientTimezone}`.trim() : `${attendance.notes || ''} | Client timezone: ${clientTimezone}`.trim(),
                 duration: sessionDuration,
                 status: determineStatus(sessionDuration.hours)
             }
@@ -806,7 +815,11 @@ export const createPastAttendance = async (req, res) => {
         
         if (checkInTimeDifference > 365 || checkOutTimeDifference > 365) { // Allow up to 1 year for past entries
             return res.status(400).json({ 
-                message: "Date is too far in the past. Please contact your administrator for older records." 
+                message: "Date is too far in the past. Please contact your administrator for older records.",
+                serverTime: serverTime.toISOString(),
+                clientCheckIn: checkInDateTime.toISOString(),
+                clientCheckOut: checkOutDateTime.toISOString(),
+                timezoneReceived: clientTimezone
             });
         }
         
@@ -843,11 +856,11 @@ export const createPastAttendance = async (req, res) => {
             data: {
                 userId: user.id,
                 date: attendanceDate,
-                checkInTime: checkInDateTime, // Use client timestamp
-                checkOutTime: checkOutDateTime, // Use client timestamp
+                checkInTime: checkInDateTime, // Store client timestamp as-is (already in UTC)
+                checkOutTime: checkOutDateTime, // Store client timestamp as-is (already in UTC)
                 checkInLocation,
                 checkOutLocation,
-                notes: `Past attendance reason: ${notes}`,
+                notes: `Past attendance reason: ${notes} | Client timezone: ${clientTimezone}`,
                 status,
                 duration: sessionDuration,
                 sessionNumber: 1,
