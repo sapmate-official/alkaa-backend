@@ -527,6 +527,7 @@ const createCompleteOrganization = [
                         status: 'inactive', 
                         verificationToken: verificationToken,
                         hiredDate: new Date(),
+                        employeeId: `EMP${Math.floor(1000 + Math.random() * 9000)}`,
                         roles: {
                             create: [{
                                 role: {
