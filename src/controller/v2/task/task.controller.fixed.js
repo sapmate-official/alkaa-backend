@@ -99,9 +99,6 @@ export const taskController = {
                         include: {
                             assignedTo: {
                                 select: { id: true, firstName: true, lastName: true, email: true }
-                            },
-                            assignedBy: {
-                                select: { id: true, firstName: true, lastName: true, email: true }
                             }
                         }
                     },
@@ -165,9 +162,6 @@ export const taskController = {
                     assignments: {
                         include: {
                             assignedTo: {
-                                select: { id: true, firstName: true, lastName: true, email: true }
-                            },
-                            assignedBy: {
                                 select: { id: true, firstName: true, lastName: true, email: true }
                             }
                         }
@@ -406,9 +400,6 @@ export const taskController = {
                     assignments: {
                         include: {
                             assignedTo: {
-                                select: { id: true, firstName: true, lastName: true, email: true }
-                            },
-                            assignedBy: {
                                 select: { id: true, firstName: true, lastName: true, email: true }
                             }
                         }

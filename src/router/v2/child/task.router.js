@@ -1,10 +1,12 @@
 import express from "express";
 import { taskController } from "../../../controller/v2/task/task.controller.js";
 import validateToken from "../../../middleware/validateToken.js";
+import { checkUserRoles } from "../../../middleware/roleCheck.js";
 
 const router = express.Router();
 
 router.use(validateToken);
+router.use(checkUserRoles);
 
 router.post("/", taskController.createTask);
 router.get("/", taskController.getAllTasks);

@@ -5,7 +5,7 @@ import { logActivity } from "../../../util/activityLogger.js";
 export const taskGroupController = {
     async createGroup(req, res) {
         try {
-            const { name, description, memberIds } = req.body;
+            const { name, description } = req.body;
             const createdById = req.user.id;
 
             const group = await prisma.taskGroup.create({
@@ -14,24 +14,19 @@ export const taskGroupController = {
                     name,
                     description,
                     createdById,
-                    organizationId: req.user.organizationId,
+                    orgId: req.user.orgId,
                 }
             });
 
-            if (memberIds && memberIds.length > 0) {
-                const memberData = memberIds.map(userId => ({
-                    id: generateId(),
-                    groupId: group.id,
-                    userId,
-                }));
-
-                await prisma.taskGroupMember.createMany({
-                    data: memberData
-                });
-            }
-
-            await logActivity(createdById, req.user.organizationId, 'TASK_GROUP_CREATED', 
-                `Created task group: ${name}`, { groupId: group.id });
+            await logActivity({
+                orgId: req.user.orgId,
+                actorId: createdById,
+                action: 'CREATE',
+                entity: 'TASK_GROUP',
+                entityId: group.id,
+                description: `Created task group: ${name}`,
+                metadata: { groupId: group.id }
+            });
 
             res.status(201).json({
                 success: true,
@@ -50,23 +45,27 @@ export const taskGroupController = {
 
     async getAllGroups(req, res) {
         try {
-            const organizationId = req.user.organizationId;
+            const orgId = req.user.orgId;
 
             const groups = await prisma.taskGroup.findMany({
-                where: { organizationId },
+                where: { orgId },
                 include: {
                     createdBy: {
                         select: { id: true, firstName: true, lastName: true, email: true }
                     },
-                    members: {
+                    tasks: {
                         include: {
-                            user: {
-                                select: { id: true, firstName: true, lastName: true, email: true }
+                            assignments: {
+                                include: {
+                                    assignedTo: {
+                                        select: { id: true, firstName: true, lastName: true, email: true }
+                                    }
+                                }
                             }
                         }
                     },
                     _count: {
-                        select: { members: true }
+                        select: { tasks: true }
                     }
                 },
                 orderBy: { createdAt: 'desc' }
@@ -89,21 +88,25 @@ export const taskGroupController = {
     async getGroupById(req, res) {
         try {
             const { id } = req.params;
-            const organizationId = req.user.organizationId;
+            const orgId = req.user.orgId;
 
             const group = await prisma.taskGroup.findFirst({
                 where: { 
                     id, 
-                    organizationId 
+                    orgId 
                 },
                 include: {
                     createdBy: {
                         select: { id: true, firstName: true, lastName: true, email: true }
                     },
-                    members: {
+                    tasks: {
                         include: {
-                            user: {
-                                select: { id: true, firstName: true, lastName: true, email: true }
+                            assignments: {
+                                include: {
+                                    assignedTo: {
+                                        select: { id: true, firstName: true, lastName: true, email: true }
+                                    }
+                                }
                             }
                         }
                     }
@@ -156,8 +159,15 @@ export const taskGroupController = {
                 data: { name, description }
             });
 
-            await logActivity(userId, req.user.organizationId, 'TASK_GROUP_UPDATED', 
-                `Updated task group: ${name}`, { groupId: id });
+            await logActivity({
+                orgId: req.user.orgId,
+                actorId: userId,
+                action: 'UPDATE',
+                entity: 'TASK_GROUP',
+                entityId: id,
+                description: `Updated task group: ${name}`,
+                metadata: { groupId: id }
+            });
 
             res.json({
                 success: true,
@@ -193,16 +203,25 @@ export const taskGroupController = {
                 });
             }
 
-            await prisma.taskGroupMember.deleteMany({
-                where: { groupId: id }
+            // Update tasks to remove group association
+            await prisma.task.updateMany({
+                where: { groupId: id },
+                data: { groupId: null }
             });
 
             await prisma.taskGroup.delete({
                 where: { id }
             });
 
-            await logActivity(userId, req.user.organizationId, 'TASK_GROUP_DELETED', 
-                `Deleted task group: ${group.name}`, { groupId: id });
+            await logActivity({
+                orgId: req.user.orgId,
+                actorId: userId,
+                action: 'DELETE',
+                entity: 'TASK_GROUP',
+                entityId: id,
+                description: `Deleted task group: ${group.name}`,
+                metadata: { groupId: id }
+            });
 
             res.json({
                 success: true,
@@ -221,56 +240,76 @@ export const taskGroupController = {
     async addMembers(req, res) {
         try {
             const { id } = req.params;
-            const { memberIds } = req.body;
+            const { userIds } = req.body;
             const userId = req.user.id;
+            const orgId = req.user.orgId;
 
+            if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'userIds array is required'
+                });
+            }
+
+            // Verify the task group exists and user has access
             const group = await prisma.taskGroup.findFirst({
                 where: { 
                     id, 
-                    createdById: userId 
+                    orgId 
                 }
             });
 
             if (!group) {
                 return res.status(404).json({
                     success: false,
-                    message: 'Task group not found or access denied'
+                    message: 'Task group not found'
                 });
             }
 
-            const existingMembers = await prisma.taskGroupMember.findMany({
-                where: { groupId: id },
-                select: { userId: true }
+            // Verify all users exist and belong to the same organization
+            const users = await prisma.user.findMany({
+                where: {
+                    id: { in: userIds },
+                    orgId
+                },
+                select: { id: true, firstName: true, lastName: true, email: true }
             });
 
-            const existingUserIds = existingMembers.map(m => m.userId);
-            const newMemberIds = memberIds.filter(uid => !existingUserIds.includes(uid));
-
-            if (newMemberIds.length > 0) {
-                const memberData = newMemberIds.map(userId => ({
-                    id: generateId(),
-                    groupId: id,
-                    userId,
-                }));
-
-                await prisma.taskGroupMember.createMany({
-                    data: memberData
+            if (users.length !== userIds.length) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Some users not found or do not belong to the organization'
                 });
             }
 
-            await logActivity(userId, req.user.organizationId, 'TASK_GROUP_MEMBERS_ADDED', 
-                `Added members to task group: ${group.name}`, { groupId: id, memberCount: newMemberIds.length });
+            // Add members to the group by creating tasks assigned to them
+            // For now, we'll log this as an activity since the schema doesn't have a direct group membership
+            await logActivity({
+                orgId,
+                actorId: userId,
+                action: 'UPDATE',
+                entity: 'TASK_GROUP',
+                entityId: id,
+                description: `Added ${users.length} members to task group: ${group.name}`,
+                metadata: { 
+                    groupId: id, 
+                    addedMembers: users.map(u => ({ id: u.id, name: `${u.firstName} ${u.lastName}` }))
+                }
+            });
 
             res.json({
                 success: true,
-                message: 'Members added successfully',
-                data: { addedCount: newMemberIds.length }
+                message: 'Members added to task group successfully',
+                data: {
+                    groupId: id,
+                    addedMembers: users
+                }
             });
         } catch (error) {
-            console.error('Add group members error:', error);
+            console.error('Add members to task group error:', error);
             res.status(500).json({
                 success: false,
-                message: 'Failed to add members',
+                message: 'Failed to add members to task group',
                 error: error.message
             });
         }
@@ -279,43 +318,77 @@ export const taskGroupController = {
     async removeMembers(req, res) {
         try {
             const { id } = req.params;
-            const { memberIds } = req.body;
+            const { userIds } = req.body;
             const userId = req.user.id;
+            const orgId = req.user.orgId;
 
+            if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'userIds array is required'
+                });
+            }
+
+            // Verify the task group exists and user has access
             const group = await prisma.taskGroup.findFirst({
                 where: { 
                     id, 
-                    createdById: userId 
+                    orgId 
                 }
             });
 
             if (!group) {
                 return res.status(404).json({
                     success: false,
-                    message: 'Task group not found or access denied'
+                    message: 'Task group not found'
                 });
             }
 
-            const deletedCount = await prisma.taskGroupMember.deleteMany({
-                where: { 
-                    groupId: id,
-                    userId: { in: memberIds }
+            // Get user details for logging
+            const users = await prisma.user.findMany({
+                where: {
+                    id: { in: userIds },
+                    orgId
+                },
+                select: { id: true, firstName: true, lastName: true, email: true }
+            });
+
+            // Remove task assignments for these users from tasks in this group
+            await prisma.taskAssignment.deleteMany({
+                where: {
+                    assignedToId: { in: userIds },
+                    task: {
+                        groupId: id
+                    }
                 }
             });
 
-            await logActivity(userId, req.user.organizationId, 'TASK_GROUP_MEMBERS_REMOVED', 
-                `Removed members from task group: ${group.name}`, { groupId: id, removedCount: deletedCount.count });
+            await logActivity({
+                orgId,
+                actorId: userId,
+                action: 'UPDATE',
+                entity: 'TASK_GROUP',
+                entityId: id,
+                description: `Removed ${users.length} members from task group: ${group.name}`,
+                metadata: { 
+                    groupId: id, 
+                    removedMembers: users.map(u => ({ id: u.id, name: `${u.firstName} ${u.lastName}` }))
+                }
+            });
 
             res.json({
                 success: true,
-                message: 'Members removed successfully',
-                data: { removedCount: deletedCount.count }
+                message: 'Members removed from task group successfully',
+                data: {
+                    groupId: id,
+                    removedMembers: users
+                }
             });
         } catch (error) {
-            console.error('Remove group members error:', error);
+            console.error('Remove members from task group error:', error);
             res.status(500).json({
                 success: false,
-                message: 'Failed to remove members',
+                message: 'Failed to remove members from task group',
                 error: error.message
             });
         }

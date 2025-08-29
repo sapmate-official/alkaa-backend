@@ -112,8 +112,8 @@ const taskController = {
                             assignedTo: {
                                 select: { id: true, firstName: true, lastName: true, email: true }
                             },
-                            group: {
-                                select: { id: true, name: true }
+                            assignedBy: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
                             }
                         }
                     },
@@ -176,8 +176,8 @@ const taskController = {
                             assignedTo: {
                                 select: { id: true, firstName: true, lastName: true, email: true }
                             },
-                            group: {
-                                select: { id: true, name: true }
+                            assignedBy: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
                             }
                         }
                     },
@@ -341,8 +341,8 @@ const taskController = {
                     assignments: {
                         where: { assignedToId: userId },
                         include: {
-                            group: {
-                                select: { id: true, name: true }
+                            assignedBy: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
                             }
                         }
                     },
@@ -397,8 +397,8 @@ const taskController = {
                             assignedTo: {
                                 select: { id: true, firstName: true, lastName: true, email: true }
                             },
-                            group: {
-                                select: { id: true, name: true }
+                            assignedBy: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
                             }
                         }
                     },

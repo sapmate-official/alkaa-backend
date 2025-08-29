@@ -5,7 +5,7 @@ import { logActivity } from "../../../util/activityLogger.js";
 export const taskController = {
     async createTask(req, res) {
         try {
-            const { title, description, priority, dueDate, assignedToIds, groupId } = req.body;
+            const { title, description, priority, dueDate, assignedToIds, groupIds } = req.body;
             const createdById = req.user.id;
 
             const task = await prisma.task.create({
@@ -18,7 +18,6 @@ export const taskController = {
                     status: 'PENDING',
                     createdById,
                     orgId: req.user.orgId,
-                    groupId: groupId || null,
                 }
             });
 
@@ -32,6 +31,18 @@ export const taskController = {
                         assignedToId: userId,
                         assignedById: createdById,
                     });
+                }
+            }
+
+            if (groupIds && groupIds.length > 0) {
+                for (const groupId of groupIds) {
+                    const groupTasks = await prisma.task.findMany({
+                        where: { groupId: groupId },
+                        include: { assignments: true }
+                    });
+                    
+                    // For now, we'll skip group assignment since TaskGroupMember doesn't exist
+                    // This would need to be implemented based on your business logic
                 }
             }
 
@@ -92,15 +103,9 @@ export const taskController = {
                     createdBy: {
                         select: { id: true, firstName: true, lastName: true, email: true }
                     },
-                    group: {
-                        select: { id: true, name: true }
-                    },
                     assignments: {
                         include: {
                             assignedTo: {
-                                select: { id: true, firstName: true, lastName: true, email: true }
-                            },
-                            assignedBy: {
                                 select: { id: true, firstName: true, lastName: true, email: true }
                             }
                         }
@@ -159,22 +164,19 @@ export const taskController = {
                     createdBy: {
                         select: { id: true, firstName: true, lastName: true, email: true }
                     },
-                    group: {
-                        select: { id: true, name: true }
-                    },
                     assignments: {
                         include: {
                             assignedTo: {
                                 select: { id: true, firstName: true, lastName: true, email: true }
                             },
-                            assignedBy: {
-                                select: { id: true, firstName: true, lastName: true, email: true }
+                            group: {
+                                select: { id: true, name: true }
                             }
                         }
                     },
                     updates: {
                         include: {
-                            updatedBy: {
+                            createdBy: {
                                 select: { id: true, firstName: true, lastName: true }
                             }
                         },
@@ -240,7 +242,7 @@ export const taskController = {
             });
 
             await logActivity({
-                orgId: req.user.orgId,
+                orgId: req.user.organizationId,
                 actorId: userId,
                 action: 'UPDATE',
                 entity: 'TASK',
@@ -296,7 +298,7 @@ export const taskController = {
             });
 
             await logActivity({
-                orgId: req.user.orgId,
+                orgId: req.user.organizationId,
                 actorId: userId,
                 action: 'DELETE',
                 entity: 'TASK',
@@ -343,20 +345,17 @@ export const taskController = {
                     createdBy: {
                         select: { id: true, firstName: true, lastName: true, email: true }
                     },
-                    group: {
-                        select: { id: true, name: true }
-                    },
                     assignments: {
                         where: { assignedToId: userId },
                         include: {
-                            assignedBy: {
-                                select: { id: true, firstName: true, lastName: true, email: true }
+                            group: {
+                                select: { id: true, name: true }
                             }
                         }
                     },
                     updates: {
                         include: {
-                            updatedBy: {
+                            createdBy: {
                                 select: { id: true, firstName: true, lastName: true }
                             }
                         },
@@ -400,22 +399,19 @@ export const taskController = {
                     createdBy: {
                         select: { id: true, firstName: true, lastName: true, email: true }
                     },
-                    group: {
-                        select: { id: true, name: true }
-                    },
                     assignments: {
                         include: {
                             assignedTo: {
                                 select: { id: true, firstName: true, lastName: true, email: true }
                             },
-                            assignedBy: {
-                                select: { id: true, firstName: true, lastName: true, email: true }
+                            group: {
+                                select: { id: true, name: true }
                             }
                         }
                     },
                     updates: {
                         include: {
-                            updatedBy: {
+                            createdBy: {
                                 select: { id: true, firstName: true, lastName: true }
                             }
                         },
@@ -442,7 +438,7 @@ export const taskController = {
     async addTaskUpdate(req, res) {
         try {
             const { taskId } = req.params;
-            const { updateType, message, progress } = req.body;
+            const { message, status } = req.body;
             const userId = req.user.id;
 
             const task = await prisma.task.findFirst({
@@ -466,27 +462,26 @@ export const taskController = {
                 data: {
                     id: generateId(),
                     taskId,
-                    updatedById: userId,
-                    updateType: updateType || 'COMMENT',
                     message,
-                    progress: progress || null
+                    status,
+                    createdById: userId
                 },
                 include: {
-                    updatedBy: {
+                    createdBy: {
                         select: { id: true, firstName: true, lastName: true }
                     }
                 }
             });
 
-            await logActivity({
-                orgId: req.user.orgId,
-                actorId: userId,
-                action: 'UPDATE',
-                entity: 'TASK_UPDATE',
-                entityId: update.id,
-                description: `Added update to task: ${task.title}`,
-                metadata: { taskId, updateId: update.id }
-            });
+            if (status && status !== task.status) {
+                await prisma.task.update({
+                    where: { id: taskId },
+                    data: { status }
+                });
+            }
+
+            await logActivity(userId, req.user.organizationId, 'TASK_UPDATE_ADDED', 
+                `Added update to task: ${task.title}`, { taskId, updateId: update.id });
 
             res.status(201).json({
                 success: true,

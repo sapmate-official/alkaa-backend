@@ -1,10 +1,8 @@
-const { PrismaClient } = require('@prisma/client');
-const { generateId } = require('../../../util/generate');
-const { logActivity } = require('../../../util/activityLogger');
+import prisma from "../../../db/connectDb.js";
+import { generateId } from "../../../util/generate.js";
+import { logActivity } from "../../../util/activityLogger.js";
 
-const prisma = new PrismaClient();
-
-const taskGroupController = {
+export const taskGroupController = {
     async createGroup(req, res) {
         try {
             const { name, description, memberIds } = req.body;
@@ -60,19 +58,15 @@ const taskGroupController = {
                     createdBy: {
                         select: { id: true, firstName: true, lastName: true, email: true }
                     },
-                    tasks: {
+                    members: {
                         include: {
-                            assignments: {
-                                include: {
-                                    assignedTo: {
-                                        select: { id: true, firstName: true, lastName: true, email: true }
-                                    }
-                                }
+                            user: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
                             }
                         }
                     },
                     _count: {
-                        select: { tasks: true }
+                        select: { members: true }
                     }
                 },
                 orderBy: { createdAt: 'desc' }
@@ -106,14 +100,10 @@ const taskGroupController = {
                     createdBy: {
                         select: { id: true, firstName: true, lastName: true, email: true }
                     },
-                    tasks: {
+                    members: {
                         include: {
-                            assignments: {
-                                include: {
-                                    assignedTo: {
-                                        select: { id: true, firstName: true, lastName: true, email: true }
-                                    }
-                                }
+                            user: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
                             }
                         }
                     }
@@ -331,5 +321,3 @@ const taskGroupController = {
         }
     }
 };
-
-module.exports = taskGroupController;
