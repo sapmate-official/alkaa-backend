@@ -44,6 +44,8 @@ model Organization {
   PermissionPreset      PermissionPreset[]
   roles                 Role[]
   users                 User[]
+  tasks                 Task[]
+  taskGroups            TaskGroup[]
 }
 
 model Organization_admin {
@@ -216,6 +218,12 @@ model User {
   // NEW: Multi-department relations
   userDepartments              UserDepartment[]
   assignedDepartments          UserDepartment[]      @relation("DepartmentAssignments")
+  // Task Management relations
+  createdTasks                 Task[]                @relation("TaskCreator")
+  createdTaskGroups            TaskGroup[]           @relation("TaskGroupCreator")
+  assignedTasks                TaskAssignment[]      @relation("TaskAssignee")
+  assignedToTasks              TaskAssignment[]      @relation("TaskAssigner")
+  taskUpdates                  TaskUpdate[]          @relation("TaskUpdater")
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -608,6 +616,120 @@ model OnboardingCandidate {
   @@index([verificationToken])
 }
 
+model Task {
+  id              String         @id @default(cuid())
+  title           String
+  description     String?
+  priority        TaskPriority   @default(MEDIUM)
+  status          TaskStatus     @default(PENDING)
+  dueDate         DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  createdById     String
+  orgId           String
+  groupId         String?
+  estimatedHours  Float?
+  tags            String[]
+  attachments     Json?
+  
+  createdBy       User           @relation("TaskCreator", fields: [createdById], references: [id])
+  organization    Organization   @relation(fields: [orgId], references: [id])
+  group           TaskGroup?     @relation(fields: [groupId], references: [id])
+  assignments     TaskAssignment[]
+  updates         TaskUpdate[]
+  
+  @@index([orgId, status])
+  @@index([createdById])
+  @@index([dueDate])
+}
+
+model TaskGroup {
+  id              String         @id @default(cuid())
+  name            String
+  description     String?
+  orgId           String
+  createdById     String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  organization    Organization   @relation(fields: [orgId], references: [id])
+  createdBy       User           @relation("TaskGroupCreator", fields: [createdById], references: [id])
+  tasks           Task[]
+  
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
+model TaskAssignment {
+  id              String         @id @default(cuid())
+  taskId          String
+  assignedToId    String
+  assignedById    String
+  assignedAt      DateTime       @default(now())
+  status          AssignmentStatus @default(ASSIGNED)
+  acceptedAt      DateTime?
+  completedAt     DateTime?
+  remarks         String?
+  
+  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignedTo      User           @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  assignedBy      User           @relation("TaskAssigner", fields: [assignedById], references: [id])
+  
+  @@unique([taskId, assignedToId])
+  @@index([assignedToId, status])
+  @@index([taskId])
+}
+
+model TaskUpdate {
+  id              String         @id @default(cuid())
+  taskId          String
+  updatedById     String
+  updateType      UpdateType
+  message         String
+  attachments     Json?
+  progress        Int?
+  createdAt       DateTime       @default(now())
+  metadata        Json?
+  
+  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  updatedBy       User           @relation("TaskUpdater", fields: [updatedById], references: [id])
+  
+  @@index([taskId, createdAt])
+  @@index([updatedById])
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  ON_HOLD
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+
+enum UpdateType {
+  STATUS_CHANGE
+  PROGRESS_UPDATE
+  COMMENT
+  ATTACHMENT
+  COMPLETION
+  REJECTION
+}
+
 enum BillingStatus {
   UNPAID
   PAID
@@ -700,6 +822,11 @@ enum ActivityAction {
   UPLOAD_DOCUMENT
   VIEW_SENSITIVE_DATA
   ABORT
+  ASSIGN_TASK
+  COMPLETE_TASK
+  UPDATE_TASK
+  REJECT_TASK
+  ACCEPT_TASK
 }
 
 enum ActivityEntity {
@@ -717,6 +844,10 @@ enum ActivityEntity {
   DOCUMENT
   SETTINGS
   ONBOARDING_CANDIDATE
+  TASK
+  TASK_GROUP
+  TASK_ASSIGNMENT
+  TASK_UPDATE
 }
 
 enum OnboardingStatus {
