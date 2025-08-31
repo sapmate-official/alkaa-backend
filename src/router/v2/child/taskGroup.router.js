@@ -1,10 +1,12 @@
 import express from "express";
 import { taskGroupController } from "../../../controller/v2/taskGroup/taskGroup.controller.js";
 import validateToken from "../../../middleware/validateToken.js";
+import { checkUserRoles } from "../../../middleware/roleCheck.js";
 
 const router = express.Router();
 
 router.use(validateToken);
+router.use(checkUserRoles);
 
 router.post("/", taskGroupController.createGroup);
 router.get("/", taskGroupController.getAllGroups);

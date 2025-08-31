@@ -264,6 +264,107 @@ export const taskController = {
         }
     },
 
+    async patchTask(req, res) {
+        try {
+            const { id } = req.params;
+            const userId = req.user.id;
+
+            // Check if user has permission to update this task
+            const existingTask = await prisma.task.findFirst({
+                where: {
+                    id,
+                    OR: [
+                        { createdById: userId },
+                        { assignments: { some: { assignedToId: userId } } }
+                    ]
+                }
+            });
+
+            if (!existingTask) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Task not found or access denied'
+                });
+            }
+
+            // Only update fields that are provided in the request
+            const updateData = {};
+            const { title, description, priority, dueDate, status } = req.body;
+            
+            if (title !== undefined) updateData.title = title;
+            if (description !== undefined) updateData.description = description;
+            if (priority !== undefined) updateData.priority = priority;
+            if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
+            if (status !== undefined) updateData.status = status;
+
+            // If no fields to update, return current task
+            if (Object.keys(updateData).length === 0) {
+                return res.json({
+                    success: true,
+                    message: 'No changes provided',
+                    data: existingTask
+                });
+            }
+
+            const updatedTask = await prisma.task.update({
+                where: { id },
+                data: updateData,
+                include: {
+                    createdBy: {
+                        select: { id: true, firstName: true, lastName: true, email: true }
+                    },
+                    group: {
+                        select: { id: true, name: true }
+                    },
+                    assignments: {
+                        include: {
+                            assignedTo: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
+                            },
+                            assignedBy: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
+                            }
+                        }
+                    },
+                    updates: {
+                        include: {
+                            updatedBy: {
+                                select: { id: true, firstName: true, lastName: true }
+                            }
+                        },
+                        orderBy: { createdAt: 'desc' }
+                    }
+                }
+            });
+
+            await logActivity({
+                orgId: req.user.orgId,
+                actorId: userId,
+                action: 'UPDATE',
+                entity: 'TASK',
+                entityId: id,
+                description: `Updated task: ${updatedTask.title}`,
+                metadata: { 
+                    taskId: id,
+                    fieldsUpdated: Object.keys(updateData)
+                }
+            });
+
+            res.json({
+                success: true,
+                message: 'Task updated successfully',
+                data: updatedTask
+            });
+        } catch (error) {
+            console.error('Patch task error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to update task',
+                error: error.message
+            });
+        }
+    },
+
     async deleteTask(req, res) {
         try {
             const { id } = req.params;
@@ -324,7 +425,7 @@ export const taskController = {
             const { userId } = req.params;
             const requesterId = req.user.id;
 
-            if (userId !== requesterId && !req.user.isManager) {
+            if (userId !== requesterId && !req.isManager) {
                 return res.status(403).json({
                     success: false,
                     message: 'Access denied'

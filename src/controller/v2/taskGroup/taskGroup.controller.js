@@ -71,9 +71,35 @@ export const taskGroupController = {
                 orderBy: { createdAt: 'desc' }
             });
 
+            // Process groups to add member information
+            const processedGroups = groups.map(group => {
+                // Extract unique members from task assignments
+                const memberMap = new Map();
+                group.tasks.forEach(task => {
+                    task.assignments.forEach(assignment => {
+                        const member = assignment.assignedTo;
+                        memberMap.set(member.id, member);
+                    });
+                });
+                
+                const members = Array.from(memberMap.values());
+                
+                return {
+                    ...group,
+                    members,
+                    memberCount: members.length,
+                    stats: {
+                        totalTasks: group.tasks.length,
+                        pendingTasks: group.tasks.filter(t => t.status === 'PENDING').length,
+                        inProgressTasks: group.tasks.filter(t => t.status === 'IN_PROGRESS').length,
+                        completedTasks: group.tasks.filter(t => t.status === 'COMPLETED').length
+                    }
+                };
+            });
+
             res.json({
                 success: true,
-                data: groups
+                data: processedGroups
             });
         } catch (error) {
             console.error('Get task groups error:', error);
@@ -105,10 +131,22 @@ export const taskGroupController = {
                                 include: {
                                     assignedTo: {
                                         select: { id: true, firstName: true, lastName: true, email: true }
+                                    },
+                                    assignedBy: {
+                                        select: { id: true, firstName: true, lastName: true, email: true }
                                     }
                                 }
+                            },
+                            updates: {
+                                include: {
+                                    updatedBy: {
+                                        select: { id: true, firstName: true, lastName: true }
+                                    }
+                                },
+                                orderBy: { createdAt: 'desc' }
                             }
-                        }
+                        },
+                        orderBy: { createdAt: 'desc' }
                     }
                 }
             });
@@ -120,9 +158,32 @@ export const taskGroupController = {
                 });
             }
 
+            // Extract unique members from task assignments
+            const memberMap = new Map();
+            group.tasks.forEach(task => {
+                task.assignments.forEach(assignment => {
+                    const member = assignment.assignedTo;
+                    memberMap.set(member.id, member);
+                });
+            });
+            
+            const members = Array.from(memberMap.values());
+            
+            const processedGroup = {
+                ...group,
+                members,
+                memberCount: members.length,
+                stats: {
+                    totalTasks: group.tasks.length,
+                    pendingTasks: group.tasks.filter(t => t.status === 'PENDING').length,
+                    inProgressTasks: group.tasks.filter(t => t.status === 'IN_PROGRESS').length,
+                    completedTasks: group.tasks.filter(t => t.status === 'COMPLETED').length
+                }
+            };
+
             res.json({
                 success: true,
-                data: group
+                data: processedGroup
             });
         } catch (error) {
             console.error('Get task group error:', error);
@@ -251,18 +312,19 @@ export const taskGroupController = {
                 });
             }
 
-            // Verify the task group exists and user has access
+            // Verify the task group exists and user has access (only creator can add members)
             const group = await prisma.taskGroup.findFirst({
                 where: { 
                     id, 
-                    orgId 
+                    orgId,
+                    createdById: userId
                 }
             });
 
             if (!group) {
                 return res.status(404).json({
                     success: false,
-                    message: 'Task group not found'
+                    message: 'Task group not found or access denied'
                 });
             }
 
@@ -282,18 +344,63 @@ export const taskGroupController = {
                 });
             }
 
-            // Add members to the group by creating tasks assigned to them
-            // For now, we'll log this as an activity since the schema doesn't have a direct group membership
+            // Create a placeholder task for the group if it doesn't have any tasks yet
+            // This allows us to assign members to the group through task assignments
+            let placeholderTask = await prisma.task.findFirst({
+                where: {
+                    groupId: id,
+                    title: `[GROUP_PLACEHOLDER] ${group.name}`
+                }
+            });
+
+            if (!placeholderTask) {
+                placeholderTask = await prisma.task.create({
+                    data: {
+                        id: generateId(),
+                        title: `[GROUP_PLACEHOLDER] ${group.name}`,
+                        description: 'This is a placeholder task to manage group membership',
+                        priority: 'LOW',
+                        status: 'COMPLETED',
+                        createdById: userId,
+                        orgId,
+                        groupId: id,
+                    }
+                });
+            }
+
+            // Create task assignments for the new members
+            const existingAssignments = await prisma.taskAssignment.findMany({
+                where: {
+                    taskId: placeholderTask.id,
+                    assignedToId: { in: userIds }
+                }
+            });
+
+            const existingUserIds = existingAssignments.map(a => a.assignedToId);
+            const newUserIds = userIds.filter(uid => !existingUserIds.includes(uid));
+
+            if (newUserIds.length > 0) {
+                await prisma.taskAssignment.createMany({
+                    data: newUserIds.map(assignedToId => ({
+                        id: generateId(),
+                        taskId: placeholderTask.id,
+                        assignedToId,
+                        assignedById: userId,
+                        status: 'COMPLETED'
+                    }))
+                });
+            }
+
             await logActivity({
                 orgId,
                 actorId: userId,
                 action: 'UPDATE',
                 entity: 'TASK_GROUP',
                 entityId: id,
-                description: `Added ${users.length} members to task group: ${group.name}`,
+                description: `Added ${newUserIds.length} new members to task group: ${group.name}`,
                 metadata: { 
                     groupId: id, 
-                    addedMembers: users.map(u => ({ id: u.id, name: `${u.firstName} ${u.lastName}` }))
+                    addedMembers: users.filter(u => newUserIds.includes(u.id)).map(u => ({ id: u.id, name: `${u.firstName} ${u.lastName}` }))
                 }
             });
 
@@ -302,7 +409,8 @@ export const taskGroupController = {
                 message: 'Members added to task group successfully',
                 data: {
                     groupId: id,
-                    addedMembers: users
+                    addedMembers: users.filter(u => newUserIds.includes(u.id)),
+                    skippedMembers: users.filter(u => existingUserIds.includes(u.id))
                 }
             });
         } catch (error) {
@@ -329,18 +437,19 @@ export const taskGroupController = {
                 });
             }
 
-            // Verify the task group exists and user has access
+            // Verify the task group exists and user has access (only creator can remove members)
             const group = await prisma.taskGroup.findFirst({
                 where: { 
                     id, 
-                    orgId 
+                    orgId,
+                    createdById: userId
                 }
             });
 
             if (!group) {
                 return res.status(404).json({
                     success: false,
-                    message: 'Task group not found'
+                    message: 'Task group not found or access denied'
                 });
             }
 
@@ -353,8 +462,8 @@ export const taskGroupController = {
                 select: { id: true, firstName: true, lastName: true, email: true }
             });
 
-            // Remove task assignments for these users from tasks in this group
-            await prisma.taskAssignment.deleteMany({
+            // Remove task assignments for these users from ALL tasks in this group
+            const deletedAssignments = await prisma.taskAssignment.deleteMany({
                 where: {
                     assignedToId: { in: userIds },
                     task: {
@@ -372,7 +481,8 @@ export const taskGroupController = {
                 description: `Removed ${users.length} members from task group: ${group.name}`,
                 metadata: { 
                     groupId: id, 
-                    removedMembers: users.map(u => ({ id: u.id, name: `${u.firstName} ${u.lastName}` }))
+                    removedMembers: users.map(u => ({ id: u.id, name: `${u.firstName} ${u.lastName}` })),
+                    deletedAssignments: deletedAssignments.count
                 }
             });
 
@@ -381,7 +491,8 @@ export const taskGroupController = {
                 message: 'Members removed from task group successfully',
                 data: {
                     groupId: id,
-                    removedMembers: users
+                    removedMembers: users,
+                    deletedAssignments: deletedAssignments.count
                 }
             });
         } catch (error) {
