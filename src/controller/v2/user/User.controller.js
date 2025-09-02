@@ -26,7 +26,10 @@ const findUserByIdOrEmployeeId = async (identifier, includeOptions = {}) => {
 export const getUser = async (req, res) => {
     try {
         const { orgId } = req.query;
-        const users = await prisma.user.findMany({ where: { orgId } ,
+        const { onlyActive } = req.query;
+        const users = await prisma.user.findMany({ where: { orgId ,
+            ...(onlyActive === 'true' ? { status: 'active' } : {})
+        } ,
         include:{
             organization:true,
             department:true,
