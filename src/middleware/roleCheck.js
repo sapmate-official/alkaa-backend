@@ -1,3 +1,5 @@
+import prisma from "../db/connectDb.js";
+
 const roleCheckManager = (req, res, next) => {
     const user = req.user;
     if(user.role !== "MANAGER"){
@@ -31,7 +33,15 @@ const checkUserRoles = async (req, res, next) => {
             include: {
                 roles: {
                     include: {
-                        role: true
+                        role: {
+                            include: {
+                                permissions: {
+                                    include: {
+                                        permission: true
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -46,8 +56,8 @@ const checkUserRoles = async (req, res, next) => {
         
         // Check if the user is an org admin based on role permissions
         const isOrgAdmin = userWithRoles.roles.some(userRole => 
-            userRole.role.permissions.some(perm => 
-                perm.permission?.key === "view_salary_slip_of_all"
+            userRole.role.permissions.some(rolePermission => 
+                rolePermission.permission?.key === "view_salary_slip_of_all"
             )
         );
         
