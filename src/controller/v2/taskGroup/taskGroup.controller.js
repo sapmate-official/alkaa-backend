@@ -18,6 +18,18 @@ export const taskGroupController = {
                 }
             });
 
+            // Automatically add the creator as an admin member
+            await prisma.taskGroupMember.create({
+                data: {
+                    id: generateId(),
+                    groupId: group.id,
+                    userId: createdById,
+                    role: 'ADMIN',
+                    addedById: createdById,
+                    isActive: true
+                }
+            });
+
             await logActivity({
                 orgId: req.user.orgId,
                 actorId: createdById,
@@ -54,6 +66,13 @@ export const taskGroupController = {
                         select: { id: true, firstName: true, lastName: true, email: true }
                     },
                     tasks: {
+                        where: {
+                            NOT: {
+                                title: {
+                                    startsWith: "[GROUP_PLACEHOLDER]"
+                                }
+                            }
+                        },
                         include: {
                             assignments: {
                                 include: {
@@ -61,6 +80,17 @@ export const taskGroupController = {
                                         select: { id: true, firstName: true, lastName: true, email: true }
                                     }
                                 }
+                            }
+                        }
+                    },
+                    members: {
+                        where: { isActive: true },
+                        include: {
+                            user: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
+                            },
+                            addedBy: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
                             }
                         }
                     },
@@ -73,16 +103,12 @@ export const taskGroupController = {
 
             // Process groups to add member information
             const processedGroups = groups.map(group => {
-                // Extract unique members from task assignments
-                const memberMap = new Map();
-                group.tasks.forEach(task => {
-                    task.assignments.forEach(assignment => {
-                        const member = assignment.assignedTo;
-                        memberMap.set(member.id, member);
-                    });
-                });
-                
-                const members = Array.from(memberMap.values());
+                const members = group.members.map(member => ({
+                    ...member.user,
+                    role: member.role,
+                    addedAt: member.addedAt,
+                    addedBy: member.addedBy
+                }));
                 
                 return {
                     ...group,
@@ -126,6 +152,13 @@ export const taskGroupController = {
                         select: { id: true, firstName: true, lastName: true, email: true }
                     },
                     tasks: {
+                        where: {
+                            NOT: {
+                                title: {
+                                    startsWith: "[GROUP_PLACEHOLDER]"
+                                }
+                            }
+                        },
                         include: {
                             assignments: {
                                 include: {
@@ -147,6 +180,18 @@ export const taskGroupController = {
                             }
                         },
                         orderBy: { createdAt: 'desc' }
+                    },
+                    members: {
+                        where: { isActive: true },
+                        include: {
+                            user: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
+                            },
+                            addedBy: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
+                            }
+                        },
+                        orderBy: { addedAt: 'asc' }
                     }
                 }
             });
@@ -158,16 +203,13 @@ export const taskGroupController = {
                 });
             }
 
-            // Extract unique members from task assignments
-            const memberMap = new Map();
-            group.tasks.forEach(task => {
-                task.assignments.forEach(assignment => {
-                    const member = assignment.assignedTo;
-                    memberMap.set(member.id, member);
-                });
-            });
-            
-            const members = Array.from(memberMap.values());
+            // Process members for easier frontend consumption
+            const members = group.members.map(member => ({
+                ...member.user,
+                role: member.role,
+                addedAt: member.addedAt,
+                addedBy: member.addedBy
+            }));
             
             const processedGroup = {
                 ...group,
@@ -301,7 +343,7 @@ export const taskGroupController = {
     async addMembers(req, res) {
         try {
             const { id } = req.params;
-            const { userIds } = req.body;
+            const { userIds, role = 'MEMBER' } = req.body;
             const userId = req.user.id;
             const orgId = req.user.orgId;
 
@@ -309,6 +351,14 @@ export const taskGroupController = {
                 return res.status(400).json({
                     success: false,
                     message: 'userIds array is required'
+                });
+            }
+
+            // Validate role
+            if (!['ADMIN', 'MEMBER'].includes(role)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid role. Must be ADMIN or MEMBER'
                 });
             }
 
@@ -328,68 +378,58 @@ export const taskGroupController = {
                 });
             }
 
-            // Verify all users exist and belong to the same organization
+            // Verify all users exist, belong to the same organization, and are active
             const users = await prisma.user.findMany({
                 where: {
                     id: { in: userIds },
-                    orgId
+                    orgId,
+                    status: 'active'
                 },
-                select: { id: true, firstName: true, lastName: true, email: true }
+                select: { id: true, firstName: true, lastName: true, email: true, status: true }
             });
 
             if (users.length !== userIds.length) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Some users not found or do not belong to the organization'
+                    message: 'Some users not found, do not belong to the organization, or are inactive'
                 });
             }
 
-            // Create a placeholder task for the group if it doesn't have any tasks yet
-            // This allows us to assign members to the group through task assignments
-            let placeholderTask = await prisma.task.findFirst({
+            // Check for existing memberships
+            const existingMembers = await prisma.taskGroupMember.findMany({
                 where: {
                     groupId: id,
-                    title: `[GROUP_PLACEHOLDER] ${group.name}`
+                    userId: { in: userIds },
+                    isActive: true
                 }
             });
 
-            if (!placeholderTask) {
-                placeholderTask = await prisma.task.create({
+            const existingUserIds = existingMembers.map(m => m.userId);
+            const newUserIds = userIds.filter(uid => !existingUserIds.includes(uid));
+
+            if (newUserIds.length === 0) {
+                return res.json({
+                    success: true,
+                    message: 'All users are already members of this group',
                     data: {
-                        id: generateId(),
-                        title: `[GROUP_PLACEHOLDER] ${group.name}`,
-                        description: 'This is a placeholder task to manage group membership',
-                        priority: 'LOW',
-                        status: 'COMPLETED',
-                        createdById: userId,
-                        orgId,
                         groupId: id,
+                        addedMembers: [],
+                        skippedMembers: users
                     }
                 });
             }
 
-            // Create task assignments for the new members
-            const existingAssignments = await prisma.taskAssignment.findMany({
-                where: {
-                    taskId: placeholderTask.id,
-                    assignedToId: { in: userIds }
-                }
+            // Create new memberships
+            const newMembers = await prisma.taskGroupMember.createMany({
+                data: newUserIds.map(userId => ({
+                    id: generateId(),
+                    groupId: id,
+                    userId,
+                    role,
+                    addedById: userId,
+                    isActive: true
+                }))
             });
-
-            const existingUserIds = existingAssignments.map(a => a.assignedToId);
-            const newUserIds = userIds.filter(uid => !existingUserIds.includes(uid));
-
-            if (newUserIds.length > 0) {
-                await prisma.taskAssignment.createMany({
-                    data: newUserIds.map(assignedToId => ({
-                        id: generateId(),
-                        taskId: placeholderTask.id,
-                        assignedToId,
-                        assignedById: userId,
-                        status: 'COMPLETED'
-                    }))
-                });
-            }
 
             await logActivity({
                 orgId,
@@ -400,7 +440,11 @@ export const taskGroupController = {
                 description: `Added ${newUserIds.length} new members to task group: ${group.name}`,
                 metadata: { 
                     groupId: id, 
-                    addedMembers: users.filter(u => newUserIds.includes(u.id)).map(u => ({ id: u.id, name: `${u.firstName} ${u.lastName}` }))
+                    addedMembers: users.filter(u => newUserIds.includes(u.id)).map(u => ({ 
+                        id: u.id, 
+                        name: `${u.firstName} ${u.lastName}`,
+                        role 
+                    }))
                 }
             });
 
@@ -462,7 +506,28 @@ export const taskGroupController = {
                 select: { id: true, firstName: true, lastName: true, email: true }
             });
 
-            // Remove task assignments for these users from ALL tasks in this group
+            // Prevent removing the group creator
+            if (userIds.includes(group.createdById)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot remove the group creator from the group'
+                });
+            }
+
+            // Remove members from TaskGroupMember table
+            const removedMembers = await prisma.taskGroupMember.updateMany({
+                where: {
+                    groupId: id,
+                    userId: { in: userIds },
+                    isActive: true
+                },
+                data: {
+                    isActive: false,
+                    removedAt: new Date()
+                }
+            });
+
+            // Also remove task assignments for these users from ALL tasks in this group
             const deletedAssignments = await prisma.taskAssignment.deleteMany({
                 where: {
                     assignedToId: { in: userIds },
@@ -500,6 +565,102 @@ export const taskGroupController = {
             res.status(500).json({
                 success: false,
                 message: 'Failed to remove members from task group',
+                error: error.message
+            });
+        }
+    },
+
+    async updateMemberRole(req, res) {
+        try {
+            const { id } = req.params;
+            const { userId: targetUserId, role } = req.body;
+            const userId = req.user.id;
+            const orgId = req.user.orgId;
+
+            // Validate role
+            if (!['ADMIN', 'MEMBER'].includes(role)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid role. Must be ADMIN or MEMBER'
+                });
+            }
+
+            // Verify the task group exists and user has access (only creator can update roles)
+            const group = await prisma.taskGroup.findFirst({
+                where: { 
+                    id, 
+                    orgId,
+                    createdById: userId
+                }
+            });
+
+            if (!group) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Task group not found or access denied'
+                });
+            }
+
+            // Prevent changing the group creator's role
+            if (targetUserId === group.createdById) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot change the group creator\'s role'
+                });
+            }
+
+            // Update the member's role
+            const updatedMember = await prisma.taskGroupMember.updateMany({
+                where: {
+                    groupId: id,
+                    userId: targetUserId,
+                    isActive: true
+                },
+                data: { role }
+            });
+
+            if (updatedMember.count === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Member not found in this group'
+                });
+            }
+
+            // Get user details for logging
+            const user = await prisma.user.findUnique({
+                where: { id: targetUserId },
+                select: { id: true, firstName: true, lastName: true, email: true }
+            });
+
+            await logActivity({
+                orgId,
+                actorId: userId,
+                action: 'UPDATE',
+                entity: 'TASK_GROUP',
+                entityId: id,
+                description: `Updated role for ${user.firstName} ${user.lastName} to ${role} in task group: ${group.name}`,
+                metadata: { 
+                    groupId: id, 
+                    targetUserId,
+                    newRole: role,
+                    userName: `${user.firstName} ${user.lastName}`
+                }
+            });
+
+            res.json({
+                success: true,
+                message: 'Member role updated successfully',
+                data: {
+                    groupId: id,
+                    userId: targetUserId,
+                    newRole: role
+                }
+            });
+        } catch (error) {
+            console.error('Update member role error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to update member role',
                 error: error.message
             });
         }

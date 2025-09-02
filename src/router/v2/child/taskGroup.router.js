@@ -15,5 +15,6 @@ router.put("/:id", taskGroupController.updateGroup);
 router.delete("/:id", taskGroupController.deleteGroup);
 router.post("/:id/members", taskGroupController.addMembers);
 router.delete("/:id/members", taskGroupController.removeMembers);
+router.put("/:id/members/role", taskGroupController.updateMemberRole);
 
 export default router;

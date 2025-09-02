@@ -224,6 +224,8 @@ model User {
   assignedTasks                TaskAssignment[]      @relation("TaskAssignee")
   assignedToTasks              TaskAssignment[]      @relation("TaskAssigner")
   taskUpdates                  TaskUpdate[]          @relation("TaskUpdater")
+  taskGroupMemberships         TaskGroupMember[]     @relation("TaskGroupMemberships")
+  addedGroupMembers            TaskGroupMember[]     @relation("TaskGroupMemberAdder")
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -655,9 +657,30 @@ model TaskGroup {
   organization    Organization   @relation(fields: [orgId], references: [id])
   createdBy       User           @relation("TaskGroupCreator", fields: [createdById], references: [id])
   tasks           Task[]
+  members         TaskGroupMember[]
   
   @@unique([orgId, name])
   @@index([orgId])
+}
+
+model TaskGroupMember {
+  id              String         @id @default(cuid())
+  groupId         String
+  userId          String
+  role            GroupRole      @default(MEMBER)
+  addedById       String
+  addedAt         DateTime       @default(now())
+  removedAt       DateTime?
+  isActive        Boolean        @default(true)
+  
+  group           TaskGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user            User           @relation("TaskGroupMemberships", fields: [userId], references: [id])
+  addedBy         User           @relation("TaskGroupMemberAdder", fields: [addedById], references: [id])
+  
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@index([groupId])
+  @@index([isActive])
 }
 
 model TaskAssignment {
@@ -696,6 +719,11 @@ model TaskUpdate {
   
   @@index([taskId, createdAt])
   @@index([updatedById])
+}
+
+enum GroupRole {
+  ADMIN
+  MEMBER
 }
 
 enum TaskPriority {
