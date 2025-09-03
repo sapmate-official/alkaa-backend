@@ -25,7 +25,11 @@ const findUserByIdOrEmployeeId = async (identifier, includeOptions = {}) => {
 
 export const getUser = async (req, res) => {
     try {
-        const { orgId } = req.query;
+    // Accept orgId from route params, query, body or authenticated user
+    const orgId = req.params?.orgId || req.query?.orgId || req.body?.orgId || req.user?.orgId;
+        if (!orgId) {
+            return res.status(400).json({ error: 'Organization ID is required' });
+        }
         const users = await prisma.user.findMany({ where: { orgId } ,
         include:{
             organization:true,

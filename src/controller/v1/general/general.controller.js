@@ -273,20 +273,21 @@ const validatetoken = async (req, res) => {
 const refreshToken = async (req, res) => {
     try {
         const { refreshToken } = req.body;
-        
-        if (!refreshToken) {
+        const { refreshToken: cookieRefreshToken } = req.cookies;
+
+        if (!refreshToken && !cookieRefreshToken) {
             return res.status(401).json({ message: "Refresh token is required." });
         }
 
         // Verify refresh token
         const decodedToken = jwt.verify(
-            refreshToken,
+            refreshToken || cookieRefreshToken,
             process.env.REFRESH_TOKEN_SECRET
         );
 
         // Find user using ID from token
         const user = await findUserById(decodedToken.id);
-        if (!user || user.refreshToken !== refreshToken) {
+        if (!user || user.refreshToken !== (refreshToken || cookieRefreshToken)) {
             return res.status(403).json({ message: "Invalid refresh token." });
         }
 
@@ -300,7 +301,15 @@ const refreshToken = async (req, res) => {
 
         // Update user's refresh token
         await updateUser(user.id, { refreshToken: tokens.refreshToken });
-
+        res.cookie("refreshToken", tokens.refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",  // Changed from strict to lax
+            maxAge: 2 * 24 * 60 * 60 * 1000,  // 2 days in milliseconds
+            expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
+            path: "/",
+            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
+        });
         // Return new tokens
         return res.status(200).json({
             message: "Tokens refreshed successfully",
