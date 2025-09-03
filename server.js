@@ -69,7 +69,9 @@ import general from './src/router/v1/general.router.js'
 import leave from './src/router/v1/leave.router.js'
 import attendance from './src/router/v1/attendance.router.js'
 import salary from './src/router/v1/salary.router.js'
+import authRouter from './src/router/v1/auth.router.js'
 
+app.use("/api/v1/auth/", authRouter)
 app.use("/api/v1/manager/", manager)
 app.use("/api/v1/employee/", employee)
 app.use("/api/v1/general/", general)
