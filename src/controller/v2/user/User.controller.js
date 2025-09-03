@@ -30,7 +30,10 @@ export const getUser = async (req, res) => {
         if (!orgId) {
             return res.status(400).json({ error: 'Organization ID is required' });
         }
-        const users = await prisma.user.findMany({ where: { orgId } ,
+        const { onlyActive } = req.query;
+        const users = await prisma.user.findMany({ where: { orgId ,
+            ...(onlyActive === 'true' ? { status: 'active' } : {})
+        } ,
         include:{
             organization:true,
             department:true,
