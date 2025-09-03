@@ -193,6 +193,8 @@ model User {
   firstName                    String?               @default("unknown")
   lastName                     String?               @default("unknown")
   emergencyContact             String?
+  twoFactorEnabled             Boolean               @default(false)
+  loginNotificationsEnabled    Boolean               @default(true)
   activityLogs                 ActivityLog[]         @relation("ActivityActor")
   targetedActivities           ActivityLog[]         @relation("ActivityTarget")
   attendanceRecords            AttendanceRecord[]
@@ -226,6 +228,9 @@ model User {
   taskUpdates                  TaskUpdate[]          @relation("TaskUpdater")
   taskGroupMemberships         TaskGroupMember[]     @relation("TaskGroupMemberships")
   addedGroupMembers            TaskGroupMember[]     @relation("TaskGroupMemberAdder")
+  // OTP and Session Management relations
+  emailOtpVerifications        EmailOtpVerification[]
+  tempLoginSessions            TempLoginSession[]
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -886,4 +891,45 @@ enum OnboardingStatus {
   APPROVED
   ONBOARDED
   ABORTED
+}
+
+model EmailOtpVerification {
+  id            String   @id @default(cuid())
+  userId        String
+  otpCode       String
+  purpose       OtpPurpose
+  expiresAt     DateTime
+  isUsed        Boolean  @default(false)
+  attemptsCount Int      @default(0)
+  maxAttempts   Int      @default(3)
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+  usedAt        DateTime?
+  
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, purpose])
+  @@index([otpCode, expiresAt, isUsed])
+}
+
+model TempLoginSession {
+  id            String   @id @default(cuid())
+  sessionToken  String   @unique
+  userId        String
+  expiresAt     DateTime
+  isUsed        Boolean  @default(false)
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+  
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([sessionToken, expiresAt, isUsed])
+}
+
+enum OtpPurpose {
+  LOGIN
+  PASSWORD_RESET
+  ACCOUNT_VERIFICATION
 }

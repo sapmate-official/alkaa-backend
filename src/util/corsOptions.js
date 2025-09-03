@@ -30,6 +30,6 @@ export const corsOptions = {
     credentials: true,
     optionsSuccessStatus: 200,
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
-    allowedHeaders: "Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept",
+    allowedHeaders: "Content-Type,Authorization,X-Requested-With,Cache-Control,Pragma,Accept,X-Org-Id",
     exposedHeaders: "Content-Length,Content-Type,Authorization"
 }
