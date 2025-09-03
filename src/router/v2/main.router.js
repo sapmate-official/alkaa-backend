@@ -27,6 +27,7 @@ import onboardingRouter from "./child/onboarding.router.js";
 import taskRouter from "./child/task.router.js";
 import taskGroupRouter from "./child/taskGroup.router.js";
 import whatsappRouter from "./child/whatsapp.router.js";
+import relationshipRouter from "./child/relationship.router.js";
 
 
 const router = express.Router();
@@ -59,5 +60,6 @@ router.use("/onboarding", onboardingRouter);
 router.use("/task", taskRouter);
 router.use("/task-group", taskGroupRouter);
 router.use("/whatsapp", whatsappRouter);
+router.use("/relationship", relationshipRouter);
 
 export default router;
