@@ -1,6 +1,10 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 
+function generateId() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
 function generateTokens(email, userId, accessTokenExpiry, refreshTokenExpiry) {
   try {
     const accessToken = jwt.sign(
@@ -32,5 +36,5 @@ function generateTokens(email, userId, accessTokenExpiry, refreshTokenExpiry) {
     return null;
   }
 }
-export { generateTokens };
+export { generateTokens, generateId };
 

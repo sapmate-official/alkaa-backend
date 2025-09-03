@@ -157,8 +157,12 @@ export const createLeaveRequest = async (req, res) => {
             }
         });
 
+        let finalLeaveRequest = leaveRequest; // will be updated if auto-approved
+
         if (leaveRequest) {
-            // Fetch manager of this user
+            // Fetch manager of this user and their roles
+            // if user dont have manager then forward it to org admin
+            // if the user is org admin then auto-approve (no manager verification)
             const user = await prisma.user.findUnique({
                 where: { id: userId },
                 select: {
@@ -167,38 +171,11 @@ export const createLeaveRequest = async (req, res) => {
                     orgId: true,
                     firstName: true,
                     lastName: true,
-                }
-            });
-
-            if (!user || !user.managerId) {
-                console.log('User or manager not found:', { userId, user });
-                return res.status(404).json({ error: "User or manager not found" });
-            }
-
-            const manager = await prisma.user.findUnique({
-                where: { id: user.managerId },
-                select: {
-                    email: true,
-                    firstName: true,
-                    lastName: true,
-                    orgId: true,
-                }
-            });
-
-            if (!manager) {
-                console.log('Manager not found:', user.managerId);
-                return res.status(404).json({ error: "Manager not found" });
-            }
-
-            const organization = await prisma.organization.findUnique({
-                where: { id: user.orgId },
-                select: {
-                    name: true,
-                    Organization_admin: {
+                    roles: {
                         select: {
-                            admin_user: {
+                            role: {
                                 select: {
-                                    email: true,
+                                    name: true
                                 }
                             }
                         }
@@ -206,36 +183,186 @@ export const createLeaveRequest = async (req, res) => {
                 }
             });
 
-            if (!organization) {
-                console.log('Organization not found:', user.orgId);
-                return res.status(404).json({ error: "Organization not found" });
+            if (!user) {
+                console.log('User not found after leave creation:', userId);
+                return res.status(404).json({ error: "User not found" });
             }
-            const employeeName = `${user.firstName} ${user.lastName}`;
-            console.log(organization);
-            console.log(leaveRequest);
-            
-            try {
-                await sendLeaveRequestEmail(
-                    manager.email,
-                    organization.Organization_admin[0]?.admin_user?.email,
-                    employeeName,
-                    user.email,
-                    {
-                        leaveType: leaveRequest.leaveType.name,
-                        startDate: leaveRequest.startDate,
-                        endDate: leaveRequest.endDate,
-                        duration: leaveRequest.numberOfDays,
-                        reason: leaveRequest.reason
-                    },
-                    organization.name
-                );
-            } catch (emailError) {
-                console.error('Error sending email:', emailError);
-                // Don't fail the request if email fails
+
+            const isOrgAdmin = user.roles?.some(r => r.role?.name === 'Org_Admin');
+
+            // If user is Org_Admin -> auto-approve and update balance
+            if (isOrgAdmin) {
+                try {
+                    const [approvedRequest, updatedBalance] = await prisma.$transaction([
+                        prisma.leaveRequest.update({
+                            where: { id: leaveRequest.id },
+                            data: {
+                                status: 'APPROVED',
+                                approvedBy: userId,
+                                approvedAt: new Date(),
+                            },
+                            include: {
+                                user: true,
+                                leaveType: true
+                            }
+                        }),
+                        prisma.leaveBalance.update({
+                            where: { id: userLeaveBalance.id },
+                            data: {
+                                usedDays: userLeaveBalance.usedDays + requestedDays,
+                                remainingDays: userLeaveBalance.remainingDays - requestedDays
+                            }
+                        })
+                    ]);
+
+                    finalLeaveRequest = approvedRequest;
+
+                    const name = `${approvedRequest.user.firstName} ${approvedRequest.user.lastName}`;
+                    const org_name = await prisma.user.findUnique({
+                        where:{
+                            id: approvedRequest.user.id
+                        },
+                        select:{
+                            organization:{
+                                select:{
+                                    name:true
+                                }
+                            }
+                        }
+                    });
+
+                    try {
+                        await sendLeaveStatusUpdateEmail(
+                            approvedRequest.user.email,
+                            name,
+                            {
+                                leaveType: approvedRequest.leaveType.name,
+                                startDate: approvedRequest.startDate,
+                                endDate: approvedRequest.endDate,
+                                duration: approvedRequest.numberOfDays
+                            },
+                            approvedRequest.status,
+                            approvedRequest.rejectedReason,
+                            org_name.organization.name,
+                        );
+                    } catch (emailError) {
+                        console.error('Error sending approval email to org admin user:', emailError);
+                    }
+                } catch (txError) {
+                    console.error('Error auto-approving leave for Org_Admin:', txError);
+                    // do not block creation, but report failure
+                }
+
+            } else if (user.managerId) {
+                // User has a manager -> send to manager and organization admin
+                const manager = await prisma.user.findUnique({
+                    where: { id: user.managerId },
+                    select: {
+                        email: true,
+                        firstName: true,
+                        lastName: true,
+                        orgId: true,
+                    }
+                });
+
+                if (!manager) {
+                    console.log('Manager not found:', user.managerId);
+                    return res.status(404).json({ error: "Manager not found" });
+                }
+
+                const organization = await prisma.organization.findUnique({
+                    where: { id: user.orgId },
+                    select: {
+                        name: true,
+                        Organization_admin: {
+                            select: {
+                                admin_user: {
+                                    select: {
+                                        email: true,
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                if (!organization) {
+                    console.log('Organization not found:', user.orgId);
+                    return res.status(404).json({ error: "Organization not found" });
+                }
+
+                const employeeName = `${user.firstName} ${user.lastName}`;
+
+                try {
+                    await sendLeaveRequestEmail(
+                        manager.email,
+                        organization.Organization_admin[0]?.admin_user?.email,
+                        employeeName,
+                        user.email,
+                        {
+                            leaveType: leaveRequest.leaveType.name,
+                            startDate: leaveRequest.startDate,
+                            endDate: leaveRequest.endDate,
+                            duration: leaveRequest.numberOfDays,
+                            reason: leaveRequest.reason
+                        },
+                        organization.name
+                    );
+                } catch (emailError) {
+                    console.error('Error sending email to manager:', emailError);
+                    // Don't fail the request if email fails
+                }
+
+            } else {
+                // No manager and not Org_Admin -> forward to organization admin
+                const organization = await prisma.organization.findUnique({
+                    where: { id: user.orgId },
+                    select: {
+                        name: true,
+                        Organization_admin: {
+                            select: {
+                                admin_user: {
+                                    select: {
+                                        email: true,
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                if (!organization || !organization.Organization_admin[0]?.admin_user?.email) {
+                    console.log('Organization admin not found for org:', user.orgId);
+                    return res.status(404).json({ error: "Organization admin not found to forward leave request" });
+                }
+
+                const orgAdminEmail = organization.Organization_admin[0].admin_user.email;
+                const employeeName = `${user.firstName} ${user.lastName}`;
+
+                try {
+                    // Use org admin as the recipient (since no manager)
+                    await sendLeaveRequestEmail(
+                        orgAdminEmail,
+                        null,
+                        employeeName,
+                        user.email,
+                        {
+                            leaveType: leaveRequest.leaveType.name,
+                            startDate: leaveRequest.startDate,
+                            endDate: leaveRequest.endDate,
+                            duration: leaveRequest.numberOfDays,
+                            reason: leaveRequest.reason
+                        },
+                        organization.name
+                    );
+                } catch (emailError) {
+                    console.error('Error forwarding email to org admin:', emailError);
+                    // Don't fail the request if email fails
+                }
             }
         }
 
-        res.status(201).json(leaveRequest);
+        res.status(201).json(finalLeaveRequest);
     } catch (error) {
         console.error('Error in createLeaveRequest:', error);
         res.status(500).json({ error: error.message });
