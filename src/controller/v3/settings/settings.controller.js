@@ -53,7 +53,9 @@ const resetSettings = async (req, res) => {
     try {
         const {orgId} = req.params
         const defaultSettings = {
-            weekoff: [0, 6]
+            weekoff: [0, 6],
+            timezone: 'Asia/Kolkata',
+            workingHours: '9:00 AM - 6:00 PM'
         }
         const existingSettings = await prisma.organizationSettings.findFirst({
             where: {orgId: orgId},

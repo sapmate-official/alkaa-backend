@@ -1,5 +1,6 @@
 import prisma from "../../../db/connectDb.js";
 import { sendAttendanceVerificationEmail } from "../../../util/sendEmail.js";
+import { getOrganizationTimezone, formatInOrgTimezone } from "../../../util/timezoneUtils.js";
 
 const WORKING_HOURS = {
     FULL_DAY: 8,
@@ -133,6 +134,10 @@ export const checkIn = async (req, res) => {
         const user = req.user;
         console.log('User details:', user);
         
+        // Get organization timezone
+        const orgTimezone = await getOrganizationTimezone(user.orgId);
+        console.log('Organization timezone:', orgTimezone);
+        
         // Get user's hiring date for validation
         const userDetails = await prisma.user.findUnique({
             where: { id: user.id },
@@ -143,6 +148,10 @@ export const checkIn = async (req, res) => {
         const checkInDateTime = new Date(checkInTime);
         const attendanceDate = new Date(date);
         const serverTime = new Date();
+        
+        // Format times in organization timezone for logging
+        const checkInTimeInOrgTZ = formatInOrgTimezone(checkInDateTime.toISOString(), orgTimezone);
+        console.log('Check-in time in org timezone:', checkInTimeInOrgTZ);
         
         // Validate attendance date is not before hiring date
         if (userDetails.hiredDate && attendanceDate < new Date(userDetails.hiredDate)) {
