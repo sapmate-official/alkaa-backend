@@ -23,23 +23,27 @@ model Organization {
   industry              String?
   logo                  String?
   address               String?
-  subscriptionPlan      String
   subscriptionStart     DateTime               @default(now())
   subscriptionEnd       DateTime?
   isActive              Boolean                @default(true)
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   settings              Json?
+  subscriptionPlanId    String?
+  activityLogs          ActivityLog[]
+  billingRecords        BillingRecord[]
   departments           Department[]
   holidays              Holiday[]
   holidayTypes          HolidayType[]
   leaveTypes            LeaveType[]
   notificationTemplates NotificationTemplate[]
-  roles                 Role[]
-  users                 User[]
+  onboardingCandidates  OnboardingCandidate[]
+  subscriptionPlan      SubscriptionPlan?      @relation(fields: [subscriptionPlanId], references: [id])
   OrganizationSettings  OrganizationSettings[]
   Organization_admin    Organization_admin[]
   PermissionPreset      PermissionPreset[]
+  roles                 Role[]
+  users                 User[]
 }
 
 model Organization_admin {
@@ -48,28 +52,29 @@ model Organization_admin {
   adminId      String
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
-  organization Organization @relation(fields: [orgId], references: [id])
   admin_user   User         @relation(fields: [adminId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [id])
 }
 
 model Department {
-  id               String       @id @default(cuid())
+  id               String                @id @default(cuid())
   orgId            String
   name             String
   description      String?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
   budget           Float?
   code             String?
   headId           String?
   location         String?
   parentId         String?
-  status           Boolean      @default(true)
-  departmentHead   User?        @relation("DepartmentHead", fields: [headId], references: [id])
-  organization     Organization @relation(fields: [orgId], references: [id])
-  parentDepartment Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id])
-  subDepartments   Department[] @relation("DepartmentHierarchy")
-  users            User[]       @relation("UserDepartment")
+  status           Boolean               @default(true)
+  departmentHead   User?                 @relation("DepartmentHead", fields: [headId], references: [id])
+  organization     Organization          @relation(fields: [orgId], references: [id])
+  parentDepartment Department?           @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  subDepartments   Department[]          @relation("DepartmentHierarchy")
+  users            User[]                @relation("UserDepartment")
+  onboardingCandidates OnboardingCandidate[]
 
   @@unique([orgId, name])
   @@unique([orgId, code])
@@ -137,46 +142,53 @@ model RolePermission {
 }
 
 model User {
-  id                   String               @id @default(cuid())
-  orgId                String
-  departmentId         String?
-  managerId            String?
-  email                String
-  hashedPassword       String?
-  refreshToken         String?
-  status               UserStatus           @default(active)
-  verificationToken    String?              @unique
-  annualPackage        Float?               @default(0.0)
-  monthlySalary        Float?               @default(0.0)
-  hiredDate            DateTime?            @default(now())
-  dateOfBirth          DateTime?
-  address              String?
-  adharNumber          String?
-  panNumber            String?
-  mobileNumber         String?
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
-  employeeId           String?
-  terminationDate      DateTime?
-  firstName            String?              @default("unknown")
-  lastName             String?              @default("unknown")
-  attendanceRecords    AttendanceRecord[]
-  bankDetails          BankDetails?
-  Department           Department[]         @relation("DepartmentHead")
-  leaveBalances        LeaveBalance[]
-  leaveRequests        LeaveRequest[]
-  notifications        Notification[]
-  PushSubscription     PushSubscription[]
-  salaryParameter      SalaryParameter?
-  salaryRecords        SalaryRecord[]
-  receivedTransactions TransactionTable[]   @relation("ReceiverTransaction")
-  sentTransactions     TransactionTable[]   @relation("SenderTransaction")
-  department           Department?          @relation("UserDepartment", fields: [departmentId], references: [id])
-  manager              User?                @relation("UserManager", fields: [managerId], references: [id])
-  subordinates         User[]               @relation("UserManager")
-  organization         Organization         @relation(fields: [orgId], references: [id])
-  roles                UserRole[]
-  Organization_admin   Organization_admin[]
+  id                          String               @id @default(cuid())
+  orgId                       String
+  departmentId                String?
+  managerId                   String?
+  email                       String
+  hashedPassword              String?
+  refreshToken                String?
+  status                      UserStatus           @default(active)
+  verificationToken           String?              @unique
+  verificationTokenExpiry     DateTime?
+  annualPackage               Float?               @default(0.0)
+  monthlySalary               Float?               @default(0.0)
+  hiredDate                   DateTime?            @default(now())
+  dateOfBirth                 DateTime?
+  address                     String?
+  adharNumber                 String?
+  panNumber                   String?
+  mobileNumber                String?
+  createdAt                   DateTime             @default(now())
+  updatedAt                   DateTime             @updatedAt
+  employeeId                  String?
+  terminationDate             DateTime?
+  firstName                   String?              @default("unknown")
+  lastName                    String?              @default("unknown")
+  emergencyContact            String?
+  activityLogs                ActivityLog[]        @relation("ActivityActor")
+  targetedActivities          ActivityLog[]        @relation("ActivityTarget")
+  attendanceRecords           AttendanceRecord[]
+  bankDetails                 BankDetails?
+  createdOnboardingCandidates OnboardingCandidate[] @relation("CreatedCandidates")
+  reviewedOnboardingCandidates OnboardingCandidate[] @relation("ReviewedCandidates")
+  managedCandidates           OnboardingCandidate[] @relation("CandidateManager")
+  Department                  Department[]         @relation("DepartmentHead")
+  leaveBalances               LeaveBalance[]
+  leaveRequests               LeaveRequest[]
+  notifications               Notification[]
+  Organization_admin          Organization_admin[]
+  PushSubscription            PushSubscription[]
+  salaryParameter             SalaryParameter?
+  salaryRecords               SalaryRecord[]
+  receivedTransactions        TransactionTable[]   @relation("ReceiverTransaction")
+  sentTransactions            TransactionTable[]   @relation("SenderTransaction")
+  department                  Department?          @relation("UserDepartment", fields: [departmentId], references: [id])
+  manager                     User?                @relation("UserManager", fields: [managerId], references: [id])
+  subordinates                User[]               @relation("UserManager")
+  organization                Organization         @relation(fields: [orgId], references: [id])
+  roles                       UserRole[]
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -241,43 +253,47 @@ model LeaveBalance {
 }
 
 model LeaveRequest {
-  id             String      @id @default(cuid())
-  userId         String
-  leaveTypeId    String
-  startDate      DateTime
-  endDate        DateTime
-  status         LeaveStatus @default(PENDING)
-  reason         String?
-  approvedBy     String?
-  approvedAt     DateTime?
-  rejectedReason String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  attachments    Json?
-  numberOfDays   Float
-  leaveType      LeaveType   @relation(fields: [leaveTypeId], references: [id])
-  user           User        @relation(fields: [userId], references: [id])
+  id                  String      @id @default(cuid())
+  userId              String
+  leaveTypeId         String
+  startDate           DateTime
+  endDate             DateTime
+  status              LeaveStatus @default(PENDING)
+  reason              String?
+  approvedBy          String?
+  approvedAt          DateTime?
+  rejectedReason      String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  attachments         Json?
+  numberOfDays        Float
+  contributedToSalary Json?
+  leaveType           LeaveType   @relation(fields: [leaveTypeId], references: [id])
+  user                User        @relation(fields: [userId], references: [id])
 }
 
 model AttendanceRecord {
-  id                 String                        @id @default(cuid())
-  userId             String
-  date               DateTime                      @default(now())
-  sessionNumber      Int
-  checkInTime        DateTime
-  checkOutTime       DateTime?
-  checkInLocation    Json
-  checkOutLocation   Json?
-  status             AttendanceStatus              @default(PRESENT)
-  notes              String?
-  duration           Json?
-  createdAt          DateTime                      @default(now())
-  updatedAt          DateTime                      @updatedAt
-  deviceInfo         String?
-  ipAddress          String?
-  verificationStatus AttendanceVerificationStatus? @default(UNVERIFIED)
-  user               User                          @relation(fields: [userId], references: [id])
-  UserDailyReport    UserDailyReport[]
+  id                  String                        @id @default(cuid())
+  userId              String
+  date                DateTime                      @default(now())
+  sessionNumber       Int
+  checkInTime         DateTime
+  checkOutTime        DateTime?
+  checkInLocation     Json
+  checkOutLocation    Json?
+  status              AttendanceStatus              @default(PRESENT)
+  notes               String?
+  duration            Json?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  deviceInfo          String?
+  ipAddress           String?
+  verificationStatus  AttendanceVerificationStatus? @default(UNVERIFIED)
+  contributedToSalary Json?
+  verifiedAt          DateTime?
+  verifiedBy          String?
+  user                User                          @relation(fields: [userId], references: [id])
+  UserDailyReport     UserDailyReport[]
 
   @@unique([userId, date, sessionNumber])
   @@index([userId, date])
@@ -341,39 +357,6 @@ model NotificationTemplate {
   @@unique([orgId, name])
 }
 
-// Example attendance verification notification template:
-// {
-//   id: "clx789ghi123",
-//   orgId: "org123",
-//   name: "AttendanceVerificationRequest",
-//   type: "IN_APP",
-//   subject: "Attendance Verification Required",
-//   content: "Employee {{employeeName}} has submitted attendance for a past date ({{attendanceDate}}). Session: {{sessionNumber}}, Check-in: {{checkInTime}}. Please verify this attendance record.",
-//   variables: { 
-//     "employeeName": "string", 
-//     "attendanceDate": "date", 
-//     "sessionNumber": "number", 
-//     "checkInTime": "datetime",
-//     "employeeId": "string",
-//     "attendanceId": "string"
-//   },
-//   createdAt: "2023-05-15T10:00:00Z",
-//   updatedAt: "2023-05-15T10:00:00Z"
-// }
-
-// Example seed data would look like:
-// {
-//   id: "clx123abc456",
-//   orgId: "org123",
-//   name: "LeaveApprovalNotification",
-//   type: "IN_APP",
-//   subject: "Leave Request Approved",
-//   content: "Hello {{userName}}, your leave request from {{startDate}} to {{endDate}} has been {{status}}.",
-//   variables: { "userName": "string", "startDate": "date", "endDate": "date", "status": "string" },
-//   createdAt: "2023-05-15T10:00:00Z",
-//   updatedAt: "2023-05-15T10:00:00Z"
-// }
-
 model Notification {
   id         String               @id @default(cuid())
   userId     String
@@ -388,18 +371,6 @@ model Notification {
 
   @@index([userId, isRead])
 }
-
-// Example mock data:
-// {
-//   id: "clx456def789",
-//   userId: "usr123",
-//   templateId: "tmpl456",
-//   content: "Hello John, your leave request from 2023-06-10 to 2023-06-15 has been approved.",
-//   isRead: false,
-//   createdAt: "2023-05-20T14:30:00Z",
-//   metadata: { "leaveRequestId": "leave789", "leaveType": "Annual Leave" },
-//   readAt: null
-// }
 
 model BackgroundJob {
   id           String    @id @default(cuid())
@@ -488,7 +459,7 @@ model UserDailyReport {
   id            String           @id @default(cuid())
   attendanceId  String
   reportContent Json
-  attendance    AttendanceRecord @relation(fields: [attendanceId], references: [id])
+  attendance    AttendanceRecord @relation(fields: [attendanceId], references: [id],onDelete: Cascade)
 
   @@index([id, attendanceId])
 }
@@ -500,6 +471,121 @@ model OrganizationSettings {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   organization Organization @relation(fields: [orgId], references: [id])
+}
+
+model SubscriptionPlan {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  description   String?
+  monthlyPrice  Float
+  annualPrice   Float
+  maxUsers      Int
+  features      Json?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  organizations Organization[]
+}
+
+model BillingRecord {
+  id               String        @id @default(cuid())
+  organizationId   String
+  month            Int
+  year             Int
+  activeUserCount  Int
+  pricePerUser     Float
+  totalAmount      Float
+  status           BillingStatus
+  billDate         DateTime
+  dueDate          DateTime
+  paidDate         DateTime?
+  paymentReference String?
+  notes            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  organization     Organization  @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, month, year])
+  @@index([organizationId, status])
+  @@index([dueDate])
+}
+
+model PermissionPreset {
+  id           String       @id @default(cuid())
+  name         String
+  description  String?
+  orgId        String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  permissions  Json
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, name])
+}
+
+model ActivityLog {
+  id           String         @id @default(cuid())
+  orgId        String
+  actorId      String
+  targetId     String?
+  action       ActivityAction
+  entity       ActivityEntity
+  entityId     String
+  description  String
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime       @default(now())
+  actor        User           @relation("ActivityActor", fields: [actorId], references: [id])
+  organization Organization   @relation(fields: [orgId], references: [id])
+  target       User?          @relation("ActivityTarget", fields: [targetId], references: [id])
+
+  @@index([orgId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([targetId, createdAt])
+  @@index([action, createdAt])
+  @@index([entity, createdAt])
+}
+
+model OnboardingCandidate {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  firstName       String
+  lastName        String?
+  mobileNumber    String?
+  status          OnboardingStatus @default(INVITED)
+  formData        Json?
+  verificationToken String?
+  tokenExpiry     DateTime?
+  orgId           String
+  createdById     String
+  managerId       String?          // Add manager assignment
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  formSubmittedAt DateTime?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectionReason String?
+  departmentId    String?
+  annualPackage   Float?
+  monthlySalary   Float?           // Add monthly salary field
+  hiredDate       DateTime?
+  
+  organization    Organization     @relation(fields: [orgId], references: [id])
+  createdBy       User             @relation("CreatedCandidates", fields: [createdById], references: [id])
+  reviewedBy      User?            @relation("ReviewedCandidates", fields: [reviewedById], references: [id])
+  manager         User?            @relation("CandidateManager", fields: [managerId], references: [id])
+  department      Department?      @relation(fields: [departmentId], references: [id])
+
+  @@index([orgId])
+  @@index([verificationToken])
+}
+
+enum BillingStatus {
+  UNPAID
+  PAID
+  OVERDUE
+  CANCELLED
 }
 
 enum UserStatus {
@@ -560,15 +646,57 @@ enum AttendanceVerificationStatus {
   REJECTED
 }
 
-model PermissionPreset {
-  id           String       @id @default(cuid())
-  name         String
-  description  String?
-  orgId        String
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  permissions  Json // Store array of permission IDs
-  organization Organization @relation(fields: [orgId], references: [id])
+enum ActivityAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ASSIGN
+  UNASSIGN
+  APPROVE
+  REJECT
+  ACTIVATE
+  DEACTIVATE
+  RESET_PASSWORD
+  CHANGE_ROLE
+  CHANGE_DEPARTMENT
+  CHANGE_MANAGER
+  CHECK_IN
+  CHECK_OUT
+  APPLY_LEAVE
+  CANCEL_LEAVE
+  GENERATE_SALARY
+  PROCESS_PAYMENT
+  VERIFY_ATTENDANCE
+  SEND_NOTIFICATION
+  UPLOAD_DOCUMENT
+  VIEW_SENSITIVE_DATA
+  ABORT
+}
 
-  @@unique([orgId, name])
+enum ActivityEntity {
+  USER
+  ORGANIZATION
+  DEPARTMENT
+  ROLE
+  PERMISSION
+  ATTENDANCE
+  LEAVE_REQUEST
+  SALARY_RECORD
+  BANK_DETAILS
+  NOTIFICATION
+  DOCUMENT
+  SETTINGS
+  ONBOARDING_CANDIDATE
+}
+
+enum OnboardingStatus {
+  INVITED
+  FORM_SUBMITTED
+  UNDER_REVIEW
+  REJECTED
+  APPROVED
+  ONBOARDED
+  ABORTED
 }

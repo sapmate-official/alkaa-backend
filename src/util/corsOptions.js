@@ -1,4 +1,4 @@
-export const allowedOrigins = [
+        export const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:5174',
@@ -6,13 +6,16 @@ export const allowedOrigins = [
     'http://192.168.0.193:5173',
     'https://myapp.herokuapp.com',
     'http://127.0.0.1:5173',
+    'http://192.168.0.158:5174',
     'https://192.168.0.193:5173',
     'http://sapmate-employee-bucket.s3-website.ap-south-1.amazonaws.com',
     "https://main.dy4iqzhph9mgs.amplifyapp.com",
     "https://www.alkaa.sapmate.com",
     "https://www.alkaa.online",
     "https://api.alkaa.online" ,
-    "https://alkaa.vercel.app"
+    "https://alkaa.vercel.app",
+    "https://alkaa-frontend-test.vercel.app",
+    "https://alkaa-admin-test.vercel.app"
 ]
 
 export const corsOptions = {
@@ -20,7 +23,7 @@ export const corsOptions = {
         if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
             callback(null, true)
         } else {
-            console.log(`CORS blocked origin: ${origin}`); // Add logging for debugging
+            console.log(`CORS blocked origin: ${origin}`); // For debugging
             callback(new Error(`Not allowed by CORS: ${origin}`))
         }
     },

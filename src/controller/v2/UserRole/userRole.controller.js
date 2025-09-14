@@ -23,7 +23,14 @@ export const getUserRoleById = async (req, res) => {
 
 export const createUserRole = async (req, res) => {
     const { userId, roleId } = req.body;
+    console.log("User ID:", userId);
+    console.log("Role ID:", roleId);
+    console.log("Request Body:", req.body);
+    
     try {
+        if (!userId || !roleId) {
+            return res.status(400).json({ error: "User ID and Role ID are required" });
+        }
         const roleName = await prisma.role.findUnique({ where: { id: roleId }, select: { name: true } });
         if (!roleName) {
             return res.status(404).json({ error: "Role not found" });

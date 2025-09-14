@@ -1,6 +1,7 @@
 import prisma from '../../../db/connectDb.js';
 import bcrypt from 'bcrypt';
 import { generateTokens } from '../../../util/generate.js';
+import { sendBillingEmail } from '../../../util/sendEmail.js';
 
 // Get all super admins
 export const getSuperAdmins = async (req, res) => {
@@ -162,7 +163,11 @@ export const loginSuperAdmin = async (req, res) => {
         console.log("[loginSuperAdmin] Login attempt started");
         const { email, password } = req.body;
         console.log(`[loginSuperAdmin] Login attempt for email: ${email}`);
-        
+        if(email==="superadmin-test@alkaa.com"){
+            res.status(401).send({
+                message: "Super Admin email is changed to superadmin-test@alkaa.online",
+            });
+        }
         if (!email || !password) {
             console.log("[loginSuperAdmin] Missing email or password");
             return res.status(400).send({
@@ -214,7 +219,7 @@ export const loginSuperAdmin = async (req, res) => {
         
         console.log("[loginSuperAdmin] Setting cookies");
         res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
+            // httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
         });
@@ -224,14 +229,14 @@ export const loginSuperAdmin = async (req, res) => {
             secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
         });
-
+        
         console.log("[loginSuperAdmin] Login successful");
         return res.status(200).send({
             message: "Super Admin logged in successfully",
             userData: {
-                id: superAdmin.id,  // Fixed: changed user.id to superAdmin.id
-                email: superAdmin.email,  // Fixed: changed user.email to superAdmin.email
-                name: superAdmin.name,  // Fixed: changed user.name to superAdmin.name
+                id: superAdmin.id,  
+                email: superAdmin.email, 
+                name: superAdmin.name, 
             },
             refreshToken,
             accessToken,
@@ -368,10 +373,20 @@ export const getOrganizationsStats = async (req, res) => {
             select: {
                 id: true,
                 name: true,
-                subscriptionPlan: true,
                 subscriptionStart: true,
                 subscriptionEnd: true,
                 isActive: true,
+                subscriptionPlanId: true,
+                subscriptionPlan: {
+                    select: {
+                        id: true,
+                        name: true,
+                        monthlyPrice: true,
+                        annualPrice: true,
+                        maxUsers: true,
+                        features: true
+                    }
+                },
                 _count: {
                     select: {
                         users: true,
@@ -416,6 +431,7 @@ export const getOrganizationDetails = async (req, res) => {
         const organization = await prisma.organization.findUnique({
             where: { id },
             include: {
+                subscriptionPlan: true,
                 _count: {
                     select: {
                         users: true,
@@ -589,15 +605,7 @@ export const getOrganizationAdmins = async (req, res) => {
                 roles: {
                     some: {
                         role: {
-                            permissions: {
-                                some: {
-                                    permission: {
-                                        key: {
-                                            contains: "admin"
-                                        }
-                                    }
-                                }
-                            }
+                            name: 'Org_Admin'
                         }
                     }
                 }
@@ -651,6 +659,7 @@ export const generateOrganizationBill = async (req, res) => {
         const organization = await prisma.organization.findUnique({
             where: { id },
             include: {
+                subscriptionPlan: true,
                 _count: {
                     select: {
                         users: {
@@ -671,18 +680,13 @@ export const generateOrganizationBill = async (req, res) => {
         const activeUserCount = organization._count.users;
         let pricePerUser;
         
-        switch(organization.subscriptionPlan) {
-            case 'BASIC':
-                pricePerUser = 5; // $5 per user
-                break;
-            case 'STANDARD':
-                pricePerUser = 10; // $10 per user
-                break;
-            case 'PREMIUM':
-                pricePerUser = 15; // $15 per user
-                break;
-            default:
-                pricePerUser = 5; // Default price
+        // Use pricing from subscription plan if available
+        if (organization.subscriptionPlan) {
+            // Using monthly price as the per-user price
+            pricePerUser = organization.subscriptionPlan.monthlyPrice;
+        } else {
+            // Fallback pricing if no plan is associated
+            pricePerUser = 5; // Default price
         }
         
         const totalAmount = activeUserCount * pricePerUser;
@@ -690,32 +694,118 @@ export const generateOrganizationBill = async (req, res) => {
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + 15); // Due in 15 days
         
-        // Create or update bill in database (you would need to create a billing model in schema)
-        // For now, we'll just return the calculated bill
+        // Check if bill already exists for this period
+        const existingBill = await prisma.billingRecord.findUnique({
+            where: {
+                organizationId_month_year: {
+                    organizationId: id,
+                    month,
+                    year
+                }
+            }
+        });
         
-        const bill = {
-            organizationId: id,
+        let bill;
+        
+        if (existingBill) {
+            // Update existing bill with new user count and total amount
+            bill = await prisma.billingRecord.update({
+                where: { id: existingBill.id },
+                data: {
+                    activeUserCount,
+                    pricePerUser,
+                    totalAmount,
+                    updatedAt: new Date()
+                }
+            });
+        } else {
+            // Create new bill
+            bill = await prisma.billingRecord.create({
+                data: {
+                    organizationId: id,
+                    month,
+                    year,
+                    activeUserCount,
+                    pricePerUser,
+                    totalAmount,
+                    status: 'UNPAID',
+                    billDate,
+                    dueDate
+                }
+            });
+        }
+        
+        // Add organization name for the frontend
+        const billWithOrgName = {
+            ...bill,
             organizationName: organization.name,
-            month,
-            year,
-            activeUserCount,
-            pricePerUser,
-            totalAmount,
-            subscriptionPlan: organization.subscriptionPlan,
-            status: 'UNPAID',
-            billDate: billDate.toISOString(),
-            dueDate: dueDate.toISOString()
+            subscriptionPlan: organization.subscriptionPlan?.name || 'No Plan'
         };
-        
-        // In a real implementation, you would save this bill to the database
         
         res.status(200).json({ 
             message: "Bill generated successfully", 
-            bill 
+            bill: billWithOrgName
         });
     } catch (error) {
         console.error('Error generating organization bill:', error);
         res.status(500).json({ message: "Error generating organization bill", error: error.message });
+    }
+};
+
+/**
+ * Get all bills for an organization
+ */
+export const getOrganizationBills = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status, year, page = 1, limit = 10 } = req.query;
+        
+        // Check if organization exists
+        const organization = await prisma.organization.findUnique({
+            where: { id }
+        });
+        
+        if (!organization) {
+            return res.status(404).json({ message: "Organization not found" });
+        }
+        
+        // Build filter
+        const filter = { organizationId: id };
+        if (status) filter.status = status;
+        if (year) filter.year = parseInt(year);
+        
+        // Calculate pagination
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        // Get bill count
+        const totalBills = await prisma.billingRecord.count({
+            where: filter
+        });
+        
+        // Get bills
+        const bills = await prisma.billingRecord.findMany({
+            where: filter,
+            orderBy: [
+                { year: 'desc' },
+                { month: 'desc' }
+            ],
+            skip,
+            take: parseInt(limit)
+        });
+        
+        res.status(200).json({
+            bills,
+            pagination: {
+                total: totalBills,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(totalBills / parseInt(limit))
+            },
+            organizationName: organization.name
+        });
+    } catch (error) {
+        console.error('Error fetching organization bills:', error);
+        res.status(500).json({ message: "Error fetching organization bills", error: error.message });
     }
 };
 
@@ -727,13 +817,16 @@ export const sendBillEmail = async (req, res) => {
         const { id } = req.params;
         const { billId, month, year } = req.body;
         
-        if (!month || !year) {
-            return res.status(400).json({ message: "Month and year are required" });
+        if ((!billId && (!month || !year))) {
+            return res.status(400).json({ message: "Either billId or both month and year are required" });
         }
         
         // Get organization
         const organization = await prisma.organization.findUnique({
-            where: { id }
+            where: { id },
+            include: {
+                subscriptionPlan: true
+            }
         });
         
         if (!organization) {
@@ -748,15 +841,7 @@ export const sendBillEmail = async (req, res) => {
                 roles: {
                     some: {
                         role: {
-                            permissions: {
-                                some: {
-                                    permission: {
-                                        key: {
-                                            contains: "admin"
-                                        }
-                                    }
-                                }
-                            }
+                            name: 'Org_Admin'
                         }
                     }
                 }
@@ -767,86 +852,58 @@ export const sendBillEmail = async (req, res) => {
             return res.status(404).json({ message: "No admin users found for this organization" });
         }
         
-        // Generate the bill if not already provided
+        // Get or create the bill
         let bill;
-        if (!billId) {
-            // Logic to generate bill (similar to the generateOrganizationBill function)
-            const activeUserCount = await prisma.user.count({
+        
+        if (billId) {
+            // Find existing bill
+            bill = await prisma.billingRecord.findUnique({
+                where: { id: billId }
+            });
+            
+            if (!bill) {
+                return res.status(404).json({ message: "Bill not found" });
+            }
+        } else {
+            // Find bill by month and year
+            bill = await prisma.billingRecord.findUnique({
                 where: {
-                    orgId: id,
-                    status: 'active'
+                    organizationId_month_year: {
+                        organizationId: id,
+                        month,
+                        year
+                    }
                 }
             });
             
-            let pricePerUser;
-            switch(organization.subscriptionPlan) {
-                case 'BASIC':
-                    pricePerUser = 5;
-                    break;
-                case 'STANDARD':
-                    pricePerUser = 10;
-                    break;
-                case 'PREMIUM':
-                    pricePerUser = 15;
-                    break;
-                default:
-                    pricePerUser = 5;
+            // If bill doesn't exist, create it
+            if (!bill) {
+                const result = await generateBill(id, month, year);
+                bill = result.bill;
             }
-            
-            const totalAmount = activeUserCount * pricePerUser;
-            
-            bill = {
-                organizationId: id,
-                organizationName: organization.name,
-                month,
-                year,
-                activeUserCount,
-                pricePerUser,
-                totalAmount,
-                subscriptionPlan: organization.subscriptionPlan
-            };
-        } else {
-            // In a real implementation, you would fetch the bill from the database
-            // For now, we'll just create a dummy bill
-            bill = {
-                id: billId,
-                organizationId: id,
-                organizationName: organization.name,
-                month,
-                year,
-                // Other bill details would be fetched from the database
-            };
         }
         
         // Send email to each admin
-        // This is a placeholder - in a real implementation, you would use your email sending function
-        // For example, you could use the sendPasswordResetEmail function from src/util/sendEmail.js
-        // and modify it to send billing information
-        
         const adminEmails = admins.map(admin => admin.email);
+        const emailPromises = [];
         
-        // Construct email content
-        const emailSubject = `${organization.name} - Billing Statement for ${month}/${year}`;
-        const emailContent = `
-            <div>
-                <h2>Billing Statement</h2>
-                <p>Organization: ${organization.name}</p>
-                <p>Period: ${month}/${year}</p>
-                <p>Total Amount: $${bill.totalAmount}</p>
-                <p>Active Users: ${bill.activeUserCount}</p>
-                <p>Subscription Plan: ${bill.subscriptionPlan}</p>
-                <p>Please process this payment within 15 days.</p>
-            </div>
-        `;
+        for (const email of adminEmails) {
+            const emailData = {
+                ...bill,
+                subscriptionPlan: organization.subscriptionPlan?.name || 'No Plan'
+            };
+            
+            emailPromises.push(sendBillingEmail(email, emailData, organization.name));
+        }
         
-        // In a real implementation, you would call your email sending function here
-        // For now, we'll just log the emails that would be sent
-        console.log(`Would send billing email to: ${adminEmails.join(', ')}`);
-        console.log(`Email subject: ${emailSubject}`);
-        console.log(`Email content: ${emailContent}`);
+        // Wait for all emails to be sent
+        const emailResults = await Promise.allSettled(emailPromises);
+        
+        // Count successful emails
+        const successCount = emailResults.filter(result => result.status === 'fulfilled').length;
         
         res.status(200).json({ 
-            message: "Bill email would be sent successfully", 
+            message: `${successCount} out of ${adminEmails.length} emails sent successfully`, 
             recipients: adminEmails,
             bill
         });
@@ -869,7 +926,10 @@ export const sendBillsToAllOrganizations = async (req, res) => {
         
         // Get all active organizations
         const organizations = await prisma.organization.findMany({
-            where: { isActive: true }
+            where: { isActive: true },
+            include: {
+                subscriptionPlan: true
+            }
         });
         
         if (organizations.length === 0) {
@@ -881,13 +941,8 @@ export const sendBillsToAllOrganizations = async (req, res) => {
         // For each organization, generate bill and send to admins
         for (const organization of organizations) {
             try {
-                // Get active user count
-                const activeUserCount = await prisma.user.count({
-                    where: {
-                        orgId: organization.id,
-                        status: 'active'
-                    }
-                });
+                // Generate or update bill
+                const { bill, activeUserCount, pricePerUser, totalAmount } = await generateBill(organization.id, month, year);
                 
                 // Get organization admins
                 const admins = await prisma.user.findMany({
@@ -897,47 +952,30 @@ export const sendBillsToAllOrganizations = async (req, res) => {
                         roles: {
                             some: {
                                 role: {
-                                    permissions: {
-                                        some: {
-                                            permission: {
-                                                key: {
-                                                    contains: "admin"
-                                                }
-                                            }
-                                        }
-                                    }
+                                    name: 'Org_Admin'
                                 }
                             }
                         }
                     }
                 });
                 
-                // Calculate bill
-                let pricePerUser;
-                switch(organization.subscriptionPlan) {
-                    case 'BASIC':
-                        pricePerUser = 5;
-                        break;
-                    case 'STANDARD':
-                        pricePerUser = 10;
-                        break;
-                    case 'PREMIUM':
-                        pricePerUser = 15;
-                        break;
-                    default:
-                        pricePerUser = 5;
-                }
-                
-                const totalAmount = activeUserCount * pricePerUser;
-                
-                // In a real implementation, save the bill to database
-                
-                // If there are admins, prepare to send emails
+                // If there are admins, send emails
                 if (admins.length > 0) {
                     const adminEmails = admins.map(admin => admin.email);
+                    const emailPromises = [];
                     
-                    // In a real implementation, send the emails
-                    // For now, just track what would be sent
+                    for (const email of adminEmails) {
+                        const emailData = {
+                            ...bill,
+                            subscriptionPlan: organization.subscriptionPlan?.name || 'No Plan'
+                        };
+                        
+                        emailPromises.push(sendBillingEmail(email, emailData, organization.name));
+                    }
+                    
+                    // Process emails in parallel
+                    const emailResults = await Promise.allSettled(emailPromises);
+                    const successCount = emailResults.filter(result => result.status === 'fulfilled').length;
                     
                     results.push({
                         organizationId: organization.id,
@@ -945,6 +983,7 @@ export const sendBillsToAllOrganizations = async (req, res) => {
                         adminEmails,
                         activeUserCount,
                         totalAmount,
+                        emailsSent: successCount,
                         status: 'prepared'
                     });
                 } else {
@@ -968,11 +1007,312 @@ export const sendBillsToAllOrganizations = async (req, res) => {
         }
         
         res.status(200).json({
-            message: `Prepared billing for ${organizations.length} organizations`,
+            message: `Processed billing for ${organizations.length} organizations`,
             results
         });
     } catch (error) {
         console.error('Error sending bills to all organizations:', error);
         res.status(500).json({ message: "Error sending bills", error: error.message });
+    }
+};
+
+/**
+ * Helper function to generate or update a bill
+ */
+const generateBill = async (organizationId, month, year) => {
+    // Get organization with user count
+    const organization = await prisma.organization.findUnique({
+        where: { id: organizationId },
+        include: {
+            subscriptionPlan: true,
+            _count: {
+                select: {
+                    users: {
+                        where: {
+                            status: 'active'
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    if (!organization) {
+        throw new Error("Organization not found");
+    }
+    
+    // Calculate bill based on subscription plan and user count
+    const activeUserCount = organization._count.users;
+    let pricePerUser;
+    
+    // Use pricing from subscription plan if available
+    if (organization.subscriptionPlan) {
+        // Using monthly price as the per-user price
+        pricePerUser = organization.subscriptionPlan.monthlyPrice;
+    } else {
+        // Fallback pricing if no plan is associated
+        pricePerUser = 5; // Default price
+    }
+    
+    const totalAmount = activeUserCount * pricePerUser;
+    const billDate = new Date();
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 15); // Due in 15 days
+    
+    // Check if bill already exists for this period
+    const existingBill = await prisma.billingRecord.findUnique({
+        where: {
+            organizationId_month_year: {
+                organizationId,
+                month,
+                year
+            }
+        }
+    });
+    
+    let bill;
+    
+    if (existingBill) {
+        // Update existing bill with new user count and total amount
+        bill = await prisma.billingRecord.update({
+            where: { id: existingBill.id },
+            data: {
+                activeUserCount,
+                pricePerUser,
+                totalAmount,
+                updatedAt: new Date()
+            }
+        });
+    } else {
+        // Create new bill
+        bill = await prisma.billingRecord.create({
+            data: {
+                organizationId,
+                month,
+                year,
+                activeUserCount,
+                pricePerUser,
+                totalAmount,
+                status: 'UNPAID',
+                billDate,
+                dueDate
+            }
+        });
+    }
+    
+    return { bill, activeUserCount, pricePerUser, totalAmount };
+};
+
+/**
+ * Update bill status
+ */
+export const updateBillStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status, paymentReference, notes } = req.body;
+        
+        if (!status) {
+            return res.status(400).json({ message: "Status is required" });
+        }
+        
+        // Check if bill exists
+        const bill = await prisma.billingRecord.findUnique({
+            where: { id }
+        });
+        
+        if (!bill) {
+            return res.status(404).json({ message: "Bill not found" });
+        }
+        
+        // Update data
+        const updateData = { status };
+        
+        if (status === 'PAID') {
+            updateData.paidDate = new Date();
+        }
+        
+        if (paymentReference) updateData.paymentReference = paymentReference;
+        if (notes) updateData.notes = notes;
+        
+        // Update bill
+        const updatedBill = await prisma.billingRecord.update({
+            where: { id },
+            data: updateData
+        });
+        
+        res.status(200).json({
+            message: "Bill status updated successfully",
+            bill: updatedBill
+        });
+    } catch (error) {
+        console.error('Error updating bill status:', error);
+        res.status(500).json({ message: "Error updating bill status", error: error.message });
+    }
+};
+
+/**
+ * Get billing statistics for dashboard
+ */
+export const getBillingStatistics = async (req, res) => {
+    try {
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;
+        
+        // Get total billing amount this month
+        const thisMonthBills = await prisma.billingRecord.findMany({
+            where: {
+                month: currentMonth,
+                year: currentYear
+            }
+        });
+        
+        const totalBilledThisMonth = thisMonthBills.reduce((sum, bill) => sum + bill.totalAmount, 0);
+        const totalPaidThisMonth = thisMonthBills
+            .filter(bill => bill.status === 'PAID')
+            .reduce((sum, bill) => sum + bill.totalAmount, 0);
+        
+        // Get billing status breakdown
+        const unpaidBills = await prisma.billingRecord.count({
+            where: { status: 'UNPAID' }
+        });
+        
+        const paidBills = await prisma.billingRecord.count({
+            where: { status: 'PAID' }
+        });
+        
+        const overdueBills = await prisma.billingRecord.count({
+            where: { status: 'OVERDUE' }
+        });
+        
+        // Get organizations with pending bills
+        const orgsWithPendingBills = await prisma.billingRecord.findMany({
+            where: {
+                status: 'UNPAID'
+            },
+            select: {
+                organizationId: true,
+                organization: {
+                    select: {
+                        name: true
+                    }
+                },
+                totalAmount: true,
+                dueDate: true
+            },
+            orderBy: {
+                dueDate: 'asc'
+            },
+            take: 5
+        });
+        
+        res.status(200).json({
+            billing: {
+                totalBilledThisMonth,
+                totalPaidThisMonth,
+                collectionRate: totalBilledThisMonth ? (totalPaidThisMonth / totalBilledThisMonth) * 100 : 0
+            },
+            billStatus: {
+                unpaid: unpaidBills,
+                paid: paidBills,
+                overdue: overdueBills,
+                total: unpaidBills + paidBills + overdueBills
+            },
+            pendingBills: orgsWithPendingBills.map(bill => ({
+                organizationId: bill.organizationId,
+                organizationName: bill.organization.name,
+                amount: bill.totalAmount,
+                dueDate: bill.dueDate
+            }))
+        });
+    } catch (error) {
+        console.error('Error fetching billing statistics:', error);
+        res.status(500).json({ message: "Error fetching billing statistics", error: error.message });
+    }
+};
+
+/**
+ * Get a specific bill by ID
+ */
+export const getBillById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const bill = await prisma.billingRecord.findUnique({
+            where: { id },
+            include: {
+                organization: {
+                    select: {
+                        name: true,
+                        logo: true,
+                        subscriptionPlanId: true,
+                        subscriptionPlan: true
+                    }
+                }
+            }
+        });
+        
+        if (!bill) {
+            return res.status(404).json({ message: "Bill not found" });
+        }
+        
+        // Format the bill for the frontend
+        const subscriptionPlanName = bill.organization.subscriptionPlan?.name || 'No Plan';
+        
+        const formattedBill = {
+            ...bill,
+            organizationName: bill.organization.name,
+            organizationLogo: bill.organization.logo,
+            subscriptionPlan: subscriptionPlanName,
+            monthName: new Date(bill.year, bill.month - 1).toLocaleString('default', { month: 'long' }),
+        };
+        
+        res.status(200).json(formattedBill);
+    } catch (error) {
+        console.error('Error fetching bill details:', error);
+        res.status(500).json({ message: "Error fetching bill details", error: error.message });
+    }
+};
+
+// Add a controller to process payments
+export const processBillPayment = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { paymentMethod, paymentReference } = req.body;
+        
+        // Validate input
+        if (!paymentMethod) {
+            return res.status(400).json({ message: "Payment method is required" });
+        }
+        
+        // Check if bill exists and is unpaid
+        const bill = await prisma.billingRecord.findUnique({
+            where: { id }
+        });
+        
+        if (!bill) {
+            return res.status(404).json({ message: "Bill not found" });
+        }
+        
+        if (bill.status === 'PAID') {
+            return res.status(400).json({ message: "Bill is already paid" });
+        }
+        
+        // Update bill status to PAID
+        const updatedBill = await prisma.billingRecord.update({
+            where: { id },
+            data: {
+                status: 'PAID',
+                paidDate: new Date(),
+                paymentReference: paymentReference || `${paymentMethod}-${Date.now()}`
+            }
+        });
+        
+        res.status(200).json({
+            message: "Payment processed successfully",
+            bill: updatedBill
+        });
+    } catch (error) {
+        console.error('Error processing payment:', error);
+        res.status(500).json({ message: "Error processing payment", error: error.message });
     }
 };

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
+    <!-- Stylized people icons in original position -->
+    <g transform="translate(70, 65) scale(0.9)">
+      <!-- Person 1 -->
+      <circle cx="50" cy="40" r="20" fill="#4CAF50"/>
+      <rect x="30" y="65" width="40" height="50" rx="10" fill="#4CAF50"/>
+      
+      <!-- Person 2 -->
+      <circle cx="100" cy="40" r="20" fill="#FF9800"/>
+      <rect x="80" y="65" width="40" height="50" rx="10" fill="#FF9800"/>
+      
+      <!-- Person 3 (smaller, behind) -->
+      <circle cx="75" cy="30" r="15" fill="#2E7D32"/>
+      <rect x="60" y="50" width="30" height="40" rx="8" fill="#2E7D32"/>
+    </g>
+    
+    <!-- Text - "Alkaa" branding with capitalized A, vertically centered -->
+    <text x="200" y="130" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#2E7D32" dominant-baseline="middle">Alkaa</text>
+  </svg>

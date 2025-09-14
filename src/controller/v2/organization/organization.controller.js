@@ -1,5 +1,7 @@
 import prisma from '../../../db/connectDb.js';
 import { body, validationResult } from 'express-validator';
+import { initializePresetsForOrg } from '../../../seed/PermissionPreset.js';
+import { sendEmailWithCustomContent, sendPasswordResetEmail } from '../../../util/sendEmail.js';
 
 // Get all organizations
 const getOrganization = async (req, res) => {
@@ -11,7 +13,8 @@ const getOrganization = async (req, res) => {
                         firstName: true,
                         lastName: true,
                     }
-                }
+                },
+                subscriptionPlan: true,
             }
         });
         res.status(200).json(organizations);
@@ -32,6 +35,7 @@ const getOrganizationById = async (req, res) => {
             include: {
                 users: true,
                 departments: true,
+                subscriptionPlan: true,
             }
         });
         res.status(200).json(organization);
@@ -44,7 +48,7 @@ const getOrganizationById = async (req, res) => {
 const createOrganization = [
     body('name').notEmpty().withMessage('Name is required'),
     body('industry').optional().notEmpty().withMessage('Industry is required'),
-    body('subscriptionPlan').notEmpty().withMessage('Subscription Plan is required'),
+    body('subscriptionPlanId').notEmpty().withMessage('Subscription Plan is required'),
     body('subscriptionEnd').optional().isISO8601().withMessage('Subscription End must be a valid date'),
     body('isActive').optional().isBoolean().withMessage('IsActive must be a boolean'),
     body('settings').optional().isJSON().withMessage('Settings must be a valid JSON'),
@@ -55,13 +59,13 @@ const createOrganization = [
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { name, industry, subscriptionPlan, subscriptionEnd, isActive, settings } = req.body;
+        const { name, industry, subscriptionPlanId, subscriptionEnd, isActive, settings } = req.body;
         try {
             const newOrganization = await prisma.organization.create({
                 data: {
                     name,
                     industry,
-                    subscriptionPlan,
+                    subscriptionPlanId,
                     subscriptionEnd,
                     isActive,
                     settings
@@ -71,10 +75,12 @@ const createOrganization = [
                 data: {
                     orgId: newOrganization.id,
                     settings: {
-                        weekof: [0, 6]
+                        weekoff: [0, 6]
                     }   
                 }
             });
+            initializePresetsForOrg(newOrganization.id);
+            console.log("New organization created with ID:", newOrganization.id);
             console.log(newSettings);
             console.log(newOrganization);
             
@@ -92,7 +98,7 @@ const updateOrganization = [
     body('id').notEmpty().withMessage('ID is required'),
     body('name').optional().notEmpty().withMessage('Name is required'),
     body('industry').optional().notEmpty().withMessage('Industry is required'),
-    body('subscriptionPlan').optional().notEmpty().withMessage('Subscription Plan is required'),
+    body('subscriptionPlanId').optional(),  // Remove notEmpty() validation to allow null
     body('subscriptionEnd').optional().isISO8601().withMessage('Subscription End must be a valid date'),
     body('isActive').optional().isBoolean().withMessage('IsActive must be a boolean'),
 
@@ -104,17 +110,17 @@ const updateOrganization = [
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { id, name, industry, subscriptionPlan, subscriptionEnd, isActive, settings } = req.body;
+        const { id, name, industry, subscriptionPlanId, subscriptionEnd, isActive, settings } = req.body;
         try {
             const updatedOrganization = await prisma.organization.update({
                 where: { id },
                 data: {
-                    ...(name && { name }),
-                    ...(industry && { industry }),
-                    ...(subscriptionPlan && { subscriptionPlan }),
-                    ...(subscriptionEnd && { subscriptionEnd }),
+                    ...(name !== undefined && { name }),
+                    ...(industry !== undefined && { industry }),
+                    ...(subscriptionPlanId !== undefined && { subscriptionPlanId }),  // Changed from truthy check to undefined check
+                    ...(subscriptionEnd !== undefined && { subscriptionEnd }),
                     ...(isActive !== undefined && { isActive }),
-                    ...(settings && { settings })
+                    ...(settings !== undefined && { settings })
                 }
             });
             res.status(200).json(updatedOrganization);
@@ -279,7 +285,22 @@ const deleteOrganization = [
                     where: { orgId: id }
                 });
                 
-                // 19. Finally delete the organization itself
+                // Delete permission presets before deleting the organization
+                await tx.permissionPreset.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                // 19. Delete billing records
+                await tx.billingRecord.deleteMany({
+                    where: { organizationId: id }
+                });
+                
+                // 20. Delete activity logs
+                await tx.activityLog.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                // 21. Finally delete the organization itself
                 await tx.organization.delete({
                     where: { id }
                 });
@@ -397,6 +418,311 @@ const removeOrganizationAdmin = async (req, res) => {
     }
 };
 
+// Create complete organization with admin role and admin user in single transaction
+const createCompleteOrganization = [
+    // Organization validation
+    body('organization.name').notEmpty().withMessage('Organization name is required'),
+    body('organization.industry').optional().notEmpty().withMessage('Industry is required'),
+    body('organization.subscriptionPlanId').notEmpty().withMessage('Subscription Plan is required'),
+    body('organization.subscriptionEnd').optional().isISO8601().withMessage('Subscription End must be a valid date'),
+    body('organization.isActive').optional().isBoolean().withMessage('IsActive must be a boolean'),
+    body('organization.settings').optional().isJSON().withMessage('Settings must be a valid JSON'),
+    
+    // Admin user validation
+    body('admin.email').isEmail().withMessage('Valid admin email is required'),
+    body('admin.firstName').notEmpty().withMessage('Admin first name is required'),
+    body('admin.lastName').notEmpty().withMessage('Admin last name is required'),
+    
+    // Admin role permissions validation
+    body('permissions').isArray({ min: 1 }).withMessage('At least one permission is required for admin role'),
+
+    async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        const { organization, admin, permissions } = req.body;
+        try {
+            // Execute everything in a single transaction with rollback on error
+            const result = await prisma.$transaction(async (tx) => {
+                console.log('Starting organization creation transaction...');
+                
+                // Step 1: Create Organization
+                console.log('Creating organization...');
+                const newOrganization = await tx.organization.create({
+                    data: {
+                        name: organization.name,
+                        industry: organization.industry,
+                        subscriptionPlanId: organization.subscriptionPlanId,
+                        subscriptionEnd: organization.subscriptionEnd || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                        isActive: organization.isActive ?? true,
+                        settings: organization.settings || JSON.stringify({})
+                    }
+                });
+                console.log('Organization created with ID:', newOrganization.id);
+
+                // Step 2: Create Organization Settings
+                console.log('Creating organization settings...');
+                const newSettings = await tx.organizationSettings.create({
+                    data: {
+                        orgId: newOrganization.id,
+                        settings: {
+                            weekoff: [0, 6],
+                            workingHours: "9:00 AM - 6:00 PM",
+                            timezone: "Asia/Kolkata"
+                        }   
+                    }
+                });
+                console.log('Organization settings created');
+
+                // Step 3: Check if admin email already exists
+                console.log('Checking for existing admin email...');
+                const existingUser = await tx.user.findFirst({
+                    where: {
+                        email: admin.email
+                    }
+                });
+
+                if (existingUser) {
+                    throw new Error(`User with email ${admin.email} already exists`);
+                }
+
+                // Step 4: Create Admin Role with permissions
+                console.log('Creating admin role...');
+                const adminRole = await tx.role.create({
+                    data: {
+                        orgId: newOrganization.id,
+                        name: 'Org_Admin',
+                        description: 'Full administrative access to organization',
+                        isDefault: true,
+                        permissions: {
+                            create: permissions.map(permissionId => ({
+                                permission: {
+                                    connect: { id: permissionId }
+                                }
+                            }))
+                        }
+                    },
+                    include: {
+                        permissions: {
+                            include: {
+                                permission: true
+                            }
+                        }
+                    }
+                });
+                console.log('Admin role created with ID:', adminRole.id);
+
+                // Step 5: Generate verification token and create admin user
+                console.log('Creating admin user...');
+                const verificationToken = Math.random().toString(36).substring(2, 15) + 
+                                       Math.random().toString(36).substring(2, 15);
+                
+                const adminUser = await tx.user.create({
+                    data: {
+                        orgId: newOrganization.id,
+                        email: admin.email,
+                        firstName: admin.firstName,
+                        lastName: admin.lastName,
+                        status: 'inactive', 
+                        verificationToken: verificationToken,
+                        hiredDate: new Date(),
+                        roles: {
+                            create: [{
+                                role: {
+                                    connect: { id: adminRole.id }
+                                }
+                            }]
+                        }
+                    },
+                    include: {
+                        roles: {
+                            include: {
+                                role: {
+                                    include: {
+                                        permissions: {
+                                            include: {
+                                                permission: true
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+
+                console.log('Admin user created with ID:', adminUser.id);
+                const organization_admin = await tx.organization_admin.create({
+                    data:{
+                        adminId:adminUser.id,
+                        orgId:newOrganization.id
+                    }
+                })
+                console.log('Admin user assigned to organization admin role');
+
+                // Step 6: Initialize permission presets for organization
+                console.log('Initializing permission presets...');
+                // Note: This is called outside transaction as it's a separate operation
+                
+                return {
+                    organization: newOrganization,
+                    organizationSettings: newSettings,
+                    adminRole: adminRole,
+                    adminUser: adminUser,
+                    verificationToken: verificationToken
+                };
+            }, {
+                maxWait: 10000, // 10 seconds
+                timeout: 20000, // 20 seconds
+            });
+
+            // Step 7: Initialize permission presets (outside transaction)
+            try {
+                await initializePresetsForOrg(result.organization.id);
+                console.log('Permission presets initialized');
+            } catch (presetError) {
+                console.warn('Permission preset initialization failed:', presetError.message);
+                // Don't fail the entire operation for this
+            }
+
+            // Step 8: Send welcome email to admin
+            try {
+                // Send welcome email to admin with password reset link
+                const resetToken = result.verificationToken;
+                const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+cmcaoet8t0001tg1cz9asq6go
+cmcaof3i1002ttg1c5qfvpjzv
+                const emailSubject = "Welcome to Alkaa - Your Organization Setup is Complete";
+
+                const emailContent = `
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fafafa;">
+                    <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <div style="background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 50%, #FF9800 100%); padding: 40px 20px; text-align: center;">
+                            <img src="${process.env.CLIENT_URL}/logo.svg" alt="Alkaa" style="height: 60px; margin-bottom: 20px;" onerror="this.style.display='none';">
+                            <h1 style="color: white; margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -0.5px;">Welcome to Alkaa!</h1>
+                        </div>
+                        
+                        <div style="padding: 40px 30px;">
+                            <p style="margin-bottom: 20px; line-height: 1.6; font-size: 18px; color: #1a1a1a;">Hello ${admin.firstName},</p>
+                            
+                            <p style="margin-bottom: 25px; line-height: 1.7; font-size: 16px; color: #4a4a4a;">
+                                Fantastic news! 🎉 Your organization <strong style="color: #2E7D32;">${organization.name}</strong> is now live on the Alkaa platform. 
+                                We're genuinely excited to be part of your HR journey.
+                            </p>
+                            
+                            <p style="margin-bottom: 30px; line-height: 1.7; font-size: 16px; color: #4a4a4a;">
+                                As the administrator, you now have access to a comprehensive suite of tools designed to simplify 
+                                workforce management, streamline daily operations, and help your team thrive.
+                            </p>
+                            
+                            <div style="background-color: #f8f9fa; padding: 30px; border-radius: 8px; margin: 30px 0;">
+                                <h2 style="color: #2E7D32; font-size: 20px; margin: 0 0 20px; font-weight: 500;">Your Next Steps:</h2>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <span style="display: inline-block; background-color: #2E7D32; color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 14px; font-weight: bold; margin-right: 12px;">1</span>
+                                    <span style="color: #1a1a1a; font-weight: 500;">Set up your secure password</span>
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <span style="display: inline-block; background-color: #4CAF50; color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 14px; font-weight: bold; margin-right: 12px;">2</span>
+                                    <span style="color: #1a1a1a; font-weight: 500;">Complete your organization profile</span>
+                                </div>
+                                
+                                <div style="margin-bottom: 0;">
+                                    <span style="display: inline-block; background-color: #FF9800; color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 14px; font-weight: bold; margin-right: 12px;">3</span>
+                                    <span style="color: #1a1a1a; font-weight: 500;">Start inviting your team members</span>
+                                </div>
+                            </div>
+                            
+                            <div style="text-align: center; margin: 40px 0;">
+                                <a href="${resetUrl}" style="background: linear-gradient(135deg, #2E7D32, #4CAF50); color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 16px rgba(46, 125, 50, 0.3); transition: all 0.2s;">
+                                    Set Up My Account →
+                                </a>
+                            </div>
+                            
+                            <div style="background-color: #fff3cd; padding: 20px; border-radius: 6px; border-left: 4px solid #ffc107; margin: 30px 0;">
+                                <p style="color: #856404; font-size: 14px; margin: 0; line-height: 1.6;">
+                                    <strong>Security Notice:</strong> This link expires in 24 hours. Need help getting started? 
+                                    Our support team is ready to assist at <a href="mailto:support@alkaa.online" style="color: #856404; font-weight: 500;">support@alkaa.online</a>
+                                </p>
+                            </div>
+                            
+                            <p style="margin-bottom: 25px; line-height: 1.7; font-size: 16px; color: #4a4a4a;">
+                                We're committed to making ${organization.name}'s transition to digital HR management as smooth as possible. 
+                                Here's to building something great together! 🚀
+                            </p>
+                            
+                            <p style="line-height: 1.6; font-size: 16px; color: #4a4a4a;">
+                                Warm regards,<br>
+                                <span style="color: #2E7D32; font-weight: 500;">The Alkaa Team</span>
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 25px; color: #8e8e93; font-size: 12px;">
+                        <p style="margin: 0 0 5px;">© ${new Date().getFullYear()} Alkaa. Building better workplaces together.</p>
+                        <p style="margin: 0;">This email was sent to the administrator of ${organization.name}</p>
+                    </div>
+                </div>
+                `;
+                console.log('Sending welcome email to admin:', admin.email);
+                
+                await sendEmailWithCustomContent(admin.email, emailSubject, emailContent);
+                console.log('Welcome email sent to admin');
+            } catch (emailError) {
+                console.warn('Failed to send welcome email:', emailError.message);
+                // Don't fail the entire operation for email failure
+            }
+
+            console.log('Organization creation completed successfully!');
+            
+            // Return success response with all created data
+            res.status(201).json({
+                success: true,
+                message: 'Organization created successfully with admin user',
+                data: {
+                    organization: {
+                        id: result.organization.id,
+                        name: result.organization.name,
+                        industry: result.organization.industry,
+                        isActive: result.organization.isActive
+                    },
+                    adminRole: {
+                        id: result.adminRole.id,
+                        name: result.adminRole.name,
+                        permissions: result.adminRole.permissions.map(p => ({
+                            id: p.permission.id,
+                            name: p.permission.name,
+                            description: p.permission.description
+                        }))
+                    },
+                    adminUser: {
+                        id: result.adminUser.id,
+                        email: result.adminUser.email,
+                        firstName: result.adminUser.firstName,
+                        lastName: result.adminUser.lastName,
+                        status: result.adminUser.status
+                    }
+                }
+            });
+
+        } catch (error) {
+            console.error('Organization creation failed, transaction rolled back:', error);
+            
+            // Return detailed error response
+            res.status(500).json({
+                success: false,
+                message: 'Organization creation failed',
+                error: error.message,
+                details: 'All changes have been rolled back automatically'
+            });
+        }
+    }
+];
+
 export {
     getOrganization,
     createOrganization,
@@ -405,5 +731,6 @@ export {
     getOrganizationById,
     setOrgAdmin,
     getOrganizationAdmins,
-    removeOrganizationAdmin
+    removeOrganizationAdmin,
+    createCompleteOrganization
 };
