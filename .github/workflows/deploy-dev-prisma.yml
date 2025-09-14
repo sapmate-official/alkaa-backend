@@ -1,0 +1,25 @@
+name: Deploy to Development (dev)
+
+on:
+  push:
+    branches: [ dev ]
+    paths:
+      - 'backend/**'
+
+concurrency:
+  group: deploy-dev-render
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Render Development
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Trigger Render deployment
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clear_cache": false}'
+          echo "Render deployment triggered successfully!"
