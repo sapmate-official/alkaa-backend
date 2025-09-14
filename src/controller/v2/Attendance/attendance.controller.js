@@ -34,6 +34,23 @@ export const getAttendanceById = async (req, res) => {
 export const createAttendance = async (req, res) => {
     const { userId, date, sessionNumber, checkInTime, checkOutTime, checkInLocation, checkOutLocation, status, notes, duration } = req.body;
     try {
+        // Get user's hiring date for validation
+        const userDetails = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { hiredDate: true }
+        });
+        
+        const attendanceDate = new Date(date);
+        
+        // Validate attendance date is not before hiring date
+        if (userDetails && userDetails.hiredDate && attendanceDate < new Date(userDetails.hiredDate)) {
+            return res.status(400).json({ 
+                error: "Cannot create attendance for a date before the user's hiring date",
+                hiredDate: userDetails.hiredDate.toISOString().split('T')[0],
+                attemptedDate: attendanceDate.toISOString().split('T')[0]
+            });
+        }
+        
         const newAttendance = await prisma.attendanceRecord.create({
             data: {
                 userId,
@@ -116,16 +133,32 @@ export const checkIn = async (req, res) => {
         const user = req.user;
         console.log('User details:', user);
         
-        // Use client-provided timestamp
+        // Get user's hiring date for validation
+        const userDetails = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { hiredDate: true }
+        });
+        
+        // Use client-provided timestamp with timezone validation
         const checkInDateTime = new Date(checkInTime);
         const attendanceDate = new Date(date);
         const serverTime = new Date();
         
+        // Validate attendance date is not before hiring date
+        if (userDetails.hiredDate && attendanceDate < new Date(userDetails.hiredDate)) {
+            console.log('Attendance date before hiring date:', { attendanceDate, hiredDate: userDetails.hiredDate });
+            return res.status(400).json({ 
+                message: "Cannot check in for a date before your hiring date",
+                hiredDate: userDetails.hiredDate.toISOString().split('T')[0],
+                attemptedDate: attendanceDate.toISOString().split('T')[0]
+            });
+        }
+        
         console.log('Timestamps:', { 
             clientCheckIn: checkInDateTime, 
+            clientTimezone: clientTimezone,
             attendanceDate, 
-            serverTime,
-            timezone: clientTimezone 
+            serverTime 
         });
 
         // Validate that the client time is reasonable (within 24 hours of server time)
@@ -133,7 +166,10 @@ export const checkIn = async (req, res) => {
         if (timeDifferenceHours > 24) {
             console.log('Time difference too large:', timeDifferenceHours, 'hours');
             return res.status(400).json({ 
-                message: "Client time appears to be incorrect. Please check your device's time settings." 
+                message: "Client time appears to be incorrect. Please check your device's time settings.",
+                serverTime: serverTime.toISOString(),
+                clientTime: checkInDateTime.toISOString(),
+                timezoneReceived: clientTimezone
             });
         }
 
@@ -166,9 +202,9 @@ export const checkIn = async (req, res) => {
             data: {
                 userId: user.id,
                 date: attendanceDate,
-                checkInTime: checkInDateTime, // Use client timestamp
+                checkInTime: checkInDateTime, // Store client timestamp as-is (already in UTC)
                 checkInLocation,
-                notes,
+                notes: `${notes || ''} | Client timezone: ${clientTimezone}`.trim(),
                 sessionNumber: nextSessionNumber,
                 status: 'PRESENT',
                 ipAddress: req.ip,
@@ -203,9 +239,26 @@ export const checkOut = async (req, res) => {
         }
 
         const user = req.user;
+        
+        // Get user's hiring date for validation
+        const userDetails = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { hiredDate: true }
+        });
+        
         const checkOutDateTime = new Date(checkOutTime); // Use client timestamp
         let attendanceDate = new Date(date);
         const serverTime = new Date();
+        
+        // Validate attendance date is not before hiring date
+        if (userDetails.hiredDate && attendanceDate < new Date(userDetails.hiredDate)) {
+            console.log('Attendance date before hiring date:', { attendanceDate, hiredDate: userDetails.hiredDate });
+            return res.status(400).json({ 
+                message: "Cannot check out for a date before your hiring date",
+                hiredDate: userDetails.hiredDate.toISOString().split('T')[0],
+                attemptedDate: attendanceDate.toISOString().split('T')[0]
+            });
+        }
 
         console.log('Parsed dates:', {
             originalDate: date,
@@ -218,7 +271,10 @@ export const checkOut = async (req, res) => {
         const timeDifferenceHours = Math.abs(serverTime - checkOutDateTime) / (1000 * 60 * 60);
         if (timeDifferenceHours > 24) {
             return res.status(400).json({ 
-                message: "Client time appears to be incorrect. Please check your device's time settings." 
+                message: "Client time appears to be incorrect. Please check your device's time settings.",
+                serverTime: serverTime.toISOString(),
+                clientTime: checkOutDateTime.toISOString(),
+                timezoneReceived: clientTimezone
             });
         }
 
@@ -310,9 +366,9 @@ export const checkOut = async (req, res) => {
         const updatedSession = await prisma.attendanceRecord.update({
             where: { id: sessionToUpdate.id },
             data: {
-                checkOutTime: checkOutDateTime, // Use client timestamp
+                checkOutTime: checkOutDateTime, // Store client timestamp as-is (already in UTC)
                 checkOutLocation,
-                notes: notes ? `${sessionToUpdate.notes || ''} ${notes}`.trim() : sessionToUpdate.notes,
+                notes: notes ? `${sessionToUpdate.notes || ''} ${notes} | Client timezone: ${clientTimezone}`.trim() : `${sessionToUpdate.notes || ''} | Client timezone: ${clientTimezone}`.trim(),
                 status,
                 duration: sessionDuration,
                 ipAddress: req.ip,
@@ -734,7 +790,10 @@ export const postPastCheckOut = async(req, res) => {
         const timeDifferenceHours = Math.abs(serverTime - checkOutDateTime) / (1000 * 60 * 60);
         if (timeDifferenceHours > 168) { // Allow 1 week difference for past entries
             return res.status(400).json({ 
-                error: "Client time appears to be incorrect. Please check your device's time settings." 
+                error: "Client time appears to be incorrect. Please check your device's time settings.",
+                serverTime: serverTime.toISOString(),
+                clientTime: checkOutDateTime.toISOString(),
+                timezoneReceived: clientTimezone
             });
         }
 
@@ -751,8 +810,8 @@ export const postPastCheckOut = async(req, res) => {
                 id: attendanceId
             },
             data: {
-                checkOutTime: checkOutDateTime, // Use client timestamp
-                notes: notes ? `${attendance.notes || ''} | Late checkout reason: ${notes}`.trim() : attendance.notes,
+                checkOutTime: checkOutDateTime, // Store client timestamp as-is (already in UTC)
+                notes: notes ? `${attendance.notes || ''} | Late checkout reason: ${notes} | Client timezone: ${clientTimezone}`.trim() : `${attendance.notes || ''} | Client timezone: ${clientTimezone}`.trim(),
                 duration: sessionDuration,
                 status: determineStatus(sessionDuration.hours)
             }
@@ -795,10 +854,27 @@ export const createPastAttendance = async (req, res) => {
         }
 
         const user = req.user;
+        
+        // Get user's hiring date for validation
+        const userDetails = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { hiredDate: true }
+        });
+        
         const checkInDateTime = new Date(checkInTime); // Use client timestamp
         const checkOutDateTime = new Date(checkOutTime); // Use client timestamp
         const attendanceDate = new Date(date);
         const serverTime = new Date();
+        
+        // Validate attendance date is not before hiring date
+        if (userDetails.hiredDate && attendanceDate < new Date(userDetails.hiredDate)) {
+            console.log('Past attendance date before hiring date:', { attendanceDate, hiredDate: userDetails.hiredDate });
+            return res.status(400).json({ 
+                message: "Cannot create attendance for a date before your hiring date",
+                hiredDate: userDetails.hiredDate.toISOString().split('T')[0],
+                attemptedDate: attendanceDate.toISOString().split('T')[0]
+            });
+        }
         
         // Validate that the client times are reasonable for past entries
         const checkInTimeDifference = Math.abs(serverTime - checkInDateTime) / (1000 * 60 * 60 * 24);
@@ -806,7 +882,11 @@ export const createPastAttendance = async (req, res) => {
         
         if (checkInTimeDifference > 365 || checkOutTimeDifference > 365) { // Allow up to 1 year for past entries
             return res.status(400).json({ 
-                message: "Date is too far in the past. Please contact your administrator for older records." 
+                message: "Date is too far in the past. Please contact your administrator for older records.",
+                serverTime: serverTime.toISOString(),
+                clientCheckIn: checkInDateTime.toISOString(),
+                clientCheckOut: checkOutDateTime.toISOString(),
+                timezoneReceived: clientTimezone
             });
         }
         
@@ -814,6 +894,20 @@ export const createPastAttendance = async (req, res) => {
         const currentDate = new Date();
         if (attendanceDate > currentDate) {
             return res.status(400).json({ message: "Cannot create attendance for future dates" });
+        }
+        if (attendanceDate == currentDate) {
+            return res.status(400).json({ message: "Cannot create attendance for same-day dates" });
+        }
+        
+        // Check if the attendance date is more than 5 days in the past
+        const fiveDaysAgo = new Date();
+        fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+        if (attendanceDate < fiveDaysAgo) {
+            return res.status(400).json({ 
+                message: "Cannot create attendance for dates more than 5 days in the past. Please contact your administrator for older records.",
+                maxAllowedDate: fiveDaysAgo.toISOString().split('T')[0],
+                attemptedDate: attendanceDate.toISOString().split('T')[0]
+            });
         }
         
         if (checkOutDateTime <= checkInDateTime) {
@@ -843,11 +937,11 @@ export const createPastAttendance = async (req, res) => {
             data: {
                 userId: user.id,
                 date: attendanceDate,
-                checkInTime: checkInDateTime, // Use client timestamp
-                checkOutTime: checkOutDateTime, // Use client timestamp
+                checkInTime: checkInDateTime, // Store client timestamp as-is (already in UTC)
+                checkOutTime: checkOutDateTime, // Store client timestamp as-is (already in UTC)
                 checkInLocation,
                 checkOutLocation,
-                notes: `Past attendance reason: ${notes}`,
+                notes: `Past attendance reason: ${notes} | Client timezone: ${clientTimezone}`,
                 status,
                 duration: sessionDuration,
                 sessionNumber: 1,
