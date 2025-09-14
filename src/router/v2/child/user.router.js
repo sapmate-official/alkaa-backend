@@ -1,5 +1,5 @@
 import express from "express";
-import { createUser, deleteUser, fetchAllSubordinates, fetchAllUsersFromOrg, fetchManagers, getUser, getUserById, hardDeleteUser, updateUser,updateUserDepartment,updateUserRole } from "../../../controller/v2/user/User.controller.js";
+import { createUser, deleteUser, fetchAllSubordinates, fetchAllUsersFromOrg, fetchManagers, getUser, getUserById, hardDeleteUser, hardDeleteUserFromOrg, updateUser,updateUserDepartment,updateUserRole } from "../../../controller/v2/user/User.controller.js";
 import validateToken from "../../../middleware/validateToken.js";
 
 const router = express.Router();
@@ -15,6 +15,9 @@ router.post("/",createUser);
 router.put("/:id",updateUser);
 router.patch("/:id",updateUser);
 router.delete("/",hardDeleteUser);
+
+// Organization-specific hard delete route
+router.delete("/org/:orgId/user/:userId", validateToken, hardDeleteUserFromOrg);
 
 //extra routes
 router.put("/:userId/role/:prevRole/:roleId",updateUserRole);
