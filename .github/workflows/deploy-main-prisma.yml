@@ -26,18 +26,40 @@ jobs:
             set -e
             APP_PATH="/home/ec2-user/Alkaa/alkaa-backend"
             
+            echo "Starting deployment process..."
+            echo "Timestamp: $(date)"
+            
             echo "Pulling latest changes..."
             cd "$APP_PATH"
             git fetch --all
             git checkout main
             git pull --ff-only origin main
             
+            echo "Current commit: $(git rev-parse HEAD)"
             echo "Installing dependencies and generating Prisma client..."
-            npm ci
+            
+            # Check if package-lock.json is in sync with package.json
+            if npm ci --dry-run >/dev/null 2>&1; then
+              echo "Package lock file is in sync, using npm ci for clean install..."
+              npm ci
+            else
+              echo "Package lock file out of sync, using npm install to fix dependencies..."
+              npm install
+            fi
+            
+            echo "Generating Prisma client..."
             npx prisma generate
             
             echo "Restarting application with PM2..."
-            pm2 describe alkaa-backend >/dev/null 2>&1 && pm2 restart alkaa-backend || pm2 start server.js --name alkaa-backend
+            if pm2 describe alkaa-backend >/dev/null 2>&1; then
+              echo "Application found, restarting..."
+              pm2 restart alkaa-backend
+            else
+              echo "Application not found, starting new instance..."
+              pm2 start server.js --name alkaa-backend
+            fi
             pm2 save
             
             echo "Deployment completed successfully!"
+            echo "Application status:"
+            pm2 list alkaa-backend
