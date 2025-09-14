@@ -163,11 +163,13 @@ export const loginSuperAdmin = async (req, res) => {
         console.log("[loginSuperAdmin] Login attempt started");
         const { email, password } = req.body;
         console.log(`[loginSuperAdmin] Login attempt for email: ${email}`);
+        
         if(email==="superadmin-test@alkaa.com"){
-            res.status(401).send({
+            return res.status(401).send({
                 message: "Super Admin email is changed to superadmin-test@alkaa.online",
             });
         }
+        
         if (!email || !password) {
             console.log("[loginSuperAdmin] Missing email or password");
             return res.status(400).send({
@@ -243,7 +245,7 @@ export const loginSuperAdmin = async (req, res) => {
         });
     } catch (error) {
         console.error("[loginSuperAdmin] Error:", error);
-        res.status(500).json({ error: error.message });
+        return res.status(500).json({ error: error.message });
     }
 };
 

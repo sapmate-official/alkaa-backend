@@ -24,6 +24,10 @@ import subscriptionPlanRouter from "./child/subscriptionPlan.router.js";
 import publicRouter from "./child/public.router.js";
 import activityLogRouter from "./child/activityLog.router.js";
 import onboardingRouter from "./child/onboarding.router.js";
+import taskRouter from "./child/task.router.js";
+import taskGroupRouter from "./child/taskGroup.router.js";
+import whatsappRouter from "./child/whatsapp.router.js";
+import relationshipRouter from "./child/relationship.router.js";
 
 
 const router = express.Router();
@@ -53,5 +57,9 @@ router.use("/subscription-plans", subscriptionPlanRouter);
 router.use("/public", publicRouter);
 router.use("/activity-logs", activityLogRouter);
 router.use("/onboarding", onboardingRouter);
+router.use("/task", taskRouter);
+router.use("/task-group", taskGroupRouter);
+router.use("/whatsapp", whatsappRouter);
+router.use("/relationship", relationshipRouter);
 
 export default router;
