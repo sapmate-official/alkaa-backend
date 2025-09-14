@@ -1,0 +1,922 @@
+[
+    {
+        "id": "cm6vx9jvs0000tla4r1awtxeb",
+        "name": "Create User/Employee",
+        "description": "This permission will allow you to hire employee.",
+        "module": "user",
+        "key": "create_user",
+        "action": "create",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9dozplf0002tl5oncrfrn7g"
+    },
+    {
+        "id": "cm6vyaw940001tla42zcmd50g",
+        "name": "Read User Details",
+        "description": "This permission will allow to see any user's profile info.",
+        "module": "user",
+        "key": null,
+        "action": "read",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vyfdw20002tla4o5redit7",
+        "name": "Update User Details",
+        "description": "This permission will allow to update other user's details.",
+        "module": "user",
+        "key": null,
+        "action": "update",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vygfxr0003tla4brxyqhmt",
+        "name": "Delete User",
+        "description": "This permission will allow to delete user from database.",
+        "module": "user",
+        "key": null,
+        "action": "delete",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vyhhjq0004tla4kc2g2ork",
+        "name": "Manage User Roles",
+        "description": "This permission will allow to manage existing user's roles.",
+        "module": "user",
+        "key": "manage_role",
+        "action": "manage_roles",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9du13630002tlfkmjn5a2j4"
+    },
+    {
+        "id": "cm6vyi8o30005tla4762qrdoe",
+        "name": "View Subordinates",
+        "description": "This permission allows viewing subordinates in the organization.",
+        "module": "user",
+        "key": null,
+        "action": "view_subordinates",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3n6g0006tla4a2o49i8d",
+        "name": "department.create",
+        "description": "Create departments",
+        "module": "Department",
+        "key": null,
+        "action": "Create",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3naw0007tla4hqzpc6qf",
+        "name": "department.read",
+        "description": "View departments",
+        "module": "Department",
+        "key": null,
+        "action": "Read",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3ndq0008tla431k1qall",
+        "name": "department.update",
+        "description": "Update departments",
+        "module": "Department",
+        "key": null,
+        "action": "Update",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3nfr0009tla4mxrt7n7h",
+        "name": "department.delete",
+        "description": "Delete departments",
+        "module": "Department",
+        "key": null,
+        "action": "Delete",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3nhs000atla4kpkg2ljz",
+        "name": "department.assign_users",
+        "description": "Assign users to departments",
+        "module": "Department",
+        "key": null,
+        "action": "Assign",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3nju000btla4oq7zmbkz",
+        "name": "Create Leave Types",
+        "description": "This permission will give access to create leave type.",
+        "module": "Leave",
+        "key": "leave_type_create",
+        "action": "Create",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9e4xqoo0002tl5kf0gqmc3c"
+    },
+    {
+        "id": "cm6vz3nlv000ctla4t1xuq7z8",
+        "name": "Read Leave Types",
+        "description": "This permission wil give access to read leave type.",
+        "module": "Leave",
+        "key": "read_leave_type",
+        "action": "Read",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9e57bc10004tl5ky2h31nq0"
+    },
+    {
+        "id": "cm6vz3no4000dtla40hisib9a",
+        "name": "Update Leave Types",
+        "description": "This permission will give access to update leave type.",
+        "module": "Leave",
+        "key": "update_leave_types",
+        "action": "Update",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9e4xqoo0002tl5kf0gqmc3c"
+    },
+    {
+        "id": "cm6vz3nqq000etla4sjjwgy04",
+        "name": "Delete Leave Types",
+        "description": "This permission will give access to delete leave type.",
+        "module": "Leave",
+        "key": "delete_leave_type",
+        "action": "Delete",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9e4xqoo0002tl5kf0gqmc3c"
+    },
+    {
+        "id": "cm6vz3nsq000ftla4p83v5wea",
+        "name": "Request Leave",
+        "description": "This permission will give access to leave request.",
+        "module": "Leave",
+        "key": "leave_request",
+        "action": "Create",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9e57bc10004tl5ky2h31nq0"
+    },
+    {
+        "id": "cm6vz3nur000gtla4rs6ckecf",
+        "name": "Approve Leave",
+        "description": "This permission will give access to approve leave request.",
+        "module": "Leave",
+        "key": "approve_leave",
+        "action": "Create",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9e4xqoo0002tl5kf0gqmc3c"
+    },
+    {
+        "id": "cm6vz3nwv000htla4t8fd22w7",
+        "name": "Reject Leave",
+        "description": "This permission will give access to approve other's leave request.",
+        "module": "Leave",
+        "key": "reject_leave",
+        "action": "Reject",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9e4xqoo0002tl5kf0gqmc3c"
+    },
+    {
+        "id": "cm6vz3nzz000itla4a1gfg9qd",
+        "name": "View Subordinates leave",
+        "description": "This permission will give access to view leaves of your team.",
+        "module": "Leave",
+        "key": "view_subordinates_leave",
+        "action": "View",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9e4xqoo0002tl5kf0gqmc3c"
+    },
+    {
+        "id": "cm6vz3o22000jtla4kca2szpq",
+        "name": "View All leave of User",
+        "description": "This permission will give access to view all team's leave.",
+        "module": "Leave",
+        "key": "view_all_user_leave",
+        "action": "View",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9e4xqoo0002tl5kf0gqmc3c"
+    },
+    {
+        "id": "cm6vz3o43000ktla4vnj7539b",
+        "name": "Manage Leave Balances",
+        "description": "This permission will give access to manage leave balance.",
+        "module": "Leave",
+        "key": "manage_leave_balance",
+        "action": "Edit",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9e4xqoo0002tl5kf0gqmc3c"
+    },
+    {
+        "id": "cm6vz3o64000ltla4gw3xr7s8",
+        "name": "Mark Own Attendance",
+        "description": "This permission will give grant to mark attendance.",
+        "module": "Attendance",
+        "key": "mark_attendance",
+        "action": "Mark",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm8q8h3q5000ep8hn3w4wzj9o"
+    },
+    {
+        "id": "cm6vz3o8h000mtla4dgmw25ip",
+        "name": "View Own Attendance",
+        "description": "This permission will give grant to view own  attendance.",
+        "module": "Attendance",
+        "key": "view_own_attendance",
+        "action": "View Own",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm8q8h3q5000ep8hn3w4wzj9o"
+    },
+    {
+        "id": "cm6vz3ob4000ntla4ybisiv6j",
+        "name": "View Subordinates Attendance",
+        "description": "This permission will give access to view subordinates attendance.",
+        "module": "Attendance",
+        "key": "view_subordinates_attendance",
+        "action": "View",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm8q8guh3000cp8hnl32uw62t"
+    },
+    {
+        "id": "cm6vz3od5000otla4uyw4pdcb",
+        "name": "View All User's Attendance",
+        "description": "This permission will give access to view all user's attendance.",
+        "module": "Attendance",
+        "key": "view_all_user_attendance",
+        "action": "View",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm8q8guh3000cp8hnl32uw62t"
+    },
+    {
+        "id": "cm6vz3of8000ptla4wysv6omw",
+        "name": "Modify Past Attendance",
+        "description": "This permission will give access to modify past attendance.",
+        "module": "Attendance",
+        "key": "modify_past_attendance",
+        "action": "Modify",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3oh9000qtla4u5am0mnx",
+        "name": "Generate Attendance Report",
+        "description": "This permission will give access to generate attendance report of any user.",
+        "module": "Attendance",
+        "key": "generate_attendance_report",
+        "action": "Reports",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm8q8guh3000cp8hnl32uw62t"
+    },
+    {
+        "id": "cm6vz3oxo000xtla4238layw3",
+        "name": "bank.create",
+        "description": "Create bank details",
+        "module": "Bank",
+        "key": null,
+        "action": "Create",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3ozq000ytla4oabpqzbn",
+        "name": "bank.read_own",
+        "description": "View own bank details",
+        "module": "Bank",
+        "key": null,
+        "action": "Read Own",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3p2z000ztla4mkhr5ljq",
+        "name": "bank.read_all",
+        "description": "View all bank details",
+        "module": "Bank",
+        "key": null,
+        "action": "Read All",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3p500010tla41j23vakl",
+        "name": "bank.update",
+        "description": "Update bank details",
+        "module": "Bank",
+        "key": null,
+        "action": "Update",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3p720011tla421tmn8gu",
+        "name": "bank.delete",
+        "description": "Delete bank details",
+        "module": "Bank",
+        "key": null,
+        "action": "Delete",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3p930012tla462y56l8y",
+        "name": "Create Holiday",
+        "description": "Create holidays",
+        "module": "Holiday",
+        "key": "create_holiday",
+        "action": "Create",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3pb30013tla4tzuzy88j",
+        "name": "View Holiday",
+        "description": "View holidays",
+        "module": "Holiday",
+        "key": "view_holiday",
+        "action": "Read",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3pe10014tla43r8jgn2d",
+        "name": "Update Holiday",
+        "description": "Update holidays",
+        "module": "Holiday",
+        "key": "update_holiday",
+        "action": "Update",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3pg20015tla4fvxbyq7o",
+        "name": "Delete Holiday",
+        "description": "Delete holidays",
+        "module": "Holiday",
+        "key": "delete_holiday",
+        "action": "Delete",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3pia0016tla4voayc10j",
+        "name": "notification.create_template",
+        "description": "Create notification templates",
+        "module": "Notification",
+        "key": null,
+        "action": "Create Template",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3pkb0017tla4svggps4l",
+        "name": "notification.read_template",
+        "description": "View notification templates",
+        "module": "Notification",
+        "key": null,
+        "action": "Read Template",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3pnd0018tla4puyya95t",
+        "name": "notification.update_template",
+        "description": "Update notification templates",
+        "module": "Notification",
+        "key": null,
+        "action": "Update Template",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3ppd0019tla4d3zezn69",
+        "name": "notification.delete_template",
+        "description": "Delete notification templates",
+        "module": "Notification",
+        "key": null,
+        "action": "Delete Template",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3prf001atla4x4z69d0h",
+        "name": "notification.send",
+        "description": "Send notifications",
+        "module": "Notification",
+        "key": null,
+        "action": "Send",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm6vz3ptg001btla4e9ecv5sr",
+        "name": "Manage Organization settings",
+        "description": "Manage organization settings",
+        "module": "Organization",
+        "key": "manage_org_setting",
+        "action": "Manage Settings",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm8aa77w7000lp8v4qe1upt95"
+    },
+    {
+        "id": "cm6vz3pvh001ctla4tn9649l6",
+        "name": "View Organization Settings",
+        "description": "View organization settings",
+        "module": "Organization",
+        "key": "view_org_settings",
+        "action": "View Settings",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": "cm9ee4kh8001jtlgsd4wc3cz1"
+    },
+    {
+        "id": "cm6vz3pye001dtla4x1c3a9e4",
+        "name": "org.manage_subscription",
+        "description": "Manage organization subscription",
+        "module": "Organization",
+        "key": null,
+        "action": "Manage Subscription",
+        "createdAt": "2025-03-04 12:34:16.256",
+        "subcategoryId": null
+    },
+    {
+        "id": "cm8agz6yy000pp8v4gu6q1ixd",
+        "name": "View Organization's Employee Details",
+        "description": "This permission allows to view other employees details of organization.",
+        "module": null,
+        "key": null,
+        "action": "Read",
+        "createdAt": "2025-03-15 17:17:25.567",
+        "subcategoryId": "cm8aa77w7000lp8v4qe1upt95"
+    },
+    {
+        "id": "cm900t0pa0001tlu0pew2jevq",
+        "name": "Send Salary to All",
+        "description": "This permission has power of sending salary to all users exists in the organisation.",
+        "module": null,
+        "key": "send_salary_to_all",
+        "action": "Send",
+        "createdAt": "2025-04-02 14:26:44.945",
+        "subcategoryId": "cm900kbpz000op8wyhadh5wot"
+    },
+    {
+        "id": "cm900tv2k0003tlu03vma711t",
+        "name": "Generate Salary of all",
+        "description": "This permission has power of generate salary of all users exists in the organisation.",
+        "module": null,
+        "key": "generate_salary_of_all",
+        "action": "Generate",
+        "createdAt": "2025-04-02 14:27:24.338",
+        "subcategoryId": "cm900kbpz000op8wyhadh5wot"
+    },
+    {
+        "id": "cm90190ni0005tlu014rm6hkr",
+        "name": "View Salary Slip of All",
+        "description": "This permission has power to view all employee's salary slip.",
+        "module": null,
+        "key": "view_salary_slip_of_all",
+        "action": "View",
+        "createdAt": "2025-04-02 14:39:10.507",
+        "subcategoryId": "cm900kbpz000op8wyhadh5wot"
+    },
+    {
+        "id": "cm901abez0007tlu0gja0qaz6",
+        "name": "Send Salary to Subordinates.",
+        "description": "This permission has power of sending salary to subordinates of current user.",
+        "module": null,
+        "key": "send_salary_to_subordinates",
+        "action": "Send",
+        "createdAt": "2025-04-02 14:40:12.039",
+        "subcategoryId": "cm900kbpz000op8wyhadh5wot"
+    },
+    {
+        "id": "cm901df5c0009tlu04joykfn5",
+        "name": "Generate Salary of subordinates.",
+        "description": "This permission has power of generate salary of subordinates of current user.",
+        "module": null,
+        "key": "generate_salary_of_subordinates",
+        "action": "Generate",
+        "createdAt": "2025-04-02 14:42:36.843",
+        "subcategoryId": "cm900kbpz000op8wyhadh5wot"
+    },
+    {
+        "id": "cm901egth000btlu0r0un3wgh",
+        "name": "View Salary Slip of Subordinates",
+        "description": "This permission has power to view all subordinates salary slip of current user.",
+        "module": null,
+        "key": "view_salary_slip_of_subordinates",
+        "action": "View",
+        "createdAt": "2025-04-02 14:43:25.657",
+        "subcategoryId": "cm900kbpz000op8wyhadh5wot"
+    },
+    {
+        "id": "cm901n5jb000ftlu03co7iobe",
+        "name": "Generate Salary of Myself.",
+        "description": "This permission has power of generate salary of that user itself.",
+        "module": null,
+        "key": "generate_salary_to_myself",
+        "action": "Generate",
+        "createdAt": "2025-04-02 14:50:10.947",
+        "subcategoryId": "cm901ildq000dtlu0d2wzdurc"
+    },
+    {
+        "id": "cm901o2x1000htlu0fmu142wp",
+        "name": "View Salary Slip of Myself",
+        "description": "This permission has power of view salary slip of that user itself.",
+        "module": null,
+        "key": "view_salary_slip_to_myself",
+        "action": "View",
+        "createdAt": "2025-04-02 14:50:53.596",
+        "subcategoryId": "cm901ildq000dtlu0d2wzdurc"
+    },
+    {
+        "id": "cm901owfi000jtlu0r5bxgwfc",
+        "name": "Send Salary to Myself",
+        "description": "This permission has power of sending salary to that user itself.",
+        "module": null,
+        "key": "send_salary_to_myself",
+        "action": "Send",
+        "createdAt": "2025-04-02 14:51:32.457",
+        "subcategoryId": "cm901ildq000dtlu0d2wzdurc"
+    },
+    {
+        "id": "cm94dxkpy0004tl8szm8pmo5n",
+        "name": "Able to create New Department",
+        "description": "This permission will give access to create new department.",
+        "module": null,
+        "key": "create_new_department",
+        "action": "create",
+        "createdAt": "2025-04-05 15:45:14.249",
+        "subcategoryId": "cm94c1g6o0002tl8sktjdann6"
+    },
+    {
+        "id": "cm94f24vb0006tl8sc6hyxp76",
+        "name": "Able to delete Department",
+        "description": "This permission will give access to delete department.",
+        "module": null,
+        "key": "delete_department",
+        "action": "delete",
+        "createdAt": "2025-04-05 16:16:49.635",
+        "subcategoryId": "cm94c1g6o0002tl8sktjdann6"
+    },
+    {
+        "id": "cm94f6s6o0008tl8sy8916l7s",
+        "name": "Able to Edit Department",
+        "description": "This permission will give access to edit department.",
+        "module": null,
+        "key": "edit_department",
+        "action": "edit",
+        "createdAt": "2025-04-05 16:20:26.477",
+        "subcategoryId": "cm94c1g6o0002tl8sktjdann6"
+    },
+    {
+        "id": "cm9a3x1sd0001tl0sz8ti4tx2",
+        "name": "Able to view Organization Basic Details",
+        "description": "This permission will give access to view organization basic details.",
+        "module": null,
+        "key": "view_organization_basic_details",
+        "action": "view",
+        "createdAt": "2025-04-09 15:51:32.587",
+        "subcategoryId": "cm8aa77w7000lp8v4qe1upt95"
+    },
+    {
+        "id": "cm9a4bl6m0003tl0sgi9yqyuf",
+        "name": "Able to View Team Details",
+        "description": "This permission will give access to view his/her own Team's  details in organization tab.",
+        "module": null,
+        "key": "see_team_details",
+        "action": "View",
+        "createdAt": "2025-04-09 16:02:51.01",
+        "subcategoryId": "cm8aa77w7000lp8v4qe1upt95"
+    },
+    {
+        "id": "cm9a4f8u60005tl0s031p4kb2",
+        "name": "Able to View Own Department's Info",
+        "description": "This permission will give access to view his/her own department info.",
+        "module": null,
+        "key": "view_own_department_info",
+        "action": "View",
+        "createdAt": "2025-04-09 16:05:42.589",
+        "subcategoryId": "cm8aa77w7000lp8v4qe1upt95"
+    },
+    {
+        "id": "cm9a4i53j0007tl0sbuxhiqqy",
+        "name": "Able to View Detailed Organization Info",
+        "description": "This permission will give access to view detailed organization insight.",
+        "module": null,
+        "key": "view_organization_detailed_info",
+        "action": "View",
+        "createdAt": "2025-04-09 16:07:57.706",
+        "subcategoryId": "cm8aa77w7000lp8v4qe1upt95"
+    },
+    {
+        "id": "cm9a4x0rb0009tl0s4yn7iybp",
+        "name": "Able to View All Department's list",
+        "description": "This permission will give access to view list of department existed in the organization.",
+        "module": null,
+        "key": "view_list_of_department",
+        "action": "View",
+        "createdAt": "2025-04-09 16:19:30.84",
+        "subcategoryId": "cm8aa77w7000lp8v4qe1upt95"
+    },
+    {
+        "id": "cm9a5o9lf000btl0s8ycbc39n",
+        "name": "View Every Department info",
+        "description": "This permission give access to view all department's info.",
+        "module": null,
+        "key": "view_all_department_info",
+        "action": "view",
+        "createdAt": "2025-04-09 16:40:42.136",
+        "subcategoryId": "cm8aa77w7000lp8v4qe1upt95"
+    },
+    {
+        "id": "cm9a64z1n000dtl0s3gyl16qo",
+        "name": "View All Users in Organization",
+        "description": "This permission give access to view all user existed in the organization.",
+        "module": null,
+        "key": "view_all_users",
+        "action": "view",
+        "createdAt": "2025-04-09 16:53:41.67",
+        "subcategoryId": "cm8aa77w7000lp8v4qe1upt95"
+    },
+    {
+        "id": "cm9bnmwst0001tl2c9u5mazy1",
+        "name": "View Employment Information of All User",
+        "description": "This permission will allow to see all users employment information.",
+        "module": null,
+        "key": "view_employment_info_of_all",
+        "action": "view",
+        "createdAt": "2025-04-10 17:51:19.181",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9bnunin0003tl2c8eycgh9g",
+        "name": "View Employment Information of Subordinates",
+        "description": "This permission will allow to see all subordinate's employment information.",
+        "module": null,
+        "key": "view_employment_info_of_subordinates",
+        "action": "view",
+        "createdAt": "2025-04-10 17:57:19.436",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9bofjuu0005tl2cswg20cjm",
+        "name": "View Employment Information to Myself",
+        "description": "This permission will allow to see employment information to that user.",
+        "module": null,
+        "key": "view_employment_info_to_myself",
+        "action": "view",
+        "createdAt": "2025-04-10 18:13:34.365",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9d060hd0001tlw8uv8t3dbl",
+        "name": "View Personal Information to Myself",
+        "description": "This permission will allow to see personal information to that user.",
+        "module": null,
+        "key": "view_personal_info_to_myself",
+        "action": "view",
+        "createdAt": "2025-04-11 16:29:50.946",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9d0cnwi0005tlw8dbnv7i0v",
+        "name": "View Personal Information of All User",
+        "description": "This permission will allow to see personal information of all user.",
+        "module": null,
+        "key": "view_personal_info_of_all",
+        "action": "view",
+        "createdAt": "2025-04-11 16:35:02.208",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9d0vqpb0017tlw813dpv16o",
+        "name": "View Personal Information of Subordinates",
+        "description": "This permission will allow to see all subordinate's personal information.",
+        "module": null,
+        "key": "view_personal_info_of_subordinates",
+        "action": "view",
+        "createdAt": "2025-04-11 16:49:52.297",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9dp72kk0004tl5oh63hpcwy",
+        "name": "Assign User to Own Lead Department",
+        "description": "This permission will help you to assign user on your own lead department. ",
+        "module": null,
+        "key": "assign_user_to_own_lead_department",
+        "action": "create",
+        "createdAt": "2025-04-12 04:10:30.779",
+        "subcategoryId": "cm94c1g6o0002tl8sktjdann6"
+    },
+    {
+        "id": "cm9dp9trj0006tl5oarlnlf02",
+        "name": "Assign User to All Department ",
+        "description": "This permission will grant you to assign user to all exisiting department.",
+        "module": null,
+        "key": "assign_user_to_all_department",
+        "action": "create",
+        "createdAt": "2025-04-12 04:12:40.236",
+        "subcategoryId": "cm94c1g6o0002tl8sktjdann6"
+    },
+    {
+        "id": "cm9dptdkh0008tl5oc9mffpuu",
+        "name": "View Employee Management",
+        "description": "This permission will give access to view employee management.",
+        "module": null,
+        "key": "view_employee_management",
+        "action": "view",
+        "createdAt": "2025-04-12 04:27:51.385",
+        "subcategoryId": "cm9dozplf0002tl5oncrfrn7g"
+    },
+    {
+        "id": "cm9dvm9n10006tlfk9bm64nc1",
+        "name": "Change Department Head",
+        "description": "This permission will give access to change department.",
+        "module": null,
+        "key": "change_department_head",
+        "action": "edit",
+        "createdAt": "2025-04-12 07:10:18.361",
+        "subcategoryId": "cm94c1g6o0002tl8sktjdann6"
+    },
+    {
+        "id": "cm9dvxbvg0004tl9s3cqtjw0e",
+        "name": "Holiday Manage",
+        "description": "This permission will give access to manage holiday.",
+        "module": null,
+        "key": "holiday_manage",
+        "action": "edit",
+        "createdAt": "2025-04-12 07:18:54.49",
+        "subcategoryId": "cm9dvwr0t0002tl9swglzrg9g"
+    },
+    {
+        "id": "cm9dvxurc0006tl9seo56p7g0",
+        "name": "Holiday View",
+        "description": "This permission will access to view holiday.",
+        "module": null,
+        "key": "holiday_view",
+        "action": "view",
+        "createdAt": "2025-04-12 07:19:18.965",
+        "subcategoryId": "cm9dvwr0t0002tl9swglzrg9g"
+    },
+    {
+        "id": "cm9e58b990006tl5kc05irkn5",
+        "name": "View Leave Balance",
+        "description": "This will hold access control of User to view leave balance.",
+        "module": null,
+        "key": "view_leave_balance",
+        "action": "view",
+        "createdAt": "2025-04-12 11:39:23.421",
+        "subcategoryId": "cm9e57bc10004tl5ky2h31nq0"
+    },
+    {
+        "id": "cm9ec5sow0007tlgs9tobv7ms",
+        "name": "Update Personal Details By Own",
+        "description": "This permission will allow you to edit personal details.",
+        "module": null,
+        "key": "update_personal_info",
+        "action": "Update",
+        "createdAt": "2025-04-12 14:53:23.388",
+        "subcategoryId": "cm9ec2nz90005tlgsgn51xhis"
+    },
+    {
+        "id": "cm9ec7yqz0009tlgs1udru2aj",
+        "name": "Update Personal Details of Subordinates",
+        "description": "This will hold access control of user to update Personal Details of subordinates.",
+        "module": null,
+        "key": "update_personal_info_subordinates",
+        "action": "Update",
+        "createdAt": "2025-04-12 14:55:04.551",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9ecah6c000btlgsn1zoeyrh",
+        "name": "Update Personal Details of All User",
+        "description": "This permission will give access to personal details of all user.",
+        "module": null,
+        "key": "update_personal_info_all_user",
+        "action": "Update",
+        "createdAt": "2025-04-12 14:57:01.212",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9ecbpnt000dtlgsaxmmej7u",
+        "name": "Update Employee Details of All User",
+        "description": "This permission will give access to Employee details of all user.",
+        "module": null,
+        "key": "update_employee_info_all_user",
+        "action": "Update",
+        "createdAt": "2025-04-12 14:57:59.392",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9ecddwy000ftlgsvkfy20yt",
+        "name": "Update Employee Details of Subordinates",
+        "description": "This permission will give access to update employee details of subordinates.",
+        "module": null,
+        "key": "update_personal_info_subordinates",
+        "action": "update",
+        "createdAt": "2025-04-12 14:59:17.485",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9ecegoy000htlgsh3ibx7gx",
+        "name": "Update Employee Details of Own",
+        "description": "This permission will give access to update employee details of own.",
+        "module": null,
+        "key": "update_employee_own",
+        "action": "Update",
+        "createdAt": "2025-04-12 15:00:07.736",
+        "subcategoryId": "cm9ec2nz90005tlgsgn51xhis"
+    },
+    {
+        "id": "cm9ech33m000jtlgsstxkr6qx",
+        "name": "Update Salary Info Of All User",
+        "description": "This permission will give access to update salary info of all user.",
+        "module": null,
+        "key": "update_salary_all_user",
+        "action": "update",
+        "createdAt": "2025-04-12 15:02:09.558",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9echqvg000ltlgss1rtf288",
+        "name": "Update Salary Info Of Subordinates",
+        "description": "This permission will give access to update salary info of subordinates",
+        "module": null,
+        "key": "update_salary_subordinates",
+        "action": "update",
+        "createdAt": "2025-04-12 15:02:40.9",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9eci8g8000ntlgsrv71xkdp",
+        "name": "Update Salary Info Of Own",
+        "description": "This permission will give access to update salary info of own.",
+        "module": null,
+        "key": "update_salary_own",
+        "action": "update",
+        "createdAt": "2025-04-12 15:03:03.68",
+        "subcategoryId": "cm9ec2nz90005tlgsgn51xhis"
+    },
+    {
+        "id": "cm9ecjslj000ptlgstghj7psh",
+        "name": "Update Banking Info Of All User",
+        "description": "This permission will give access to update bank info of all user.",
+        "module": null,
+        "key": "update_bank_all_user",
+        "action": "update",
+        "createdAt": "2025-04-12 15:04:16.452",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9eckq0b000rtlgsiqdhq3fz",
+        "name": "Update Banking Info Of Subordinates",
+        "description": "This permission will give access to update banking info of subordinates.",
+        "module": null,
+        "key": "update_bank_all_user",
+        "action": "update",
+        "createdAt": "2025-04-12 15:04:59.748",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cm9eclqks000ttlgsv7g8j450",
+        "name": "Update Banking info of Own",
+        "description": "This permission will give access to update bank info of own.",
+        "module": null,
+        "key": "update_bank_own",
+        "action": "update",
+        "createdAt": "2025-04-12 15:05:47.137",
+        "subcategoryId": "cm9ec2nz90005tlgsgn51xhis"
+    },
+    {
+        "id": "cmafk6v9c0001tl2wvu2axzgd",
+        "name": "View Billing ",
+        "description": "This permission allows to view billing details of organization.",
+        "module": null,
+        "key": "view_billing",
+        "action": "Read",
+        "createdAt": "2025-05-08 16:05:38.808",
+        "subcategoryId": "cm8aa77w7000lp8v4qe1upt95"
+    },
+    {
+        "id": "cmahv8g6u0001jb26lxd573ez",
+        "name": "View Banking Info of All User",
+        "description": "This permission allows to view All user's banking info.",
+        "module": null,
+        "key": "view_bank_all_user",
+        "action": "Read",
+        "createdAt": "2025-05-10 06:50:20.789",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    },
+    {
+        "id": "cmahv9ok00003jb26kq67dmuu",
+        "name": "View Banking Info of subordinates.",
+        "description": "This permission allows to view bank details of subordinates.",
+        "module": null,
+        "key": "view_bank_subordinates",
+        "action": "Read",
+        "createdAt": "2025-05-10 06:51:18.25",
+        "subcategoryId": "cm9bl06q9000ctl1wp0mxw6tk"
+    }
+]

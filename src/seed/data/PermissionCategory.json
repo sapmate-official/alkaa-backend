@@ -1,0 +1,65 @@
+[
+    {
+        "id": "cm8aa631y000jp8v49w87ozgn",
+        "name": "Organization",
+        "description": "All organizational related permission contained here.",
+        "createdAt": "2025-03-15 14:06:50.55",
+        "updatedAt": "2025-03-15 14:06:50.55"
+    },
+    {
+        "id": "cm8q8gll4000ap8hn8ltfwcp3",
+        "name": "Attendance",
+        "description": null,
+        "createdAt": "2025-03-26 18:03:20.71",
+        "updatedAt": "2025-03-26 18:03:20.71"
+    },
+    {
+        "id": "cm900h381000mp8wy7932vq22",
+        "name": "Salary",
+        "description": "All user salary operation will done here. ",
+        "createdAt": "2025-04-02 14:17:28.466",
+        "updatedAt": "2025-04-02 14:17:28.466"
+    },
+    {
+        "id": "cm94c0fxv0000tl8swcu7c4df",
+        "name": "Department",
+        "description": "All Department related permission contained here.",
+        "createdAt": "2025-04-05 14:51:31.788",
+        "updatedAt": "2025-04-05 14:51:31.788"
+    },
+    {
+        "id": "cm9bkzd69000atl1wmpdgo2vr",
+        "name": "Info",
+        "description": "This group contains all the user info restriction.",
+        "createdAt": "2025-04-10 16:37:00.374",
+        "updatedAt": "2025-04-10 16:37:00.374"
+    },
+    {
+        "id": "cm9doz4uz0000tl5oi7b2u268",
+        "name": "Employee",
+        "description": "This group contains all the employee related permission.",
+        "createdAt": "2025-04-12 04:04:21.399",
+        "updatedAt": "2025-04-12 04:04:21.399"
+    },
+    {
+        "id": "cm9du0q7t0000tlfkq57fgiaj",
+        "name": "Role",
+        "description": "This group contains all role related permission.",
+        "createdAt": "2025-04-12 06:25:33.812",
+        "updatedAt": "2025-04-12 06:25:33.812"
+    },
+    {
+        "id": "cm9dvwblc0000tl9s6tug9lhs",
+        "name": "holiday",
+        "description": "This group contains all role related holiday",
+        "createdAt": "2025-04-12 07:18:07.47",
+        "updatedAt": "2025-04-12 07:18:07.47"
+    },
+    {
+        "id": "cm9e4xcg50000tl5k9zw6xxmc",
+        "name": "leave",
+        "description": "This group contains all Leave related permission.",
+        "createdAt": "2025-04-12 11:30:51.284",
+        "updatedAt": "2025-04-12 11:30:51.284"
+    }
+]
