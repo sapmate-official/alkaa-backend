@@ -18,16 +18,16 @@ model SuperAdmin {
 }
 
 model Organization {
-  id                    String                 @id @default(cuid())
+  id                    String                        @id @default(cuid())
   name                  String
   industry              String?
   logo                  String?
   address               String?
-  subscriptionStart     DateTime               @default(now())
+  subscriptionStart     DateTime                      @default(now())
   subscriptionEnd       DateTime?
-  isActive              Boolean                @default(true)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  isActive              Boolean                       @default(true)
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @updatedAt
   settings              Json?
   subscriptionPlanId    String?
   activityLogs          ActivityLog[]
@@ -38,14 +38,18 @@ model Organization {
   leaveTypes            LeaveType[]
   notificationTemplates NotificationTemplate[]
   onboardingCandidates  OnboardingCandidate[]
-  subscriptionPlan      SubscriptionPlan?      @relation(fields: [subscriptionPlanId], references: [id])
+  subscriptionPlan      SubscriptionPlan?             @relation(fields: [subscriptionPlanId], references: [id])
+  attendanceRules       OrganizationAttendanceRules[]
+  breakRules            OrganizationBreakRules[]
+  geofences             OrganizationGeofence[]
   OrganizationSettings  OrganizationSettings[]
   Organization_admin    Organization_admin[]
   PermissionPreset      PermissionPreset[]
   roles                 Role[]
-  users                 User[]
+  shiftTemplates        ShiftTemplate[]
   tasks                 Task[]
   taskGroups            TaskGroup[]
+  users                 User[]
 }
 
 model Organization_admin {
@@ -75,30 +79,27 @@ model Department {
   organization         Organization          @relation(fields: [orgId], references: [id])
   parentDepartment     Department?           @relation("DepartmentHierarchy", fields: [parentId], references: [id])
   subDepartments       Department[]          @relation("DepartmentHierarchy")
-  users                User[]                @relation("UserDepartment")
   onboardingCandidates OnboardingCandidate[]
-  // NEW: Multi-department relations
+  users                User[]                @relation("UserDepartment")
   userDepartments      UserDepartment[]
 
   @@unique([orgId, name])
   @@unique([orgId, code])
 }
 
-// NEW: Multi-department junction table
 model UserDepartment {
-  id           String   @id @default(cuid())
-  userId       String
-  departmentId String
-  isPrimary    Boolean  @default(false)
-  assignedAt   DateTime @default(now())
-  assignedBy   String?
-  role         String? // Role within this specific department
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  id             String     @id @default(cuid())
+  userId         String
+  departmentId   String
+  isPrimary      Boolean    @default(false)
+  assignedAt     DateTime   @default(now())
+  assignedBy     String?
+  role           String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
   assignedByUser User?      @relation("DepartmentAssignments", fields: [assignedBy], references: [id])
+  department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, departmentId])
   @@index([userId])
@@ -168,69 +169,73 @@ model RolePermission {
 }
 
 model User {
-  id                           String                @id @default(cuid())
+  id                           String                      @id @default(cuid())
   orgId                        String
   departmentId                 String?
   managerId                    String?
   email                        String
   hashedPassword               String?
   refreshToken                 String?
-  status                       UserStatus            @default(active)
-  verificationToken            String?               @unique
-  verificationTokenExpiry      DateTime?
-  annualPackage                Float?                @default(0.0)
-  monthlySalary                Float?                @default(0.0)
-  hiredDate                    DateTime?             @default(now())
+  status                       UserStatus                  @default(active)
+  verificationToken            String?                     @unique
+  annualPackage                Float?                      @default(0.0)
+  monthlySalary                Float?                      @default(0.0)
+  hiredDate                    DateTime?                   @default(now())
   dateOfBirth                  DateTime?
   address                      String?
   adharNumber                  String?
   panNumber                    String?
   mobileNumber                 String?
-  createdAt                    DateTime              @default(now())
-  updatedAt                    DateTime              @updatedAt
-  employeeId                   String                @unique @default(cuid())
+  createdAt                    DateTime                    @default(now())
+  updatedAt                    DateTime                    @updatedAt
+  employeeId                   String                      @unique @default(cuid())
   terminationDate              DateTime?
-  firstName                    String?               @default("unknown")
-  lastName                     String?               @default("unknown")
+  firstName                    String?                     @default("unknown")
+  lastName                     String?                     @default("unknown")
   emergencyContact             String?
-  twoFactorEnabled             Boolean               @default(false)
-  loginNotificationsEnabled    Boolean               @default(true)
-  activityLogs                 ActivityLog[]         @relation("ActivityActor")
-  targetedActivities           ActivityLog[]         @relation("ActivityTarget")
+  verificationTokenExpiry      DateTime?
+  loginNotificationsEnabled    Boolean                     @default(true)
+  twoFactorEnabled             Boolean                     @default(false)
+  activityLogs                 ActivityLog[]               @relation("ActivityActor")
+  targetedActivities           ActivityLog[]               @relation("ActivityTarget")
+  attendanceAlerts             AttendanceAlert[]
   attendanceRecords            AttendanceRecord[]
+  approvedViolations           AttendanceRuleViolation[]   @relation("ViolationApprover")
   bankDetails                  BankDetails?
-  createdOnboardingCandidates  OnboardingCandidate[] @relation("CreatedCandidates")
-  reviewedOnboardingCandidates OnboardingCandidate[] @relation("ReviewedCandidates")
-  managedCandidates            OnboardingCandidate[] @relation("CandidateManager")
-  Department                   Department[]          @relation("DepartmentHead")
+  approvedBreaks               BreakRecord[]               @relation("BreakApprover")
+  breakRecords                 BreakRecord[]
+  Department                   Department[]                @relation("DepartmentHead")
+  emailOtpVerifications        EmailOtpVerification[]
+  employeeShifts               EmployeeShift[]
+  geofenceViolations           GeofenceViolation[]
   leaveBalances                LeaveBalance[]
   leaveRequests                LeaveRequest[]
   notifications                Notification[]
+  createdOnboardingCandidates  OnboardingCandidate[]       @relation("CreatedCandidates")
+  managedCandidates            OnboardingCandidate[]       @relation("CandidateManager")
+  reviewedOnboardingCandidates OnboardingCandidate[]       @relation("ReviewedCandidates")
   Organization_admin           Organization_admin[]
+  penaltyHistory               ProgressivePenaltyHistory[]
   PushSubscription             PushSubscription[]
   salaryParameter              SalaryParameter?
   salaryRecords                SalaryRecord[]
-  receivedTransactions         TransactionTable[]    @relation("ReceiverTransaction")
-  sentTransactions             TransactionTable[]    @relation("SenderTransaction")
-  department                   Department?           @relation("UserDepartment", fields: [departmentId], references: [id])
-  manager                      User?                 @relation("UserManager", fields: [managerId], references: [id])
-  subordinates                 User[]                @relation("UserManager")
-  organization                 Organization          @relation(fields: [orgId], references: [id])
-  roles                        UserRole[]
-  // NEW: Multi-department relations
-  userDepartments              UserDepartment[]
-  assignedDepartments          UserDepartment[]      @relation("DepartmentAssignments")
-  // Task Management relations
-  createdTasks                 Task[]                @relation("TaskCreator")
-  createdTaskGroups            TaskGroup[]           @relation("TaskGroupCreator")
-  assignedTasks                TaskAssignment[]      @relation("TaskAssignee")
-  assignedToTasks              TaskAssignment[]      @relation("TaskAssigner")
-  taskUpdates                  TaskUpdate[]          @relation("TaskUpdater")
-  taskGroupMemberships         TaskGroupMember[]     @relation("TaskGroupMemberships")
-  addedGroupMembers            TaskGroupMember[]     @relation("TaskGroupMemberAdder")
-  // OTP and Session Management relations
-  emailOtpVerifications        EmailOtpVerification[]
+  createdTasks                 Task[]                      @relation("TaskCreator")
+  assignedToTasks              TaskAssignment[]            @relation("TaskAssigner")
+  assignedTasks                TaskAssignment[]            @relation("TaskAssignee")
+  createdTaskGroups            TaskGroup[]                 @relation("TaskGroupCreator")
+  addedGroupMembers            TaskGroupMember[]           @relation("TaskGroupMemberAdder")
+  taskGroupMemberships         TaskGroupMember[]           @relation("TaskGroupMemberships")
+  taskUpdates                  TaskUpdate[]                @relation("TaskUpdater")
   tempLoginSessions            TempLoginSession[]
+  receivedTransactions         TransactionTable[]          @relation("ReceiverTransaction")
+  sentTransactions             TransactionTable[]          @relation("SenderTransaction")
+  department                   Department?                 @relation("UserDepartment", fields: [departmentId], references: [id])
+  manager                      User?                       @relation("UserManager", fields: [managerId], references: [id])
+  subordinates                 User[]                      @relation("UserManager")
+  organization                 Organization                @relation(fields: [orgId], references: [id])
+  assignedDepartments          UserDepartment[]            @relation("DepartmentAssignments")
+  userDepartments              UserDepartment[]
+  roles                        UserRole[]
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -335,6 +340,11 @@ model AttendanceRecord {
   verifiedAt          DateTime?
   verifiedBy          String?
   user                User                          @relation(fields: [userId], references: [id])
+  ruleViolations      AttendanceRuleViolation[]
+  breakRecords        BreakRecord[]
+  geofenceViolations  GeofenceViolation[]
+  locationValidations LocationValidationLog[]
+  complianceRecords   ShiftComplianceRecord[]
   UserDailyReport     UserDailyReport[]
 
   @@unique([userId, date, sessionNumber])
@@ -507,12 +517,18 @@ model UserDailyReport {
 }
 
 model OrganizationSettings {
-  id           String       @id @default(cuid())
-  orgId        String
-  settings     Json
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  organization Organization @relation(fields: [orgId], references: [id])
+  id                 String       @id @default(cuid())
+  orgId              String
+  settings           Json
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  alertConfiguration Json?
+  attendanceRules    Json?
+  breakPolicies      Json?
+  breakRules         Json?
+  geofencingEnabled  Boolean      @default(false)
+  penaltySystem      Json?
+  organization       Organization @relation(fields: [orgId], references: [id])
 }
 
 model SubscriptionPlan {
@@ -601,87 +617,83 @@ model OnboardingCandidate {
   tokenExpiry       DateTime?
   orgId             String
   createdById       String
-  managerId         String? // Add manager assignment
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
   formSubmittedAt   DateTime?
   reviewedById      String?
   reviewedAt        DateTime?
   rejectionReason   String?
-  departmentId      String?
   annualPackage     Float?
-  monthlySalary     Float? // Add monthly salary field
+  departmentId      String?
   hiredDate         DateTime?
-
-  organization Organization @relation(fields: [orgId], references: [id])
-  createdBy    User         @relation("CreatedCandidates", fields: [createdById], references: [id])
-  reviewedBy   User?        @relation("ReviewedCandidates", fields: [reviewedById], references: [id])
-  manager      User?        @relation("CandidateManager", fields: [managerId], references: [id])
-  department   Department?  @relation(fields: [departmentId], references: [id])
+  managerId         String?
+  monthlySalary     Float?
+  createdBy         User             @relation("CreatedCandidates", fields: [createdById], references: [id])
+  department        Department?      @relation(fields: [departmentId], references: [id])
+  manager           User?            @relation("CandidateManager", fields: [managerId], references: [id])
+  organization      Organization     @relation(fields: [orgId], references: [id])
+  reviewedBy        User?            @relation("ReviewedCandidates", fields: [reviewedById], references: [id])
 
   @@index([orgId])
   @@index([verificationToken])
 }
 
 model Task {
-  id              String         @id @default(cuid())
-  title           String
-  description     String?
-  priority        TaskPriority   @default(MEDIUM)
-  status          TaskStatus     @default(PENDING)
-  dueDate         DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  createdById     String
-  orgId           String
-  groupId         String?
-  estimatedHours  Float?
-  tags            String[]
-  attachments     Json?
-  
-  createdBy       User           @relation("TaskCreator", fields: [createdById], references: [id])
-  organization    Organization   @relation(fields: [orgId], references: [id])
-  group           TaskGroup?     @relation(fields: [groupId], references: [id])
-  assignments     TaskAssignment[]
-  updates         TaskUpdate[]
-  
+  id             String           @id @default(cuid())
+  title          String
+  description    String?
+  priority       TaskPriority     @default(MEDIUM)
+  status         TaskStatus       @default(PENDING)
+  dueDate        DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  createdById    String
+  orgId          String
+  groupId        String?
+  estimatedHours Float?
+  tags           String[]
+  attachments    Json?
+  createdBy      User             @relation("TaskCreator", fields: [createdById], references: [id])
+  group          TaskGroup?       @relation(fields: [groupId], references: [id])
+  organization   Organization     @relation(fields: [orgId], references: [id])
+  assignments    TaskAssignment[]
+  updates        TaskUpdate[]
+
   @@index([orgId, status])
   @@index([createdById])
   @@index([dueDate])
 }
 
 model TaskGroup {
-  id              String         @id @default(cuid())
-  name            String
-  description     String?
-  orgId           String
-  createdById     String
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  
-  organization    Organization   @relation(fields: [orgId], references: [id])
-  createdBy       User           @relation("TaskGroupCreator", fields: [createdById], references: [id])
-  tasks           Task[]
-  members         TaskGroupMember[]
-  
+  id           String            @id @default(cuid())
+  name         String
+  description  String?
+  orgId        String
+  createdById  String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  tasks        Task[]
+  createdBy    User              @relation("TaskGroupCreator", fields: [createdById], references: [id])
+  organization Organization      @relation(fields: [orgId], references: [id])
+  members      TaskGroupMember[]
+
   @@unique([orgId, name])
   @@index([orgId])
 }
 
 model TaskGroupMember {
-  id              String         @id @default(cuid())
-  groupId         String
-  userId          String
-  role            GroupRole      @default(MEMBER)
-  addedById       String
-  addedAt         DateTime       @default(now())
-  removedAt       DateTime?
-  isActive        Boolean        @default(true)
-  
-  group           TaskGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user            User           @relation("TaskGroupMemberships", fields: [userId], references: [id])
-  addedBy         User           @relation("TaskGroupMemberAdder", fields: [addedById], references: [id])
-  
+  id        String    @id @default(cuid())
+  groupId   String
+  userId    String
+  role      GroupRole @default(MEMBER)
+  addedById String
+  addedAt   DateTime  @default(now())
+  removedAt DateTime?
+  isActive  Boolean   @default(true)
+  addedBy   User      @relation("TaskGroupMemberAdder", fields: [addedById], references: [id])
+  group     TaskGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User      @relation("TaskGroupMemberships", fields: [userId], references: [id])
+
   @@unique([groupId, userId])
   @@index([userId])
   @@index([groupId])
@@ -689,41 +701,297 @@ model TaskGroupMember {
 }
 
 model TaskAssignment {
-  id              String         @id @default(cuid())
-  taskId          String
-  assignedToId    String
-  assignedById    String
-  assignedAt      DateTime       @default(now())
-  status          AssignmentStatus @default(ASSIGNED)
-  acceptedAt      DateTime?
-  completedAt     DateTime?
-  remarks         String?
-  
-  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  assignedTo      User           @relation("TaskAssignee", fields: [assignedToId], references: [id])
-  assignedBy      User           @relation("TaskAssigner", fields: [assignedById], references: [id])
-  
+  id           String           @id @default(cuid())
+  taskId       String
+  assignedToId String
+  assignedById String
+  assignedAt   DateTime         @default(now())
+  status       AssignmentStatus @default(ASSIGNED)
+  acceptedAt   DateTime?
+  completedAt  DateTime?
+  remarks      String?
+  assignedBy   User             @relation("TaskAssigner", fields: [assignedById], references: [id])
+  assignedTo   User             @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  task         Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
   @@unique([taskId, assignedToId])
   @@index([assignedToId, status])
   @@index([taskId])
 }
 
 model TaskUpdate {
-  id              String         @id @default(cuid())
-  taskId          String
-  updatedById     String
-  updateType      UpdateType
-  message         String
-  attachments     Json?
-  progress        Int?
-  createdAt       DateTime       @default(now())
-  metadata        Json?
-  
-  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  updatedBy       User           @relation("TaskUpdater", fields: [updatedById], references: [id])
-  
+  id          String     @id @default(cuid())
+  taskId      String
+  updatedById String
+  updateType  UpdateType
+  message     String
+  attachments Json?
+  progress    Int?
+  createdAt   DateTime   @default(now())
+  metadata    Json?
+  task        Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  updatedBy   User       @relation("TaskUpdater", fields: [updatedById], references: [id])
+
   @@index([taskId, createdAt])
   @@index([updatedById])
+}
+
+model EmailOtpVerification {
+  id            String     @id @default(cuid())
+  userId        String
+  otpCode       String
+  purpose       OtpPurpose
+  expiresAt     DateTime
+  isUsed        Boolean    @default(false)
+  attemptsCount Int        @default(0)
+  maxAttempts   Int        @default(3)
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime   @default(now())
+  usedAt        DateTime?
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([otpCode, expiresAt, isUsed])
+}
+
+model TempLoginSession {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expiresAt    DateTime
+  isUsed       Boolean  @default(false)
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sessionToken, expiresAt, isUsed])
+}
+
+model OrganizationAttendanceRules {
+  id           String                    @id @default(cuid())
+  orgId        String
+  ruleType     AttendanceRuleType
+  threshold    Json
+  penalty      Json
+  isActive     Boolean                   @default(false)
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  violations   AttendanceRuleViolation[]
+  organization Organization              @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, ruleType, isActive])
+}
+
+model AttendanceRuleViolation {
+  id            String                      @id @default(cuid())
+  attendanceId  String
+  ruleId        String
+  violationType String
+  severity      ViolationSeverity
+  penaltyAmount Decimal?                    @db.Decimal(10, 2)
+  isApproved    Boolean                     @default(false)
+  approvedBy    String?
+  approvedAt    DateTime?
+  createdAt     DateTime                    @default(now())
+  approver      User?                       @relation("ViolationApprover", fields: [approvedBy], references: [id])
+  attendance    AttendanceRecord            @relation(fields: [attendanceId], references: [id])
+  rule          OrganizationAttendanceRules @relation(fields: [ruleId], references: [id])
+
+  @@index([attendanceId])
+  @@index([ruleId])
+  @@index([violationType, createdAt])
+}
+
+model OrganizationGeofence {
+  id               String                  @id @default(cuid())
+  orgId            String
+  name             String
+  type             GeofenceType
+  coordinates      Json
+  radius           Decimal?                @db.Decimal(10, 2)
+  isActive         Boolean                 @default(false)
+  strictMode       Boolean                 @default(false)
+  allowedDeviation Decimal                 @default(50) @db.Decimal(5, 2)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  violations       GeofenceViolation[]
+  validationLogs   LocationValidationLog[]
+  organization     Organization            @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, isActive])
+}
+
+model LocationValidationLog {
+  id             String                 @id @default(cuid())
+  attendanceId   String
+  latitude       Decimal                @db.Decimal(10, 8)
+  longitude      Decimal                @db.Decimal(11, 8)
+  geofenceId     String?
+  isValid        Boolean
+  deviation      Decimal?               @db.Decimal(10, 2)
+  validationType LocationValidationType
+  timestamp      DateTime               @default(now())
+  attendance     AttendanceRecord       @relation(fields: [attendanceId], references: [id])
+  geofence       OrganizationGeofence?  @relation(fields: [geofenceId], references: [id])
+
+  @@index([attendanceId])
+  @@index([timestamp])
+}
+
+model BreakRecord {
+  id           String            @id @default(cuid())
+  userId       String
+  attendanceId String?
+  breakType    BreakType
+  startTime    DateTime
+  endTime      DateTime?
+  duration     Json?
+  status       BreakStatus       @default(ACTIVE)
+  note         String?
+  isApproved   Boolean           @default(true)
+  approvedBy   String?
+  violation    Json?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  approver     User?             @relation("BreakApprover", fields: [approvedBy], references: [id])
+  attendance   AttendanceRecord? @relation(fields: [attendanceId], references: [id])
+  user         User              @relation(fields: [userId], references: [id])
+
+  @@index([userId, startTime])
+  @@index([attendanceId])
+}
+
+model OrganizationBreakRules {
+  id               String       @id @default(cuid())
+  orgId            String
+  breakType        String
+  maxDuration      Int
+  maxFrequency     Int?
+  timeWindow       Json?
+  mandatory        Boolean      @default(false)
+  requiresApproval Boolean      @default(false)
+  penaltyPerMinute Decimal?     @db.Decimal(5, 2)
+  isActive         Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  organization     Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, breakType])
+  @@index([orgId, isActive])
+}
+
+model ProgressivePenaltyHistory {
+  id                    String        @id @default(cuid())
+  userId                String
+  violationType         String
+  penaltyAmount         Decimal       @db.Decimal(10, 2)
+  progressiveMultiplier Decimal       @db.Decimal(5, 2)
+  violationCount        Int
+  dateApplied           DateTime      @default(now())
+  payrollMonth          Int
+  payrollYear           Int
+  status                PenaltyStatus @default(PENDING)
+  metadata              Json?
+  user                  User          @relation(fields: [userId], references: [id])
+
+  @@index([userId, payrollMonth, payrollYear])
+  @@index([violationType, dateApplied])
+}
+
+model AttendanceAlert {
+  id           String        @id @default(cuid())
+  userId       String
+  alertType    String
+  priority     AlertPriority
+  message      String
+  data         Json?
+  isRead       Boolean       @default(false)
+  isSent       Boolean       @default(false)
+  sentChannels Json?
+  createdAt    DateTime      @default(now())
+  readAt       DateTime?
+  user         User          @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead, createdAt])
+  @@index([priority, createdAt])
+}
+
+model GeofenceViolation {
+  id           String               @id @default(cuid())
+  userId       String
+  attendanceId String?
+  latitude     Decimal              @db.Decimal(10, 8)
+  longitude    Decimal              @db.Decimal(11, 8)
+  distance     Decimal              @db.Decimal(10, 2)
+  geofenceId   String
+  action       LocationActionType
+  timestamp    DateTime             @default(now())
+  attendance   AttendanceRecord?    @relation(fields: [attendanceId], references: [id])
+  geofence     OrganizationGeofence @relation(fields: [geofenceId], references: [id])
+  user         User                 @relation(fields: [userId], references: [id])
+
+  @@index([userId, timestamp])
+  @@index([geofenceId, timestamp])
+}
+
+model ShiftTemplate {
+  id                 String          @id @default(cuid())
+  orgId              String
+  name               String
+  startTime          String
+  endTime            String
+  totalHours         Decimal         @db.Decimal(4, 2)
+  lateThreshold      Int             @default(15)
+  breakConfiguration Json?
+  overtimeRules      Json?
+  attendanceRules    Json?
+  isActive           Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  employeeShifts     EmployeeShift[]
+  organization       Organization    @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, name])
+  @@index([orgId, isActive])
+}
+
+model EmployeeShift {
+  id                String                  @id @default(cuid())
+  userId            String
+  shiftTemplateId   String
+  effectiveDate     DateTime
+  endDate           DateTime?
+  status            ShiftStatus             @default(ACTIVE)
+  overrides         Json?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  shiftTemplate     ShiftTemplate           @relation(fields: [shiftTemplateId], references: [id])
+  user              User                    @relation(fields: [userId], references: [id])
+  complianceRecords ShiftComplianceRecord[]
+
+  @@index([userId, status])
+  @@index([shiftTemplateId])
+}
+
+model ShiftComplianceRecord {
+  id                String           @id @default(cuid())
+  attendanceId      String
+  shiftId           String
+  expectedStartTime DateTime
+  expectedEndTime   DateTime
+  actualStartTime   DateTime?
+  actualEndTime     DateTime?
+  complianceScore   Decimal?         @db.Decimal(5, 2)
+  violations        Json?
+  penalties         Json?
+  createdAt         DateTime         @default(now())
+  attendance        AttendanceRecord @relation(fields: [attendanceId], references: [id])
+  shift             EmployeeShift    @relation(fields: [shiftId], references: [id])
+
+  @@index([attendanceId])
+  @@index([shiftId])
 }
 
 enum GroupRole {
@@ -866,7 +1134,6 @@ enum ActivityEntity {
   USER
   ORGANIZATION
   DEPARTMENT
-  USER_DEPARTMENT
   ROLE
   PERMISSION
   ATTENDANCE
@@ -877,6 +1144,7 @@ enum ActivityEntity {
   DOCUMENT
   SETTINGS
   ONBOARDING_CANDIDATE
+  USER_DEPARTMENT
   TASK
   TASK_GROUP
   TASK_ASSIGNMENT
@@ -893,43 +1161,81 @@ enum OnboardingStatus {
   ABORTED
 }
 
-model EmailOtpVerification {
-  id            String   @id @default(cuid())
-  userId        String
-  otpCode       String
-  purpose       OtpPurpose
-  expiresAt     DateTime
-  isUsed        Boolean  @default(false)
-  attemptsCount Int      @default(0)
-  maxAttempts   Int      @default(3)
-  ipAddress     String?
-  userAgent     String?
-  createdAt     DateTime @default(now())
-  usedAt        DateTime?
-  
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([userId, purpose])
-  @@index([otpCode, expiresAt, isUsed])
-}
-
-model TempLoginSession {
-  id            String   @id @default(cuid())
-  sessionToken  String   @unique
-  userId        String
-  expiresAt     DateTime
-  isUsed        Boolean  @default(false)
-  ipAddress     String?
-  userAgent     String?
-  createdAt     DateTime @default(now())
-  
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([sessionToken, expiresAt, isUsed])
-}
-
 enum OtpPurpose {
   LOGIN
   PASSWORD_RESET
   ACCOUNT_VERIFICATION
+}
+
+enum AttendanceRuleType {
+  LATE_ARRIVAL
+  EARLY_DEPARTURE
+  MINIMUM_HOURS
+  BREAK_VIOLATION
+  GEOFENCE_VIOLATION
+  ABSENTEEISM
+}
+
+enum ViolationSeverity {
+  WARNING
+  MINOR
+  MAJOR
+  CRITICAL
+}
+
+enum GeofenceType {
+  MAIN_OFFICE
+  BRANCH_OFFICE
+  CLIENT_SITE
+  REMOTE_ZONE
+}
+
+enum LocationValidationType {
+  CHECK_IN
+  CHECK_OUT
+  PERIODIC
+  MANUAL
+  BREAK_START
+  BREAK_END
+}
+
+enum BreakType {
+  LUNCH
+  TEA_BREAK
+  PERSONAL
+  MEDICAL
+  UNAUTHORIZED
+}
+
+enum BreakStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum PenaltyStatus {
+  PENDING
+  APPLIED
+  REVERSED
+  APPROVED
+}
+
+enum AlertPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum LocationActionType {
+  CHECK_IN
+  CHECK_OUT
+  BREAK_START
+  BREAK_END
+}
+
+enum ShiftStatus {
+  ACTIVE
+  INACTIVE
+  TEMPORARY
 }
