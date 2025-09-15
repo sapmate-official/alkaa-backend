@@ -187,19 +187,19 @@ const verifyPasswordAndSendOtp = async (req, res) => {
                 userAgent: req.get('User-Agent')
             }
         });
-        console.log("OTP : ",otpCode)
+        // console.log("OTP : ",otpCode)
         // Send OTP email with organization branding
-        // await sendLoginOTPEmail(
-        //     user.email,
-        //     `${user.firstName} ${user.lastName}`,
-        //     otpCode,
-        //     user.organization.name,
-        //     {
-        //         ip: req.ip,
-        //         userAgent: req.get('User-Agent'),
-        //         timestamp: new Date()
-        //     }
-        // );
+        await sendLoginOTPEmail(
+            user.email,
+            `${user.firstName} ${user.lastName}`,
+            otpCode,
+            user.organization.name,
+            {
+                ip: req.ip,
+                userAgent: req.get('User-Agent'),
+                timestamp: new Date()
+            }
+        );
 
         // Generate temporary session token
         const sessionToken = crypto.randomBytes(32).toString('hex');
