@@ -38,14 +38,11 @@ jobs:
             echo "Current commit: $(git rev-parse HEAD)"
             echo "Installing dependencies and generating Prisma client..."
             
-            # Check if package-lock.json is in sync with package.json
-            if npm ci --dry-run >/dev/null 2>&1; then
-              echo "Package lock file is in sync, using npm ci for clean install..."
-              npm ci
-            else
-              echo "Package lock file out of sync, using npm install to fix dependencies..."
-              npm install
-            fi
+            # Clear npm cache to free up space
+            npm cache clean --force
+            
+            echo "Installing dependencies..."
+            NODE_OPTIONS="--max-old-space-size=4096" npm install
             
             echo "Generating Prisma client..."
             npx prisma generate
