@@ -602,5 +602,266 @@ export const taskController = {
                 error: error.message
             });
         }
+    },
+
+    async assignTask(req, res) {
+        try {
+            const { taskId } = req.params;
+            const { userIds } = req.body;
+            const assignedById = req.user.id;
+
+            // Check if task exists and user has permission
+            const task = await prisma.task.findFirst({
+                where: {
+                    id: taskId,
+                    OR: [
+                        { createdById: assignedById },
+                        { orgId: req.user.orgId } // Allow if user is from same organization
+                    ]
+                }
+            });
+
+            if (!task) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Task not found or access denied'
+                });
+            }
+
+            // Create assignments for each user
+            const assignments = [];
+            for (const userId of userIds) {
+                // Check if assignment already exists
+                const existingAssignment = await prisma.taskAssignment.findFirst({
+                    where: {
+                        taskId,
+                        assignedToId: userId
+                    }
+                });
+
+                if (!existingAssignment) {
+                    assignments.push({
+                        id: generateId(),
+                        taskId,
+                        assignedToId: userId,
+                        assignedById,
+                        status: 'ASSIGNED'
+                    });
+                }
+            }
+
+            if (assignments.length > 0) {
+                await prisma.taskAssignment.createMany({
+                    data: assignments
+                });
+            }
+
+            // Get the created assignments with user details
+            const createdAssignments = await prisma.taskAssignment.findMany({
+                where: {
+                    taskId,
+                    assignedToId: { in: userIds }
+                },
+                include: {
+                    assignedTo: {
+                        select: { id: true, firstName: true, lastName: true, email: true }
+                    },
+                    assignedBy: {
+                        select: { id: true, firstName: true, lastName: true, email: true }
+                    }
+                }
+            });
+
+            await logActivity({
+                orgId: req.user.orgId,
+                actorId: assignedById,
+                action: 'ASSIGN',
+                entity: 'TASK',
+                entityId: taskId,
+                description: `Assigned task: ${task.title} to ${userIds.length} user(s)`,
+                metadata: { taskId, userIds }
+            });
+
+            res.status(201).json({
+                success: true,
+                message: 'Task assigned successfully',
+                data: createdAssignments
+            });
+        } catch (error) {
+            console.error('Assign task error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to assign task',
+                error: error.message
+            });
+        }
+    },
+
+    async unassignTask(req, res) {
+        try {
+            const { taskId } = req.params;
+            const { userId } = req.body;
+            const requesterId = req.user.id;
+
+            // Check if task exists and user has permission
+            const task = await prisma.task.findFirst({
+                where: {
+                    id: taskId,
+                    OR: [
+                        { createdById: requesterId },
+                        { orgId: req.user.orgId }
+                    ]
+                }
+            });
+
+            if (!task) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Task not found or access denied'
+                });
+            }
+
+            // Check if assignment exists
+            const assignment = await prisma.taskAssignment.findFirst({
+                where: {
+                    taskId,
+                    assignedToId: userId
+                }
+            });
+
+            if (!assignment) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Assignment not found'
+                });
+            }
+
+            // Delete the assignment
+            await prisma.taskAssignment.delete({
+                where: {
+                    id: assignment.id
+                }
+            });
+
+            await logActivity({
+                orgId: req.user.orgId,
+                actorId: requesterId,
+                action: 'UNASSIGN',
+                entity: 'TASK',
+                entityId: taskId,
+                description: `Unassigned task: ${task.title} from user`,
+                metadata: { taskId, userId }
+            });
+
+            res.json({
+                success: true,
+                message: 'Task unassigned successfully'
+            });
+        } catch (error) {
+            console.error('Unassign task error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to unassign task',
+                error: error.message
+            });
+        }
+    },
+
+    async getTaskAssignments(req, res) {
+        try {
+            const { taskId } = req.params;
+            const requesterId = req.user.id;
+
+            // Check if task exists and user has permission
+            const task = await prisma.task.findFirst({
+                where: {
+                    id: taskId,
+                    OR: [
+                        { createdById: requesterId },
+                        { assignments: { some: { assignedToId: requesterId } } },
+                        { orgId: req.user.orgId }
+                    ]
+                }
+            });
+
+            if (!task) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Task not found or access denied'
+                });
+            }
+
+            const assignments = await prisma.taskAssignment.findMany({
+                where: { taskId },
+                include: {
+                    assignedTo: {
+                        select: { id: true, firstName: true, lastName: true, email: true }
+                    },
+                    assignedBy: {
+                        select: { id: true, firstName: true, lastName: true, email: true }
+                    }
+                }
+            });
+
+            res.json({
+                success: true,
+                data: assignments
+            });
+        } catch (error) {
+            console.error('Get task assignments error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch task assignments',
+                error: error.message
+            });
+        }
+    },
+
+    async getTaskUpdates(req, res) {
+        try {
+            const { taskId } = req.params;
+            const requesterId = req.user.id;
+
+            // Check if task exists and user has permission
+            const task = await prisma.task.findFirst({
+                where: {
+                    id: taskId,
+                    OR: [
+                        { createdById: requesterId },
+                        { assignments: { some: { assignedToId: requesterId } } },
+                        { orgId: req.user.orgId }
+                    ]
+                }
+            });
+
+            if (!task) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Task not found or access denied'
+                });
+            }
+
+            const updates = await prisma.taskUpdate.findMany({
+                where: { taskId },
+                include: {
+                    updatedBy: {
+                        select: { id: true, firstName: true, lastName: true, email: true }
+                    }
+                },
+                orderBy: { createdAt: 'desc' }
+            });
+
+            res.json({
+                success: true,
+                data: updates
+            });
+        } catch (error) {
+            console.error('Get task updates error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch task updates',
+                error: error.message
+            });
+        }
     }
 };
