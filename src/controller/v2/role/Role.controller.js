@@ -461,4 +461,4 @@ export const removePermissionsFromRole = async (req, res) => {
         console.error("Error removing permissions from role:", error);
         return res.status(500).json({ message: "Internal server error", error: error.message });
     }
-};
+}
