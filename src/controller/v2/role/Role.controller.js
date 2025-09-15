@@ -116,7 +116,7 @@ export const createRole = async (req, res) => {
 export const updateRole = async (req, res) => {
     try {
         const { roleId } = req.params;
-        const { name, description, permissions = [], isDefault } = req.body;
+        const { name, description, permissions, isDefault, updateType = 'replace' } = req.body;
 
         if (!roleId) {
             return res.status(400).json({ message: "Role ID is required" });
@@ -126,7 +126,11 @@ export const updateRole = async (req, res) => {
         const existingRole = await prisma.role.findFirst({
             where: { id: roleId },
             include: {
-                permissions: true
+                permissions: {
+                    include: {
+                        permission: true
+                    }
+                }
             }
         });
 
@@ -134,7 +138,7 @@ export const updateRole = async (req, res) => {
             return res.status(404).json({ message: "Role not found" });
         }
 
-        // First, update the role basic information
+        // Update the role basic information
         const updatedRole = await prisma.role.update({
             where: { id: roleId },
             data: {
@@ -144,22 +148,49 @@ export const updateRole = async (req, res) => {
             }
         });
 
-        // Then, delete all current permissions
-        await prisma.rolePermission.deleteMany({
-            where: { roleId: roleId }
-        });
-
-        // Finally, add all new permissions (ensuring no duplicates)
-        if (permissions.length > 0) {
-            // Extract unique permission IDs based on the input format
-            let uniquePermissionIds = [];
+        // Handle permissions update only if permissions array is provided
+        if (permissions !== undefined && Array.isArray(permissions)) {
+            // Extract permission IDs and validate them
+            let permissionIds = [];
             
-            if (typeof permissions[0] === 'object') {
-                // If permissions is a collection of objects with permissionId
-                uniquePermissionIds = [...new Set(permissions.map(p => p.permissionId))];
+            if (permissions.length > 0) {
+                if (typeof permissions[0] === 'object' && permissions[0].permissionId) {
+                    permissionIds = permissions.map(p => p.permissionId);
+                } else if (typeof permissions[0] === 'string') {
+                    permissionIds = permissions;
+                } else {
+                    return res.status(400).json({ message: "Invalid permissions format. Expected array of permission IDs or objects with permissionId." });
+                }
+            }
+
+            // Remove duplicates
+            permissionIds = [...new Set(permissionIds)];
+
+            // Validate that all permission IDs exist
+            if (permissionIds.length > 0) {
+                const validPermissions = await prisma.permission.findMany({
+                    where: { id: { in: permissionIds } },
+                    select: { id: true }
+                });
+
+                const validPermissionIds = validPermissions.map(p => p.id);
+                const invalidPermissionIds = permissionIds.filter(id => !validPermissionIds.includes(id));
+
+                if (invalidPermissionIds.length > 0) {
+                    return res.status(400).json({ 
+                        message: "Invalid permission IDs provided", 
+                        invalidIds: invalidPermissionIds 
+                    });
+                }
+            }
+
+            // Handle different update types
+            if (updateType === 'add') {
+                // Add new permissions (keep existing ones)
+                const existingPermissionIds = existingRole.permissions.map(rp => rp.permission.id);
+                const newPermissionIds = permissionIds.filter(id => !existingPermissionIds.includes(id));
                 
-                // Create permissions one by one to avoid constraint errors
-                for (const permissionId of uniquePermissionIds) {
+                for (const permissionId of newPermissionIds) {
                     await prisma.rolePermission.create({
                         data: {
                             roleId: roleId,
@@ -167,21 +198,30 @@ export const updateRole = async (req, res) => {
                         }
                     });
                 }
-            } else if (typeof permissions[0] === 'string') {
-                // If permissions is a collection of strings (direct permissionIds)
-                uniquePermissionIds = [...new Set(permissions)];
-                
-                // Create permissions one by one to avoid constraint errors
-                for (const permissionId of uniquePermissionIds) {
-                    await prisma.rolePermission.create({
-                        data: {
-                            roleId: roleId,
-                            permissionId: permissionId
-                        }
-                    });
-                }
+            } else if (updateType === 'remove') {
+                // Remove specified permissions
+                await prisma.rolePermission.deleteMany({
+                    where: {
+                        roleId: roleId,
+                        permissionId: { in: permissionIds }
+                    }
+                });
             } else {
-                throw new Error("Invalid permissions format");
+                // Default: replace all permissions
+                // Delete all current permissions
+                await prisma.rolePermission.deleteMany({
+                    where: { roleId: roleId }
+                });
+
+                // Add new permissions
+                for (const permissionId of permissionIds) {
+                    await prisma.rolePermission.create({
+                        data: {
+                            roleId: roleId,
+                            permissionId: permissionId
+                        }
+                    });
+                }
             }
         }
 
@@ -252,6 +292,173 @@ export const deleteRole = async (req, res) => {
         return res.status(200).json({ message: "Role deleted successfully" });
     } catch (error) {
         console.error("Error deleting role:", error);
+        return res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+};
+
+// Add permissions to role (without replacing existing ones)
+export const addPermissionsToRole = async (req, res) => {
+    try {
+        const { roleId } = req.params;
+        const { permissions = [] } = req.body;
+
+        if (!roleId) {
+            return res.status(400).json({ message: "Role ID is required" });
+        }
+
+        if (!Array.isArray(permissions) || permissions.length === 0) {
+            return res.status(400).json({ message: "Permissions array is required" });
+        }
+
+        // Check if role exists
+        const existingRole = await prisma.role.findFirst({
+            where: { id: roleId },
+            include: {
+                permissions: {
+                    include: {
+                        permission: true
+                    }
+                }
+            }
+        });
+
+        if (!existingRole) {
+            return res.status(404).json({ message: "Role not found" });
+        }
+
+        // Extract permission IDs
+        let permissionIds = [];
+        if (typeof permissions[0] === 'object' && permissions[0].permissionId) {
+            permissionIds = permissions.map(p => p.permissionId);
+        } else if (typeof permissions[0] === 'string') {
+            permissionIds = permissions;
+        } else {
+            return res.status(400).json({ message: "Invalid permissions format" });
+        }
+
+        // Remove duplicates
+        permissionIds = [...new Set(permissionIds)];
+
+        // Validate permission IDs exist
+        const validPermissions = await prisma.permission.findMany({
+            where: { id: { in: permissionIds } },
+            select: { id: true }
+        });
+
+        const validPermissionIds = validPermissions.map(p => p.id);
+        const invalidPermissionIds = permissionIds.filter(id => !validPermissionIds.includes(id));
+
+        if (invalidPermissionIds.length > 0) {
+            return res.status(400).json({ 
+                message: "Invalid permission IDs provided", 
+                invalidIds: invalidPermissionIds 
+            });
+        }
+
+        // Get existing permission IDs for this role
+        const existingPermissionIds = existingRole.permissions.map(rp => rp.permission.id);
+        
+        // Filter out permissions that already exist
+        const newPermissionIds = validPermissionIds.filter(id => !existingPermissionIds.includes(id));
+
+        if (newPermissionIds.length === 0) {
+            return res.status(200).json({ 
+                message: "All permissions already assigned to role",
+                role: existingRole 
+            });
+        }
+
+        // Add new permissions
+        for (const permissionId of newPermissionIds) {
+            await prisma.rolePermission.create({
+                data: {
+                    roleId: roleId,
+                    permissionId: permissionId
+                }
+            });
+        }
+
+        // Get updated role
+        const updatedRole = await prisma.role.findFirst({
+            where: { id: roleId },
+            include: {
+                permissions: {
+                    include: {
+                        permission: true
+                    }
+                }
+            }
+        });
+
+        return res.status(200).json({
+            message: `Added ${newPermissionIds.length} new permissions to role`,
+            role: updatedRole
+        });
+    } catch (error) {
+        console.error("Error adding permissions to role:", error);
+        return res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+};
+
+// Remove permissions from role
+export const removePermissionsFromRole = async (req, res) => {
+    try {
+        const { roleId } = req.params;
+        const { permissions = [] } = req.body;
+
+        if (!roleId) {
+            return res.status(400).json({ message: "Role ID is required" });
+        }
+
+        if (!Array.isArray(permissions) || permissions.length === 0) {
+            return res.status(400).json({ message: "Permissions array is required" });
+        }
+
+        // Check if role exists
+        const existingRole = await prisma.role.findFirst({
+            where: { id: roleId }
+        });
+
+        if (!existingRole) {
+            return res.status(404).json({ message: "Role not found" });
+        }
+
+        // Extract permission IDs
+        let permissionIds = [];
+        if (typeof permissions[0] === 'object' && permissions[0].permissionId) {
+            permissionIds = permissions.map(p => p.permissionId);
+        } else if (typeof permissions[0] === 'string') {
+            permissionIds = permissions;
+        } else {
+            return res.status(400).json({ message: "Invalid permissions format" });
+        }
+
+        // Remove permissions from role
+        const deleteResult = await prisma.rolePermission.deleteMany({
+            where: {
+                roleId: roleId,
+                permissionId: { in: permissionIds }
+            }
+        });
+
+        // Get updated role
+        const updatedRole = await prisma.role.findFirst({
+            where: { id: roleId },
+            include: {
+                permissions: {
+                    include: {
+                        permission: true
+                    }
+                }
+            }
+        });
+
+        return res.status(200).json({
+            message: `Removed ${deleteResult.count} permissions from role`,
+            role: updatedRole
+        });
+    } catch (error) {
+        console.error("Error removing permissions from role:", error);
         return res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
