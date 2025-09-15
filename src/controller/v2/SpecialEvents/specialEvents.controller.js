@@ -56,17 +56,8 @@ export const getSpecialEvents = async (req, res) => {
         );
 
         // 1. Get upcoming employee birthdays (next 7 days)
-        let userFilter = {};
-        if (hasViewAllPermission) {
-            // Admin can see all users in organization
-            userFilter = { orgId };
-        } else if (isManager) {
-            // Manager can see subordinates
-            userFilter = { managerId: userId };
-        } else {
-            // Regular user can only see their own birthday
-            userFilter = { id: userId };
-        }
+        // All employees can now see birthdays of colleagues in their organization
+        let userFilter = { orgId };
 
         const users = await prisma.user.findMany({
             where: {
