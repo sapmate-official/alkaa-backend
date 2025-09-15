@@ -1,6 +1,7 @@
 import { scheduleJob } from 'node-schedule';
 // import { runNotificationProcessor } from './notificationProcessor.js';
 import { checkMissingCheckouts } from './attendanceProcessor.js';
+import { processBirthdayEmails } from './birthdayService.js';
 
 /**
  * Scheduler for recurring jobs
@@ -20,6 +21,18 @@ export const startScheduledJobs = () => {
   scheduleJob('30,0 17-23 * * *', async () => {
     console.log('Running scheduled missing checkout check...');
     await checkMissingCheckouts();
+  });
+  
+  // Check for birthdays and send birthday emails daily at 9:00 AM
+  // This runs every hour from 8 AM to 11 AM to handle different timezones
+  scheduleJob('0 8-11 * * *', async () => {
+    console.log('🎂 Running scheduled birthday email check...');
+    try {
+      const result = await processBirthdayEmails();
+      console.log('🎉 Birthday email check completed:', result);
+    } catch (error) {
+      console.error('❌ Error in birthday email check:', error);
+    }
   });
   
   console.log('Scheduled jobs started successfully');
