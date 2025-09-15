@@ -23,6 +23,7 @@ model Organization {
   industry              String?
   logo                  String?
   address               String?
+  timezone              String?                @default("UTC")
   subscriptionStart     DateTime               @default(now())
   subscriptionEnd       DateTime?
   isActive              Boolean                @default(true)
@@ -46,6 +47,7 @@ model Organization {
   users                 User[]
   tasks                 Task[]
   taskGroups            TaskGroup[]
+  birthdayEmailLogs     BirthdayEmailLog[]
 }
 
 model Organization_admin {
@@ -231,6 +233,7 @@ model User {
   // OTP and Session Management relations
   emailOtpVerifications        EmailOtpVerification[]
   tempLoginSessions            TempLoginSession[]
+  birthdayEmailLogs            BirthdayEmailLog[]
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -932,4 +935,22 @@ enum OtpPurpose {
   LOGIN
   PASSWORD_RESET
   ACCOUNT_VERIFICATION
+}
+
+model BirthdayEmailLog {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  sentDate       DateTime
+  emailSent      Boolean      @default(false)
+  errorMessage   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, sentDate])
+  @@index([organizationId, sentDate])
+  @@index([sentDate, emailSent])
 }
