@@ -187,7 +187,6 @@ const verifyPasswordAndSendOtp = async (req, res) => {
                 userAgent: req.get('User-Agent')
             }
         });
-
         // Send OTP email with organization branding
         await sendLoginOTPEmail(
             user.email,
