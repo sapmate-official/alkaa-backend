@@ -236,7 +236,33 @@ export const taskController = {
 
             const updatedTask = await prisma.task.update({
                 where: { id },
-                data: updateData
+                data: updateData,
+                include: {
+                    createdBy: {
+                        select: { id: true, firstName: true, lastName: true, email: true }
+                    },
+                    group: {
+                        select: { id: true, name: true }
+                    },
+                    assignments: {
+                        include: {
+                            assignedTo: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
+                            },
+                            assignedBy: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
+                            }
+                        }
+                    },
+                    updates: {
+                        include: {
+                            updatedBy: {
+                                select: { id: true, firstName: true, lastName: true }
+                            }
+                        },
+                        orderBy: { createdAt: 'desc' }
+                    }
+                }
             });
 
             await logActivity({
@@ -434,6 +460,7 @@ export const taskController = {
 
             const tasks = await prisma.task.findMany({
                 where: {
+                    orgId: req.user.orgId,
                     assignments: {
                         some: {
                             assignedToId: userId
@@ -448,8 +475,10 @@ export const taskController = {
                         select: { id: true, name: true }
                     },
                     assignments: {
-                        where: { assignedToId: userId },
                         include: {
+                            assignedTo: {
+                                select: { id: true, firstName: true, lastName: true, email: true }
+                            },
                             assignedBy: {
                                 select: { id: true, firstName: true, lastName: true, email: true }
                             }
