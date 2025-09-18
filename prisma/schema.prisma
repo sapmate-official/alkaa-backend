@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL_DEVELOPMENT_BRANCH")
 }
 
 model SuperAdmin {
@@ -781,6 +781,7 @@ model OrganizationAttendanceRules {
   violations   AttendanceRuleViolation[]
   organization Organization              @relation(fields: [orgId], references: [id])
 
+  @@unique([orgId, ruleType])
   @@index([orgId, ruleType, isActive])
 }
 

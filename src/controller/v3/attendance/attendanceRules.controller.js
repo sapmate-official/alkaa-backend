@@ -22,13 +22,37 @@ export const getOrganizationRules = async (req, res) => {
 
         const rules = await rulesProcessor.getOrganizationRules(orgId);
         
+        // Convert rules object to array format for frontend
+        const rulesArray = Object.entries(rules).map(([ruleKey, ruleData]) => {
+            // Skip the defaultRules properties that aren't actual rules
+            if (typeof ruleData !== 'object' || !ruleData || Array.isArray(ruleData)) {
+                return null;
+            }
+            
+            // Map camelCase to ENUM values
+            const ruleTypeMapping = {
+                'lateArrival': 'LATE_ARRIVAL',
+                'earlyDeparture': 'EARLY_DEPARTURE', 
+                'minimumHours': 'MINIMUM_HOURS',
+                'absenteeism': 'ABSENTEEISM',
+                'breakViolation': 'BREAK_VIOLATION'
+            };
+            
+            return {
+                id: ruleData.id || `${orgId}-${ruleKey}`, // Fallback ID if not from DB
+                ruleType: ruleTypeMapping[ruleKey] || ruleKey.toUpperCase(),
+                threshold: ruleData.threshold || (ruleData.thresholds ? ruleData.thresholds[0]?.minutes : 0),
+                penalty: ruleData.penalty || (ruleData.penalties ? Object.values(ruleData.penalties)[0] : 0),
+                isActive: ruleData.isActive || false,
+                description: `${ruleKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} rule`,
+                updatedAt: ruleData.updatedAt || new Date()
+            };
+        }).filter(Boolean);
+        
         res.status(200).json({
             success: true,
-            data: {
-                orgId,
-                rules,
-                note: "All rules are disabled by default. Enable specific rules as needed."
-            }
+            data: rulesArray,
+            message: "Rules fetched successfully"
         });
     } catch (error) {
         console.error('Error fetching organization rules:', error);
@@ -107,16 +131,102 @@ export const toggleRuleStatus = async (req, res) => {
             });
         }
 
-        const rule = await prisma.organizationAttendanceRules.update({
-            where: {
-                id: ruleId,
-                orgId: orgId
-            },
-            data: {
-                isActive: Boolean(isActive),
-                updatedAt: new Date()
+        // First try to find by the actual ruleId
+        let rule = null;
+        
+        try {
+            rule = await prisma.organizationAttendanceRules.update({
+                where: {
+                    id: ruleId,
+                    orgId: orgId
+                },
+                data: {
+                    isActive: Boolean(isActive),
+                    updatedAt: new Date()
+                }
+            });
+        } catch (updateError) {
+            // If rule not found by ID, it might be a constructed ID like "rule-${ruleType}-${orgId}"
+            // Try to extract rule type from the ID pattern
+            if (updateError.code === 'P2025') { // Record not found
+                let actualRuleType = null;
+                
+                // Handle different ID patterns
+                if (ruleId.startsWith('rule-')) {
+                    // Pattern: "rule-latearrival-orgId" -> extract "latearrival"
+                    const parts = ruleId.split('-');
+                    if (parts.length >= 2) {
+                        const ruleTypePart = parts[1]; // Get the rule type part
+                        
+                        const ruleTypeMapping = {
+                            'latearrival': 'LATE_ARRIVAL',
+                            'earlydeparture': 'EARLY_DEPARTURE',
+                            'minimumhours': 'MINIMUM_HOURS',
+                            'breakviolation': 'BREAK_VIOLATION',
+                            'geofenceviolation': 'GEOFENCE_VIOLATION',
+                            'absenteeism': 'ABSENTEEISM'
+                        };
+                        
+                        actualRuleType = ruleTypeMapping[ruleTypePart.toLowerCase()] || ruleTypePart.toUpperCase();
+                    }
+                } else if (ruleId.includes('-')) {
+                    // Pattern: "${orgId}-${ruleType}" -> extract ruleType
+                    const ruleTypePart = ruleId.replace(`${orgId}-`, '');
+                    
+                    const ruleTypeMapping = {
+                        'lateArrival': 'LATE_ARRIVAL',
+                        'earlyDeparture': 'EARLY_DEPARTURE',
+                        'minimumHours': 'MINIMUM_HOURS',
+                        'breakViolation': 'BREAK_VIOLATION',
+                        'geofenceViolation': 'GEOFENCE_VIOLATION',
+                        'absenteeism': 'ABSENTEEISM'
+                    };
+                    
+                    actualRuleType = ruleTypeMapping[ruleTypePart] || ruleTypePart.toUpperCase();
+                }
+                
+                if (actualRuleType) {
+                    // Try to find by orgId and ruleType
+                    rule = await prisma.organizationAttendanceRules.findFirst({
+                        where: {
+                            orgId: orgId,
+                            ruleType: actualRuleType
+                        }
+                    });
+                    
+                    if (rule) {
+                        // Update the found rule
+                        rule = await prisma.organizationAttendanceRules.update({
+                            where: {
+                                id: rule.id
+                            },
+                            data: {
+                                isActive: Boolean(isActive),
+                                updatedAt: new Date()
+                            }
+                        });
+                    } else {
+                        // Rule doesn't exist, create it with basic defaults
+                        rule = await prisma.organizationAttendanceRules.create({
+                            data: {
+                                orgId: orgId,
+                                ruleType: actualRuleType,
+                                threshold: { minutes: 15 }, // Default threshold
+                                penalty: { amount: 0, type: 'warning' }, // Default penalty
+                                isActive: Boolean(isActive)
+                            }
+                        });
+                    }
+                } else {
+                    return res.status(404).json({
+                        error: "Rule not found",
+                        message: `No rule found for ID: ${ruleId} - could not extract valid rule type`
+                    });
+                }
+            } else {
+                throw updateError;
             }
-        });
+        }
 
         res.status(200).json({
             success: true,

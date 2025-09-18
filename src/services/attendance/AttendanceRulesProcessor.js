@@ -65,7 +65,16 @@ class AttendanceRulesProcessor {
             // Convert to organized format
             const organizedRules = {};
             rules.forEach(rule => {
-                organizedRules[rule.ruleType.toLowerCase()] = {
+                const ruleKey = rule.ruleType.toLowerCase().replace(/_/g, '');
+                const mappedKey = {
+                    'latearrival': 'lateArrival',
+                    'earlydeparture': 'earlyDeparture',
+                    'minimumhours': 'minimumHours',
+                    'absenteeism': 'absenteeism',
+                    'breakviolation': 'breakViolation'
+                }[ruleKey] || ruleKey;
+                
+                organizedRules[mappedKey] = {
                     id: rule.id,
                     isActive: rule.isActive,
                     threshold: rule.threshold,
@@ -74,11 +83,70 @@ class AttendanceRulesProcessor {
                 };
             });
 
+            // If no rules exist in DB, create default rules
+            if (rules.length === 0) {
+                await this.createDefaultRules(orgId);
+                // Re-fetch after creating defaults
+                return await this.getOrganizationRules(orgId);
+            }
+
             // Merge with defaults for missing rules
             return { ...this.defaultRules, ...organizedRules };
         } catch (error) {
             console.error('Error fetching organization rules:', error);
             return this.defaultRules;
+        }
+    }
+
+    /**
+     * Create default rules for organization
+     * @param {string} orgId - Organization ID
+     */
+    async createDefaultRules(orgId) {
+        try {
+            const defaultRuleTypes = [
+                {
+                    ruleType: 'LATE_ARRIVAL',
+                    threshold: { minutes: 15 },
+                    penalty: { amount: 0, type: 'warning' }
+                },
+                {
+                    ruleType: 'EARLY_DEPARTURE', 
+                    threshold: { minutes: 30 },
+                    penalty: { amount: 0, type: 'warning' }
+                },
+                {
+                    ruleType: 'MINIMUM_HOURS',
+                    threshold: { hours: 8 },
+                    penalty: { amount: 0, type: 'hourly_deduction' }
+                },
+                {
+                    ruleType: 'ABSENTEEISM',
+                    threshold: { consecutive_days: 3 },
+                    penalty: { amount: 0, type: 'daily_deduction' }
+                },
+                {
+                    ruleType: 'BREAK_VIOLATION',
+                    threshold: { minutes: 60 },
+                    penalty: { amount: 0, type: 'warning' }
+                }
+            ];
+
+            await prisma.organizationAttendanceRules.createMany({
+                data: defaultRuleTypes.map(rule => ({
+                    orgId,
+                    ruleType: rule.ruleType,
+                    threshold: rule.threshold,
+                    penalty: rule.penalty,
+                    isActive: false // All rules start as disabled
+                })),
+                skipDuplicates: true
+            });
+
+            console.log(`Created default attendance rules for organization: ${orgId}`);
+        } catch (error) {
+            console.error('Error creating default rules:', error);
+            throw error;
         }
     }
 
