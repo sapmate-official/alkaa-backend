@@ -7,6 +7,7 @@ import * as breakManagementController from '../../../controller/v3/attendance/br
 import * as geofencingController from '../../../controller/v3/attendance/geofencing.controller.js';
 import * as alertsController from '../../../controller/v3/attendance/alerts.controller.js';
 import * as analyticsController from '../../../controller/v3/attendance/analytics.controller.js';
+import simulationController from '../../../controller/v3/attendance/simulation.controller.js';
 
 const router = express.Router();
 
@@ -172,5 +173,12 @@ router.get('/health', (req, res) => {
         note: 'All rules are disabled by default. Configure and enable as needed.'
     });
 });
+
+// =====================================================
+// SIMULATION ROUTES (FOR TESTING)
+// =====================================================
+
+// Use the simulation controller
+router.use('/simulation', simulationController);
 
 export default router;

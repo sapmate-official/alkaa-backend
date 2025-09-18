@@ -35,7 +35,7 @@ export const createGeofence = async (req, res) => {
         }
 
         // Validate geofence type
-        const validTypes = ['OFFICE', 'BRANCH', 'WAREHOUSE', 'SITE', 'REMOTE_LOCATION'];
+        const validTypes = ['MAIN_OFFICE', 'BRANCH_OFFICE', 'CLIENT_SITE', 'REMOTE_ZONE'];
         if (!validTypes.includes(type.toUpperCase())) {
             return res.status(400).json({
                 error: "Invalid geofence type",
@@ -56,13 +56,13 @@ export const createGeofence = async (req, res) => {
                 orgId,
                 name,
                 type: type.toUpperCase(),
-                latitude: parseFloat(latitude),
-                longitude: parseFloat(longitude),
+                coordinates: {
+                    latitude: parseFloat(latitude),
+                    longitude: parseFloat(longitude),
+                    address
+                },
                 radius: radius || 100, // Default 100m radius
-                address,
-                description,
-                isActive: Boolean(isActive),
-                createdBy: req.user.id
+                isActive: Boolean(isActive)
             }
         });
 
@@ -101,14 +101,11 @@ export const getOrganizationGeofences = async (req, res) => {
         const geofences = await prisma.organizationGeofence.findMany({
             where,
             include: {
-                createdByUser: {
-                    select: { firstName: true, lastName: true }
-                },
                 _count: {
                     select: {
                         validationLogs: {
                             where: {
-                                createdAt: {
+                                timestamp: {
                                     gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
                                 }
                             }
@@ -286,31 +283,37 @@ export const getValidationHistory = async (req, res) => {
         }
 
         const where = {
-            user: { orgId }
+            attendance: {
+                user: { orgId }
+            }
         };
 
-        if (userId) where.userId = userId;
+        if (userId) where.attendance.userId = userId;
         if (geofenceId) where.geofenceId = geofenceId;
         if (isValid !== undefined) where.isValid = Boolean(isValid === 'true');
         if (fromDate || toDate) {
-            where.createdAt = {};
-            if (fromDate) where.createdAt.gte = new Date(fromDate);
-            if (toDate) where.createdAt.lte = new Date(toDate);
+            where.timestamp = {};
+            if (fromDate) where.timestamp.gte = new Date(fromDate);
+            if (toDate) where.timestamp.lte = new Date(toDate);
         }
 
         const [validations, total] = await Promise.all([
             prisma.locationValidationLog.findMany({
                 where,
                 include: {
-                    user: {
-                        select: { firstName: true, lastName: true, employeeId: true }
+                    attendance: {
+                        include: {
+                            user: {
+                                select: { firstName: true, lastName: true, employeeId: true }
+                            }
+                        }
                     },
                     geofence: {
                         select: { name: true, type: true }
                     }
                 },
                 orderBy: {
-                    createdAt: 'desc'
+                    timestamp: 'desc'
                 },
                 take: parseInt(limit),
                 skip: parseInt(offset)
@@ -359,12 +362,18 @@ export const getGeofencingAnalytics = async (req, res) => {
         // Get validation logs for analytics
         const validations = await prisma.locationValidationLog.findMany({
             where: {
-                user: { orgId },
-                createdAt: { gte: fromDate }
+                attendance: {
+                    user: { orgId }
+                },
+                timestamp: { gte: fromDate }
             },
             include: {
-                user: {
-                    select: { id: true, firstName: true, lastName: true }
+                attendance: {
+                    include: {
+                        user: {
+                            select: { id: true, firstName: true, lastName: true }
+                        }
+                    }
                 },
                 geofence: {
                     select: { id: true, name: true, type: true }
@@ -404,7 +413,7 @@ export const getGeofencingAnalytics = async (req, res) => {
                 }
 
                 // Group by employee
-                const employeeName = `${validation.user.firstName} ${validation.user.lastName}`;
+                const employeeName = `${validation.attendance.user.firstName} ${validation.attendance.user.lastName}`;
                 if (!analytics.byEmployee[employeeName]) {
                     analytics.byEmployee[employeeName] = { total: 0, violations: 0 };
                 }
@@ -414,7 +423,7 @@ export const getGeofencingAnalytics = async (req, res) => {
                 }
 
                 // Group by hour
-                const hour = validation.createdAt.getHours();
+                const hour = validation.timestamp.getHours();
                 if (!analytics.byHour[hour]) {
                     analytics.byHour[hour] = { total: 0, violations: 0 };
                 }
@@ -433,7 +442,7 @@ export const getGeofencingAnalytics = async (req, res) => {
                 }
 
                 // Daily trends
-                const date = validation.createdAt.toISOString().split('T')[0];
+                const date = validation.timestamp.toISOString().split('T')[0];
                 if (!analytics.trends[date]) {
                     analytics.trends[date] = { total: 0, violations: 0 };
                 }
@@ -493,18 +502,23 @@ export const getNearbyGeofences = async (req, res) => {
         // Find nearby geofences
         const nearbyGeofences = geofences
             .map(geofence => {
+                const coords = geofence.coordinates;
+                if (!coords || !coords.latitude || !coords.longitude) {
+                    return null;
+                }
+                
                 const distance = geofencingService.calculateDistance(
                     location,
-                    { latitude: geofence.latitude, longitude: geofence.longitude }
+                    { latitude: parseFloat(coords.latitude), longitude: parseFloat(coords.longitude) }
                 );
                 
                 return {
                     ...geofence,
                     distance: Math.round(distance),
-                    isWithin: distance <= geofence.radius
+                    isWithin: distance <= parseFloat(geofence.radius || 100)
                 };
             })
-            .filter(geo => geo.distance <= parseInt(radius))
+            .filter(geo => geo && geo.distance <= parseInt(radius))
             .sort((a, b) => a.distance - b.distance);
 
         res.status(200).json({
@@ -555,13 +569,13 @@ export const bulkImportGeofences = async (req, res) => {
                 orgId,
                 name: geo.name,
                 type: geo.type.toUpperCase(),
-                latitude: parseFloat(geo.latitude),
-                longitude: parseFloat(geo.longitude),
+                coordinates: {
+                    latitude: parseFloat(geo.latitude),
+                    longitude: parseFloat(geo.longitude),
+                    address: geo.address
+                },
                 radius: geo.radius || 100,
-                address: geo.address,
-                description: geo.description,
-                isActive: geo.isActive !== false,
-                createdBy: req.user.id
+                isActive: geo.isActive !== false
             };
         });
 
