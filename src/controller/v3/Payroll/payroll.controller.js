@@ -202,13 +202,13 @@ export const getPayslipDataForPDF = async (req, res) => {
 };
 
 /**
- * Download payslip as PDF based on salary record ID (Backend generation - DEPRECATED)
- * Use getPayslipDataForPDF for frontend PDF generation instead
+ * Download payslip as PDF - DEPRECATED - Client-side generation preferred
+ * Returns JSON data for frontend PDF generation instead of server-side PDF
  */
 export const downloadPayslipAsPDF = async (req, res) => {
     try {
         const { salaryRecordId } = req.params;
-        const { format = 'html' } = req.query; // Allow format selection: 'html' or 'pdfkit'
+        const { format = 'json' } = req.query; // Default to JSON for frontend generation
         const currentUserId = req.user.id;
 
         // Validate parameters
@@ -226,27 +226,42 @@ export const downloadPayslipAsPDF = async (req, res) => {
             });
         }
 
-        // Generate and send PDF based on format preference with fallback
-        if (format === 'html' || format === 'modern') {
-            try {
-                // Use HTML-based PDF generator (similar to your frontend approach)
-                await HTMLPayslipPDFGenerator.generatePayslipPDF(statisticsData.salaryRecord, res);
-            } catch (htmlError) {
-                console.error("HTML PDF generation failed, falling back to PDFKit:", htmlError);
-                // Fallback to PDFKit if HTML generation fails
+        // For legacy support, still allow backend PDF generation but discourage it
+        if (format === 'html' || format === 'pdfkit') {
+            console.warn('[DEPRECATED] Backend PDF generation is deprecated. Use frontend generation instead.');
+            
+            // Generate and send PDF based on format preference with fallback
+            if (format === 'html' || format === 'modern') {
+                try {
+                    // Use HTML-based PDF generator (similar to your frontend approach)
+                    await HTMLPayslipPDFGenerator.generatePayslipPDF(statisticsData.salaryRecord, res);
+                } catch (htmlError) {
+                    console.error("HTML PDF generation failed, falling back to PDFKit:", htmlError);
+                    // Fallback to PDFKit if HTML generation fails
+                    await PayslipPDFGenerator.generatePayslipPDF(statisticsData.salaryRecord, res);
+                }
+            } else {
+                // Use existing PDFKit-based generator
                 await PayslipPDFGenerator.generatePayslipPDF(statisticsData.salaryRecord, res);
             }
         } else {
-            // Use existing PDFKit-based generator
-            await PayslipPDFGenerator.generatePayslipPDF(statisticsData.salaryRecord, res);
+            // Default: Return JSON data for frontend PDF generation
+            const pdfData = formatPayslipForFrontendPDF(statisticsData.salaryRecord, statisticsData);
+            
+            return res.status(200).json({
+                success: true,
+                message: "Payslip data for frontend PDF generation",
+                data: pdfData,
+                notice: "Use frontend PDF generation for better performance and user experience"
+            });
         }
 
     } catch (error) {
-        console.error("Error generating payslip PDF:", error);
+        console.error("Error in payslip download endpoint:", error);
         if (!res.headersSent) {
             return res.status(500).json({
                 success: false,
-                message: error.message.includes("not found") ? error.message : "Failed to generate payslip PDF",
+                message: error.message.includes("not found") ? error.message : "Failed to process payslip request",
                 error: error.message
             });
         }
