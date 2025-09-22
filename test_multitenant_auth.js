@@ -1,7 +1,7 @@
 // Test script for multi-tenant authentication
 import fetch from 'node-fetch';
 
-const BASE_URL = 'http://localhost:5000/api/v1/general';
+const BASE_URL = 'http://localhost:5000/api/v1/auth';
 
 async function testMultiTenantAuth() {
     try {
