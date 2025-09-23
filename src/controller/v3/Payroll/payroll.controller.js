@@ -1,4 +1,5 @@
 import { PayrollService } from "./services/payrollService.js";
+import { PayrollCycleService } from "./services/payrollCycleService.js";
 import { PayslipPDFGenerator } from "./services/pdfGenerator.js";
 import { HTMLPayslipPDFGenerator } from "./services/htmlPdfGenerator.js";
 import { PayrollPermissions, PayrollValidators } from "./validators/payrollValidators.js";

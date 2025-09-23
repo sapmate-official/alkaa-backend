@@ -6,107 +6,16 @@ import prisma from '../../../db/connectDb.js';
 import { sendLoginOTPEmail, sendLoginNotificationEmail } from '../../../util/sendEmail.js';
 import { generateTokens, generateTokensWithOrg } from '../../../util/generate.js';
 
-/**
- * Step 1: Enhanced multi-tenant email check
- * @route POST /api/v1/auth/check-email
- * @desc Check email and return organization associations
- * @access Public
- */
-export const checkEmailForLogin = async (req, res) => {
-    try {
-        const { email } = req.body;
-        
-        if (!email) {
-            return res.status(400).json({
-                message: "Email is required",
-            });
-        }
 
-        // Check for super admin first
-        const superAdmin = await prisma.superAdmin.findFirst({
-            where: { email },
-        });
-        
-        if (superAdmin) {
-            return res.status(401).json({
-                message: "Super Admins cannot login through this endpoint",
-            });
-        }
-
-        // Find all organizations this user belongs to
-        const userOrganizations = await prisma.user.findMany({
-            where: { 
-                email,
-                status: { in: ['active', 'inactive'] }
-            },
-            include: {
-                organization: {
-                    select: {
-                        id: true,
-                        name: true,
-                        isActive: true
-                    }
-                }
-            }
-        });
-
-        if (!userOrganizations.length) {
-            return res.status(404).json({
-                message: "No User exists with this Email",
-            });
-        }
-
-        // Filter active organizations
-        const activeUserOrgs = userOrganizations.filter(user => 
-            user.organization.isActive && user.status !== 'suspended'
-        );
-
-        if (!activeUserOrgs.length) {
-            return res.status(401).json({
-                message: "No active organizations found for this user",
-            });
-        }
-
-        // If single organization, return it directly
-        if (activeUserOrgs.length === 1) {
-            return res.status(200).json({
-                singleOrganization: true,
-                organization: {
-                    orgId: activeUserOrgs[0].orgId,
-                    orgName: activeUserOrgs[0].organization.name,
-                    userId: activeUserOrgs[0].id
-                },
-                message: "Single organization found"
-            });
-        }
-
-        // Multiple organizations - return selection options
-        return res.status(200).json({
-            multipleOrganizations: true,
-            organizations: activeUserOrgs.map(user => ({
-                orgId: user.orgId,
-                orgName: user.organization.name,
-                userId: user.id,
-                userStatus: user.status
-            })),
-            message: "Multiple organizations found. Please select one."
-        });
-
-    } catch (error) {
-        console.error("Check email error:", error);
-        res.status(500).json({ error: error.message });
-    }
-};
 
 /**
- * Step 1: Verify credentials without full login (v2 style - advanced)
- * @route POST /api/v1/auth/verify-credentials
- * @desc Verify user credentials and check if 2FA is required
+ * Step 1: Multi-tenant Email Discovery
+ * @route POST /api/v1/auth/discover-organizations
+ * @desc Find all organizations associated with an email
  * @access Public
  */
-export const verifyLoginCredentials = [
+export const discoverOrganizations = [
     body('email').isEmail().withMessage('Valid email required'),
-    body('password').notEmpty().withMessage('Password required'),
     
     async (req, res) => {
         try {
@@ -118,16 +27,10 @@ export const verifyLoginCredentials = [
                 });
             }
 
-            const { email, password } = req.body;
-            const clientInfo = {
-                ip: req.ip,
-                userAgent: req.headers['user-agent'],
-                timestamp: new Date()
-            };
+            const { email } = req.body;
 
-            console.log('=== CREDENTIAL VERIFICATION START ===');
+            console.log('=== ORGANIZATION DISCOVERY START ===');
             console.log('Email:', email);
-            console.log('Client Info:', clientInfo);
 
             // Check for super admin first
             const superAdmin = await prisma.superAdmin.findUnique({
@@ -140,12 +43,394 @@ export const verifyLoginCredentials = [
                 });
             }
 
-            // Find regular user
-            const user = await prisma.user.findUnique({
-                where: { email },
+            // Find all organizations for this user
+            const userOrganizations = await prisma.user.findMany({
+                where: { 
+                    email,
+                    status: { in: ['active', 'inactive'] }
+                },
+                include: {
+                    organization: {
+                        select: {
+                            id: true,
+                            name: true,
+                            isActive: true
+                        }
+                    }
+                }
+            });
+
+            if (userOrganizations.length === 0) {
+                return res.status(404).json({ 
+                    error: 'No account found with this email address' 
+                });
+            }
+
+            // Filter active organizations only (both user status and org status should be active)
+            const activeUserOrgs = userOrganizations.filter(u => 
+                u.organization.isActive && u.status !== 'suspended'
+            );
+
+            if (activeUserOrgs.length === 0) {
+                return res.status(403).json({ 
+                    error: 'No active organizations found for this user' 
+                });
+            }
+
+            // Check if any users are inactive and handle accordingly
+            const hasInactiveUsers = activeUserOrgs.some(u => u.status === 'inactive');
+            
+            // If single organization and user is inactive, initiate password reset flow
+            if (activeUserOrgs.length === 1 && activeUserOrgs[0].status === 'inactive') {
+                console.log(`Single inactive organization found for ${email}, initiating reset flow`);
+                
+                return res.status(200).json({
+                    email,
+                    requiresPasswordReset: true,
+                    singleInactiveOrganization: {
+                        orgId: activeUserOrgs[0].orgId,
+                        orgName: activeUserOrgs[0].organization.name,
+                        userId: activeUserOrgs[0].id
+                    },
+                    message: "Your account is inactive. Email verification required for password reset."
+                });
+            }
+            
+            // Return organization options with user status information
+            console.log(`Found ${activeUserOrgs.length} accessible organizations for ${email}`);
+            
+            return res.status(200).json({
+                email,
+                organizations: activeUserOrgs.map(u => ({
+                    orgId: u.orgId,
+                    orgName: u.organization.name,
+                    userId: u.id,
+                    userStatus: u.status,
+                    hasInactiveUser: u.status === 'inactive'
+                })),
+                hasInactiveUsers,
+                message: activeUserOrgs.length === 1 
+                    ? "Organization found. Please enter your password." 
+                    : "Multiple organizations found. Please select one and enter your password."
+            });
+
+        } catch (error) {
+            console.error('Organization discovery error:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+];
+
+/**
+ * Step 1.5: Email OTP verification for inactive user password reset
+ * @route POST /api/v1/auth/request-reset-otp
+ * @desc Send OTP to email for inactive user password reset verification
+ * @access Public
+ */
+export const requestResetOTP = [
+    body('email').isEmail().withMessage('Valid email required'),
+    body('orgId').notEmpty().withMessage('Organization ID is required'),
+    
+    async (req, res) => {
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    error: 'Validation failed',
+                    details: errors.array()
+                });
+            }
+
+            const { email, orgId } = req.body;
+
+            console.log('=== RESET OTP REQUEST START ===');
+            console.log('Email:', email);
+            console.log('OrgId:', orgId);
+
+            // Find the specific inactive user in the specific organization
+            const user = await prisma.user.findFirst({
+                where: { 
+                    email,
+                    orgId,
+                    status: 'inactive'
+                },
                 include: {
                     organization: {
                         select: { 
+                            id: true,
+                            name: true,
+                            isActive: true
+                        }
+                    }
+                }
+            });
+
+            if (!user) {
+                return res.status(404).json({ error: 'Inactive user not found for this organization' });
+            }
+
+            // Check organization status
+            if (!user.organization?.isActive) {
+                return res.status(403).json({ 
+                    error: 'Organization is inactive. Please contact support.' 
+                });
+            }
+
+            // Check if recent OTP exists and is still valid (rate limiting)
+            const recentOTP = await prisma.emailOtpVerification.findFirst({
+                where: {
+                    userId: user.id,
+                    purpose: 'PASSWORD_RESET',
+                    expiresAt: { gt: new Date() },
+                    isUsed: false
+                },
+                orderBy: { createdAt: 'desc' }
+            });
+
+            if (recentOTP && recentOTP.createdAt > new Date(Date.now() - 60 * 1000)) {
+                const waitTime = 60 - Math.floor((Date.now() - recentOTP.createdAt) / 1000);
+                return res.status(429).json({ 
+                    error: 'Please wait before requesting a new OTP',
+                    waitTime
+                });
+            }
+
+            // Generate OTP
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+            // Store OTP
+            await prisma.emailOtpVerification.create({
+                data: {
+                    userId: user.id,
+                    otpCode: otp,
+                    purpose: 'PASSWORD_RESET',
+                    expiresAt: otpExpiry,
+                    ipAddress: req.ip,
+                    userAgent: req.headers['user-agent']
+                }
+            });
+
+            // Send OTP email
+            try {
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('=== DEVELOPMENT MODE - RESET OTP ===');
+                    console.log(`Reset OTP for ${user.email} (${user.firstName}): ${otp}`);
+                    console.log(`Organization: ${user.organization.name}`);
+                    console.log(`Client Info: IP=${req.ip}, UserAgent=${req.headers['user-agent']}`);
+                    console.log('=====================================');
+                } else {
+                    await sendLoginOTPEmail(
+                        user.email,
+                        user.firstName,
+                        otp,
+                        user.organization.name,
+                        {
+                            ip: req.ip,
+                            userAgent: req.headers['user-agent'],
+                            location: await getLocationFromIP(req.ip)
+                        }
+                    );
+                    console.log('Reset OTP email sent successfully');
+                }
+            } catch (emailError) {
+                console.error('Failed to send reset OTP email:', emailError);
+                // Continue execution even if email fails
+            }
+
+            res.status(200).json({ 
+                message: 'Password reset OTP sent successfully',
+                expiresIn: 600, // 10 minutes in seconds
+                maskedEmail: email.replace(/(.{2})(.*)(@.*)/, '$1***$3')
+            });
+
+        } catch (error) {
+            console.error('Reset OTP request error:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+];
+
+/**
+ * Step 1.6: Verify email OTP for inactive user password reset
+ * @route POST /api/v1/auth/verify-reset-otp
+ * @desc Verify OTP and generate password reset token for inactive user
+ * @access Public
+ */
+export const verifyResetOTP = [
+    body('email').isEmail().withMessage('Valid email required'),
+    body('orgId').notEmpty().withMessage('Organization ID is required'),
+    body('otp').isLength({ min: 6, max: 6 }).withMessage('Valid OTP required'),
+    
+    async (req, res) => {
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    error: 'Validation failed',
+                    details: errors.array()
+                });
+            }
+
+            const { email, orgId, otp } = req.body;
+
+            console.log('=== RESET OTP VERIFICATION START ===');
+            console.log('Email:', email);
+            console.log('OrgId:', orgId);
+            console.log('OTP:', otp);
+
+            // Find the specific inactive user in the specific organization
+            const user = await prisma.user.findFirst({
+                where: { 
+                    email,
+                    orgId,
+                    status: 'inactive'
+                },
+                include: {
+                    organization: {
+                        select: { 
+                            id: true,
+                            name: true,
+                            isActive: true
+                        }
+                    }
+                }
+            });
+
+            if (!user) {
+                return res.status(404).json({ error: 'Inactive user not found for this organization' });
+            }
+
+            // Find and verify OTP
+            const otpRecord = await prisma.emailOtpVerification.findFirst({
+                where: {
+                    userId: user.id,
+                    purpose: 'PASSWORD_RESET',
+                    expiresAt: { gt: new Date() },
+                    isUsed: false
+                },
+                orderBy: { createdAt: 'desc' }
+            });
+
+            if (!otpRecord) {
+                return res.status(401).json({ error: 'Invalid or expired OTP' });
+            }
+
+            // Check attempts
+            if (otpRecord.attemptsCount >= otpRecord.maxAttempts) {
+                await prisma.emailOtpVerification.update({
+                    where: { id: otpRecord.id },
+                    data: { isUsed: true }
+                });
+                
+                return res.status(429).json({ 
+                    error: 'Maximum OTP attempts exceeded. Please request a new OTP.' 
+                });
+            }
+
+            // Verify OTP
+            if (otpRecord.otpCode !== otp) {
+                // Increment attempt count
+                await prisma.emailOtpVerification.update({
+                    where: { id: otpRecord.id },
+                    data: { 
+                        attemptsCount: { increment: 1 }
+                    }
+                });
+
+                const remainingAttempts = otpRecord.maxAttempts - (otpRecord.attemptsCount + 1);
+                return res.status(401).json({ 
+                    error: 'Invalid OTP', 
+                    remainingAttempts: Math.max(0, remainingAttempts)
+                });
+            }
+
+            // Generate verification token for password reset
+            const verificationToken = crypto.randomBytes(32).toString('hex');
+            const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+            // Mark OTP as used and update user with verification token
+            await prisma.$transaction([
+                prisma.emailOtpVerification.update({
+                    where: { id: otpRecord.id },
+                    data: { 
+                        isUsed: true,
+                        usedAt: new Date()
+                    }
+                }),
+                prisma.user.update({
+                    where: { id: user.id },
+                    data: {
+                        verificationToken,
+                        verificationTokenExpiry: tokenExpiry
+                    }
+                })
+            ]);
+
+            console.log('Reset OTP verification successful, token generated');
+            res.status(200).json({
+                message: "OTP verified successfully. You can now reset your password.",
+                verificationToken,
+                userDetails: {
+                    id: user.id,
+                    email: user.email,
+                    firstName: user.firstName,
+                    orgId: user.orgId,
+                    orgName: user.organization.name
+                }
+            });
+
+        } catch (error) {
+            console.error('Reset OTP verification error:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+];
+
+/**
+ * Step 2: Enhanced Multi-tenant Credential Verification with 2FA Integration
+ * @route POST /api/v1/auth/verify-credentials
+ * @desc Verify user credentials for specific organization and check if 2FA is required
+ * @access Public
+ */
+export const verifyLoginCredentials = [
+    body('email').isEmail().withMessage('Valid email required'),
+    body('password').notEmpty().withMessage('Password required'),
+    body('orgId').notEmpty().withMessage('Organization ID is required'),
+    
+    async (req, res) => {
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    error: 'Validation failed',
+                    details: errors.array()
+                });
+            }
+
+            const { email, password, orgId } = req.body;
+            const clientInfo = {
+                ip: req.ip,
+                userAgent: req.headers['user-agent'],
+                timestamp: new Date()
+            };
+
+            console.log('=== CREDENTIAL VERIFICATION START ===');
+            console.log('Email:', email);
+            console.log('OrgId:', orgId);
+            console.log('Client Info:', clientInfo);
+
+            // Find the specific user in the specific organization
+            const user = await prisma.user.findFirst({
+                where: { 
+                    email,
+                    orgId,
+                    status: { in: ['active', 'inactive'] }
+                },
+                include: {
+                    organization: {
+                        select: { 
+                            id: true,
                             name: true,
                             isActive: true
                         }
@@ -157,7 +442,41 @@ export const verifyLoginCredentials = [
                 return res.status(401).json({ error: 'Invalid credentials' });
             }
 
-            // Check user status
+            // Check user status - handle inactive users specially
+            if (user.status === 'inactive') {
+                // Generate or retrieve verification token for password reset
+                let verificationToken = user.verificationToken;
+                let tokenExpiry = user.verificationTokenExpiry;
+                
+                // Generate new token if doesn't exist or expired
+                if (!verificationToken || !tokenExpiry || new Date(tokenExpiry) < new Date()) {
+                    verificationToken = crypto.randomBytes(32).toString('hex');
+                    tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+                    
+                    await prisma.user.update({
+                        where: { id: user.id },
+                        data: {
+                            verificationToken,
+                            verificationTokenExpiry: tokenExpiry
+                        }
+                    });
+                }
+                
+                return res.status(403).json({ 
+                    error: 'ACCOUNT_INACTIVE',
+                    message: 'Your account is inactive. You need to reset your password to activate it.',
+                    requiresPasswordReset: true,
+                    verificationToken,
+                    userDetails: {
+                        id: user.id,
+                        email: user.email,
+                        firstName: user.firstName,
+                        orgId: user.orgId,
+                        orgName: user.organization.name
+                    }
+                });
+            }
+            
             if (user.status !== 'active') {
                 return res.status(403).json({ 
                     error: `Account is ${user.status}. Please contact your administrator.` 
@@ -183,7 +502,7 @@ export const verifyLoginCredentials = [
             if (requires2FA) {
                 // Generate session token for OTP flow
                 const sessionToken = crypto.randomBytes(32).toString('hex');
-                const sessionExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+                const sessionExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
                 // Store session temporarily
                 await prisma.tempLoginSession.create({
@@ -196,13 +515,14 @@ export const verifyLoginCredentials = [
                     }
                 });
 
-                console.log('2FA required, session created');
+                console.log('2FA required, session created for user:', user.id);
                 return res.status(200).json({
                     requiresOTP: true,
                     sessionToken,
                     userId: user.id,
                     email: user.email,
                     firstName: user.firstName,
+                    organizationName: user.organization.name,
                     message: 'Credentials verified. OTP required for login.'
                 });
             } else {
@@ -215,6 +535,10 @@ export const verifyLoginCredentials = [
                     requiresOTP: false,
                     ...tokens,
                     user: sanitizeUserData(user),
+                    organization: {
+                        id: user.organization.id,
+                        name: user.organization.name
+                    },
                     message: 'Login successful'
                 });
             }
@@ -226,154 +550,7 @@ export const verifyLoginCredentials = [
     }
 ];
 
-/**
- * Step 2: Enhanced multi-tenant password verification with OTP
- * @route POST /api/v1/auth/verify-password
- * @desc Verify password and send OTP for selected organization
- * @access Public
- */
-export const verifyPasswordAndSendOtp = async (req, res) => {
-    try {
-        const { email, password, orgId } = req.body;
-        
-        if (!email || !password) {
-            return res.status(400).json({
-                message: "Email and password are required",
-            });
-        }
 
-        // Find the specific user in the organization
-        let user;
-        if (orgId) {
-            user = await prisma.user.findFirst({
-                where: { 
-                    email,
-                    orgId 
-                },
-                include: {
-                    organization: {
-                        select: {
-                            id: true,
-                            name: true,
-                            isActive: true
-                        }
-                    }
-                }
-            });
-        } else {
-            // Single organization case
-            user = await prisma.user.findFirst({
-                where: { email },
-                include: {
-                    organization: {
-                        select: {
-                            id: true,
-                            name: true,
-                            isActive: true
-                        }
-                    }
-                }
-            });
-        }
-
-        if (!user) {
-            return res.status(404).json({
-                message: "User not found",
-            });
-        }
-
-        // Validate user and organization status
-        if (user.status === "suspended") {
-            return res.status(401).json({
-                message: "User is suspended",
-            });
-        }
-
-        if (user.status === "inactive") {
-            return res.status(401).json({
-                message: "User is inactive",
-            });
-        }
-
-        if (!user.organization.isActive) {
-            return res.status(401).json({
-                message: "Organization is inactive",
-            });
-        }
-
-        // Verify password
-        const isPasswordValid = await bcrypt.compare(password, user.hashedPassword);
-        if (!isPasswordValid) {
-            return res.status(401).json({
-                message: "Invalid credentials",
-            });
-        }
-
-        // Generate and store OTP
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
-
-        // Store OTP verification record
-        await prisma.emailOtpVerification.create({
-            data: {
-                userId: user.id,
-                otpCode: otpCode,
-                purpose: 'LOGIN',
-                expiresAt: otpExpiry,
-                isUsed: false,
-                attemptsCount: 0,
-                maxAttempts: 3,
-                ipAddress: req.ip,
-                userAgent: req.get('User-Agent')
-            }
-        });
-        console.log('OTP Code:', otpCode);
-
-        // Send OTP email with organization branding
-        try {
-            await sendLoginOTPEmail(
-                user.email,
-                `${user.firstName} ${user.lastName}`,
-                otpCode,
-                user.organization.name,
-                {
-                    ip: req.ip,
-                    userAgent: req.get('User-Agent'),
-                    timestamp: new Date()
-                }
-            );
-        } catch (emailError) {
-            console.error('Failed to send OTP email:', emailError);
-            // Continue execution even if email fails
-        }
-
-        // Generate temporary session token
-        const sessionToken = crypto.randomBytes(32).toString('hex');
-        const sessionExpiry = new Date(Date.now() + 15 * 60 * 1000);
-
-        // Store temporary session
-        await prisma.tempLoginSession.create({
-            data: {
-                sessionToken,
-                userId: user.id,
-                expiresAt: sessionExpiry,
-                ipAddress: req.ip,
-                userAgent: req.get('User-Agent')
-            }
-        });
-
-        return res.status(200).json({
-            message: "OTP sent successfully",
-            sessionToken: sessionToken,
-            organizationName: user.organization.name,
-            otpExpiresIn: 600
-        });
-
-    } catch (error) {
-        console.error("Password verification error:", error);
-        res.status(500).json({ error: error.message });
-    }
-};
 
 /**
  * Step 2: Request OTP for login (v2 style - advanced)
@@ -458,18 +635,27 @@ export const requestLoginOTP = [
 
             // Send OTP email
             try {
-                await sendLoginOTPEmail(
-                    session.user.email,
-                    session.user.firstName,
-                    otp,
-                    session.user.organization.name,
-                    {
-                        ip: req.ip,
-                        userAgent: req.headers['user-agent'],
-                        location: await getLocationFromIP(req.ip)
-                    }
-                );
-                console.log('OTP email sent successfully');
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('=== DEVELOPMENT MODE - REQUEST OTP ===');
+                    console.log(`OTP for ${session.user.email} (${session.user.firstName}): ${otp}`);
+                    console.log(`Organization: ${session.user.organization.name}`);
+                    console.log(`Session Token: ${sessionToken}`);
+                    console.log(`Client Info: IP=${req.ip}, UserAgent=${req.headers['user-agent']}`);
+                    console.log('======================================');
+                } else {
+                    await sendLoginOTPEmail(
+                        session.user.email,
+                        session.user.firstName,
+                        otp,
+                        session.user.organization.name,
+                        {
+                            ip: req.ip,
+                            userAgent: req.headers['user-agent'],
+                            location: await getLocationFromIP(req.ip)
+                        }
+                    );
+                    console.log('OTP email sent successfully');
+                }
             } catch (emailError) {
                 console.error('Failed to send OTP email:', emailError);
                 // Continue execution even if email fails
@@ -487,179 +673,12 @@ export const requestLoginOTP = [
     }
 ];
 
-/**
- * Step 3: Enhanced multi-tenant OTP verification and login completion
- * @route POST /api/v1/auth/verify-otp
- * @desc Verify OTP and complete login with organization context
- * @access Public
- */
-export const verifyOtpAndLogin = async (req, res) => {
-    try {
-        const { sessionToken, otpCode } = req.body;
-        
-        if (!sessionToken || !otpCode) {
-            return res.status(400).json({
-                message: "Session token and OTP code are required",
-            });
-        }
 
-        // Find and verify session
-        const session = await prisma.tempLoginSession.findFirst({
-            where: {
-                sessionToken,
-                expiresAt: { gt: new Date() },
-                isUsed: false
-            },
-            include: {
-                user: {
-                    include: {
-                        organization: {
-                            select: {
-                                id: true,
-                                name: true,
-                                isActive: true
-                            }
-                        },
-                        roles: {
-                            include: {
-                                role: {
-                                    select: {
-                                        id: true,
-                                        name: true
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
-
-        if (!session) {
-            return res.status(401).json({
-                message: "Invalid or expired session"
-            });
-        }
-
-        // Find and verify OTP
-        const otpRecord = await prisma.emailOtpVerification.findFirst({
-            where: {
-                userId: session.userId,
-                purpose: 'LOGIN',
-                expiresAt: { gt: new Date() },
-                isUsed: false
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-
-        if (!otpRecord) {
-            return res.status(401).json({
-                message: "Invalid or expired OTP"
-            });
-        }
-
-        // Check attempts
-        if (otpRecord.attemptsCount >= otpRecord.maxAttempts) {
-            await prisma.emailOtpVerification.update({
-                where: { id: otpRecord.id },
-                data: { isUsed: true }
-            });
-            
-            return res.status(429).json({
-                message: "Maximum OTP attempts exceeded. Please try again."
-            });
-        }
-
-        // Verify OTP
-        if (otpRecord.otpCode !== otpCode) {
-            await prisma.emailOtpVerification.update({
-                where: { id: otpRecord.id },
-                data: { attemptsCount: otpRecord.attemptsCount + 1 }
-            });
-            
-            return res.status(401).json({
-                message: "Invalid OTP code"
-            });
-        }
-
-        // Mark OTP as used
-        await prisma.emailOtpVerification.update({
-            where: { id: otpRecord.id },
-            data: { 
-                isUsed: true,
-                usedAt: new Date()
-            }
-        });
-
-        // Mark session as used
-        await prisma.tempLoginSession.update({
-            where: { id: session.id },
-            data: { isUsed: true }
-        });
-
-        const user = session.user;
-
-        // Generate tokens with orgId
-        const { accessToken, refreshToken } = generateTokensWithOrg(
-            user.email,
-            user.id,
-            user.orgId,
-            "2d",
-            "7d"
-        );
-
-        // Update user's refresh token
-        await prisma.user.update({
-            where: { id: user.id },
-            data: { refreshToken: refreshToken }
-        });
-
-        // Set cookies
-        res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
-        });
-
-        res.cookie("accessToken", accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 2 * 24 * 60 * 60 * 1000,
-            expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
-        });
-
-        return res.status(200).json({
-            message: "Login successful",
-            userData: {
-                id: user.id,
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                orgId: user.orgId,
-                orgName: user.organization.name,
-                roles: user.roles.map(ur => ur.role.name)
-            },
-            refreshToken,
-            accessToken,
-        });
-
-    } catch (error) {
-        console.error("OTP verification error:", error);
-        res.status(500).json({ error: error.message });
-    }
-};
 
 /**
- * Step 3: Verify OTP and complete login (v2 style - advanced)
+ * Step 3: Enhanced Multi-tenant OTP Verification and Login Completion
  * @route POST /api/v1/auth/verify-login-otp
- * @desc Verify OTP and complete the login process
+ * @desc Verify OTP and complete the login process with multi-tenant support
  * @access Public
  */
 export const verifyLoginOTP = [
@@ -678,11 +697,11 @@ export const verifyLoginOTP = [
 
             const { sessionToken, otp } = req.body;
 
-            console.log('=== OTP VERIFICATION START ===');
+            console.log('=== ENHANCED OTP VERIFICATION START ===');
             console.log('Session Token:', sessionToken);
             console.log('OTP:', otp);
 
-            // Verify session token
+            // Verify session token with full user context
             const session = await prisma.tempLoginSession.findFirst({
                 where: {
                     sessionToken,
@@ -705,7 +724,13 @@ export const verifyLoginOTP = [
                                     }
                                 }
                             },
-                            organization: true
+                            organization: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    isActive: true
+                                }
+                            }
                         }
                     }
                 }
@@ -713,6 +738,19 @@ export const verifyLoginOTP = [
 
             if (!session) {
                 return res.status(401).json({ error: 'Invalid or expired session' });
+            }
+
+            // Additional organization and user status checks
+            if (!session.user.organization?.isActive) {
+                return res.status(403).json({ 
+                    error: 'Organization is inactive. Please contact support.' 
+                });
+            }
+
+            if (session.user.status !== 'active') {
+                return res.status(403).json({ 
+                    error: `Account is ${session.user.status}. Please contact your administrator.` 
+                });
             }
 
             // Find and verify OTP
@@ -744,14 +782,18 @@ export const verifyLoginOTP = [
 
             // Verify OTP
             if (otpRecord.otpCode !== otp) {
+                // Increment attempt count
                 await prisma.emailOtpVerification.update({
                     where: { id: otpRecord.id },
-                    data: { attemptsCount: otpRecord.attemptsCount + 1 }
+                    data: { 
+                        attemptsCount: { increment: 1 }
+                    }
                 });
-                
+
+                const remainingAttempts = otpRecord.maxAttempts - (otpRecord.attemptsCount + 1);
                 return res.status(401).json({ 
-                    error: 'Invalid OTP',
-                    attemptsRemaining: otpRecord.maxAttempts - (otpRecord.attemptsCount + 1)
+                    error: 'Invalid OTP', 
+                    remainingAttempts: Math.max(0, remainingAttempts)
                 });
             }
 
@@ -770,10 +812,43 @@ export const verifyLoginOTP = [
                 })
             ]);
 
-            // Generate auth tokens
-            const tokens = await generateAuthTokens(session.user);
+            // Generate tokens with organization context
+            const { accessToken, refreshToken } = generateTokensWithOrg(
+                session.user.email,
+                session.user.id,
+                session.user.orgId,
+                "2d",
+                "7d"
+            );
 
-            // Log successful login
+            // Update user's refresh token
+            await prisma.user.update({
+                where: { id: session.user.id },
+                data: { refreshToken }
+            });
+
+            // Set cookies with proper domain settings
+            res.cookie("refreshToken", refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax",
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+                expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                path: "/",
+                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
+            });
+
+            res.cookie("accessToken", accessToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax",
+                maxAge: 2 * 24 * 60 * 60 * 1000,
+                expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+                path: "/",
+                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
+            });
+
+            // Log successful login with 2FA
             await logLoginActivity(session.userId, {
                 ip: req.ip,
                 userAgent: req.headers['user-agent'],
@@ -783,32 +858,52 @@ export const verifyLoginOTP = [
             // Send login notification if enabled
             if (session.user.loginNotificationsEnabled) {
                 try {
-                    await sendLoginNotificationEmail(
-                        session.user.email,
-                        session.user.firstName,
-                        {
-                            ip: req.ip,
-                            userAgent: req.headers['user-agent'],
-                            timestamp: new Date(),
-                            location: await getLocationFromIP(req.ip)
-                        },
-                        session.user.organization.name
-                    );
-                    console.log('Login notification sent');
-                } catch (emailError) {
-                    console.warn('Failed to send login notification:', emailError);
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log('=== DEVELOPMENT MODE - LOGIN NOTIFICATION ===');
+                        console.log(`Login notification for ${session.user.email} (${session.user.firstName})`);
+                        console.log(`Client Info: IP=${req.ip}, UserAgent=${req.headers['user-agent']}`);
+                        console.log('=============================================');
+                    } else {
+                        await sendLoginNotificationEmail(
+                            session.user.email,
+                            session.user.firstName,
+                            {
+                                ip: req.ip,
+                                userAgent: req.headers['user-agent'],
+                                location: await getLocationFromIP(req.ip),
+                                timestamp: new Date()
+                            }
+                        );
+                    }
+                } catch (notificationError) {
+                    console.error('Failed to send login notification:', notificationError);
+                    // Continue execution even if notification fails
                 }
             }
 
-            console.log('OTP verification successful, login completed');
+            console.log('Enhanced OTP verification successful, login completed');
             res.status(200).json({
-                ...tokens,
-                user: sanitizeUserData(session.user),
-                message: 'Login successful'
+                message: "Login successful",
+                userData: {
+                    id: session.user.id,
+                    email: session.user.email,
+                    firstName: session.user.firstName,
+                    lastName: session.user.lastName,
+                    orgId: session.user.orgId,
+                    orgName: session.user.organization.name,
+                    roles: session.user.roles.map(ur => ur.role.name),
+                    twoFactorEnabled: session.user.twoFactorEnabled
+                },
+                refreshToken,
+                accessToken,
+                organization: {
+                    id: session.user.organization.id,
+                    name: session.user.organization.name
+                }
             });
 
         } catch (error) {
-            console.error('OTP verification error:', error);
+            console.error('Enhanced OTP verification error:', error);
             res.status(500).json({ error: 'Internal server error' });
         }
     }
@@ -904,18 +999,27 @@ export const resendLoginOTP = [
 
             // Send OTP email
             try {
-                await sendLoginOTPEmail(
-                    session.user.email,
-                    session.user.firstName,
-                    otp,
-                    session.user.organization.name,
-                    {
-                        ip: req.ip,
-                        userAgent: req.headers['user-agent'],
-                        location: await getLocationFromIP(req.ip)
-                    }
-                );
-                console.log('OTP resent successfully');
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('=== DEVELOPMENT MODE - RESEND OTP ===');
+                    console.log(`Resent OTP for ${session.user.email} (${session.user.firstName}): ${otp}`);
+                    console.log(`Organization: ${session.user.organization.name}`);
+                    console.log(`Session Token: ${sessionToken}`);
+                    console.log(`Client Info: IP=${req.ip}, UserAgent=${req.headers['user-agent']}`);
+                    console.log('====================================');
+                } else {
+                    await sendLoginOTPEmail(
+                        session.user.email,
+                        session.user.firstName,
+                        otp,
+                        session.user.organization.name,
+                        {
+                            ip: req.ip,
+                            userAgent: req.headers['user-agent'],
+                            location: await getLocationFromIP(req.ip)
+                        }
+                    );
+                    console.log('OTP resent successfully');
+                }
             } catch (emailError) {
                 console.error('Failed to resend OTP email:', emailError);
                 return res.status(500).json({ error: 'Failed to send OTP email' });
@@ -965,146 +1069,7 @@ export const setPassword = async (req, res) => {
     }
 };
 
-/**
- * Legacy login functionality (kept for backward compatibility)
- * @route POST /api/v1/auth/login
- * @desc Legacy single-step login
- * @access Public
- */
-export const loginUser = async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        console.log(email, password);
-        
-        if (!email || !password) {
-            return res.status(400).send({
-                message: "Email and password are required",
-            });
-        }
 
-        // Check for super admin first
-        const superAdmin = await prisma.superAdmin.findFirst({
-            where: { email },
-        });
-        
-        if (superAdmin) {
-            return res.status(401).send({
-                message: "Super Admins cannot login through this endpoint",
-            });
-        }
-
-        const user = await prisma.user.findFirst({
-            where: { email },
-        });
-        
-        if (!user) {
-            return res.status(401).send({
-                message: "No User exists with this Email",
-            });
-        }
-        
-        if (user.status == "inactive") {
-            return res.status(401).send({
-                message: "User is inactive",
-            });
-        }
-        
-        if (user.status == "suspended") {
-            return res.status(401).send({
-                message: "User is suspended",
-            });
-        }
-
-        const isPasswordValid = await bcrypt.compare(password, user.hashedPassword);
-        
-        if (!isPasswordValid) {
-            return res.status(401).send({
-                message: "Invalid credentials",
-            });
-        }
-
-        const userRole = await prisma.userRole.findFirst({
-            where: {
-                userId: user.id
-            },
-            include: {
-                role: {
-                    select: {
-                        name: true
-                    }
-                }
-            }
-        });
-
-        const organisationStatus = await prisma.organization.findFirst({
-            where: {
-                id: user.orgId
-            },
-            select: {
-                isActive: true,
-            }
-        });
-        
-        if (!organisationStatus.isActive) {
-            return res.status(401).send({
-                message: "Organization is inactive",
-            });
-        }
-
-        const { accessToken, refreshToken } = generateTokens(
-            user.email,
-            user.id,
-            "2d",
-            "7d"
-        );
-        
-        if (user) {
-            await prisma.user.update({
-                where: {
-                    id: user.id
-                },
-                data: {
-                    refreshToken: refreshToken,
-                }
-            });
-        }
-
-        res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
-        });
-
-        res.cookie("accessToken", accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 2 * 24 * 60 * 60 * 1000,
-            expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
-        });
-
-        return res.status(200).send({
-            message: "User logged in successfully",
-            userData: {
-                id: user.id,
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-            },
-            refreshToken,
-            accessToken,
-        });
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: error.message });
-    }
-};
 
 /**
  * Enhanced token validation with organization context
@@ -1411,6 +1376,7 @@ export const toggle2FA = async (req, res) => {
 
         res.status(200).json({
             message: `2FA ${enabled ? 'enabled' : 'disabled'} successfully`,
+            twoFactorEnabled: updatedUser.twoFactorEnabled,
             user: updatedUser
         });
 
@@ -1450,6 +1416,97 @@ export const updateNotificationPreferences = async (req, res) => {
 
     } catch (error) {
         console.error('Update notification preferences error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+/**
+ * @route PUT /api/v1/auth/change-password
+ * @desc Change user's password
+ * @access Private
+ */
+export const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword, confirmPassword } = req.body;
+        const userId = req.user.id;
+
+        // Validate request body
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            return res.status(400).json({
+                error: 'Current password, new password, and confirmation are required'
+            });
+        }
+
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({
+                error: 'New password and confirmation do not match'
+            });
+        }
+
+        // Password strength validation
+        if (newPassword.length < 8) {
+            return res.status(400).json({
+                error: 'New password must be at least 8 characters long'
+            });
+        }
+
+        // Find user with current password
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                email: true,
+                hashedPassword: true,
+                firstName: true,
+                lastName: true
+            }
+        });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Verify current password
+        const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.hashedPassword);
+        if (!isCurrentPasswordValid) {
+            return res.status(400).json({
+                error: 'Current password is incorrect'
+            });
+        }
+
+        // Check if new password is different from current
+        const isSamePassword = await bcrypt.compare(newPassword, user.hashedPassword);
+        if (isSamePassword) {
+            return res.status(400).json({
+                error: 'New password must be different from current password'
+            });
+        }
+
+        // Hash new password
+        const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
+        // Update password in database
+        await prisma.user.update({
+            where: { id: userId },
+            data: { 
+                hashedPassword: hashedNewPassword,
+                updatedAt: new Date()
+            }
+        });
+
+        // Log password change activity
+        await logLoginActivity(userId, {
+            ip: req.ip || req.connection.remoteAddress,
+            userAgent: req.get('User-Agent') || 'Unknown',
+            timestamp: new Date()
+        }, 'PASSWORD_CHANGE');
+
+        res.status(200).json({
+            message: 'Password changed successfully'
+        });
+
+    } catch (error) {
+        console.error('Change password error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
