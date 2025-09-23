@@ -71,7 +71,7 @@ export const createCandidate = [
             });
 
             if (existingUser) {
-                return res.status(409).json({ error: 'Email already exists' });
+                return res.status(409).json({ error: 'Email already exists in this organization' });
             }
             
             // Validate manager exists if provided

@@ -54,7 +54,7 @@ export class PayrollService {
     /**
      * Generate salary for a user
      */
-    static async generateSalary(targetUserId, month, year) {
+    static async generateSalary(targetUserId, month, year, cycleId = null) {
         console.log("[SALARY_GENERATE] Starting salary generation for user:", targetUserId);
 
         // Check if salary already exists
@@ -96,9 +96,10 @@ export class PayrollService {
         // Calculate net salary
         const netSalary = calculateNetSalary(baseSalary, allowances, deductions);
 
-        // Create salary record
+        // Create salary record with cycle reference
         const salaryRecord = await this.createSalaryRecord({
             userId: targetUserId,
+            cycleId, // Add cycle reference
             month: parseInt(month),
             year: parseInt(year),
             basicSalary: baseSalary,
@@ -178,6 +179,59 @@ export class PayrollService {
         }
 
         return statusMap;
+    }
+
+    /**
+     * Bulk approve salaries
+     */
+    static async bulkApproveSalaries(salaryRecordIds, approvedBy, notes = null) {
+        try {
+            const result = await prisma.salaryRecord.updateMany({
+                where: {
+                    id: { in: salaryRecordIds },
+                    status: 'PENDING'
+                },
+                data: {
+                    status: 'PROCESSED',
+                    processedAt: new Date(),
+                    remarks: notes ? `${notes} - Bulk approved` : 'Bulk approved'
+                }
+            });
+
+            // Log the bulk approval
+            for (const salaryRecordId of salaryRecordIds) {
+                await prisma.activityLog.create({
+                    data: {
+                        orgId: await this.getOrgIdFromSalaryRecord(salaryRecordId),
+                        actorId: approvedBy,
+                        action: 'APPROVE',
+                        entity: 'SALARY_RECORD',
+                        entityId: salaryRecordId,
+                        description: `Bulk approved salary record ${salaryRecordId}`
+                    }
+                });
+            }
+
+            return result;
+        } catch (error) {
+            console.error("[BULK_APPROVE_SALARIES] Error:", error);
+            throw error;
+        }
+    }
+
+    /**
+     * Helper method to get organization ID from salary record
+     */
+    static async getOrgIdFromSalaryRecord(salaryRecordId) {
+        const salaryRecord = await prisma.salaryRecord.findUnique({
+            where: { id: salaryRecordId },
+            include: {
+                user: {
+                    select: { orgId: true }
+                }
+            }
+        });
+        return salaryRecord?.user?.orgId;
     }
 
     // Private helper methods

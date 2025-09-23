@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL_DEVELOPMENT_BRANCH")
+  url      = env("DATABASE_URL")
 }
 
 model SuperAdmin {
@@ -50,6 +50,11 @@ model Organization {
   tasks                 Task[]
   taskGroups            TaskGroup[]
   users                 User[]
+  payrollTemplates      PayrollTemplate[]
+  payrollCycles         PayrollCycle[]
+  salaryTemplates       SalaryTemplate[]
+  calculationRules      CalculationRule[]
+  workflowSteps         WorkflowStep[]
 }
 
 model Organization_admin {
@@ -236,6 +241,11 @@ model User {
   assignedDepartments          UserDepartment[]            @relation("DepartmentAssignments")
   userDepartments              UserDepartment[]
   roles                        UserRole[]
+  createdSalaryTemplates       SalaryTemplate[]
+  salaryTemplate               SalaryTemplate?             @relation("UserSalaryTemplate", fields: [salaryTemplateId], references: [id])
+  salaryTemplateId             String?
+  createdWorkflowSteps         WorkflowStep[]              @relation("WorkflowStepCreatedBy")
+  completedWorkflowSteps       WorkflowStep[]              @relation("WorkflowStepCompletedBy")
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -370,6 +380,7 @@ model SalaryParameter {
 model SalaryRecord {
   id                 String                   @id @default(cuid())
   userId             String
+  cycleId            String?
   month              Int
   year               Int
   basicSalary        Float
@@ -387,10 +398,14 @@ model SalaryRecord {
   incentive          Float?
   bonus              Float?
   user               User                     @relation(fields: [userId], references: [id])
+  cycle              PayrollCycle?            @relation(fields: [cycleId], references: [id])
   salaryTransactions salaryTransactionTable[]
+  auditLogs          PayrollAudit[]
+  disputes           SalaryDispute[]
 
   @@unique([userId, month, year])
   @@index([userId, year, month])
+  @@index([cycleId])
 }
 
 model NotificationTemplate {
@@ -995,6 +1010,147 @@ model ShiftComplianceRecord {
   @@index([shiftId])
 }
 
+model PayrollTemplate {
+  id           String       @id @default(cuid())
+  orgId        String
+  name         String
+  description  String?
+  isDefault    Boolean      @default(false)
+  isActive     Boolean      @default(true)
+  rules        Json // Calculation rules, overtime rates, tax brackets
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  createdBy    String
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, name])
+  @@index([orgId, isActive])
+}
+
+model PayrollCycle {
+  id             String             @id @default(cuid())
+  orgId          String
+  month          Int
+  year           Int
+  status         PayrollCycleStatus @default(DRAFT)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  startedBy      String?
+  approvedBy     String?
+  approvedAt     DateTime?
+  totalEmployees Int                @default(0)
+  processedCount Int                @default(0)
+  totalAmount    Float              @default(0)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  salaryRecords  SalaryRecord[]
+  workflowSteps  WorkflowStep[]
+  organization   Organization       @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, month, year])
+  @@index([orgId, status])
+}
+
+model SalaryDispute {
+  id             String        @id @default(cuid())
+  salaryRecordId String
+  userId         String
+  reason         String
+  description    String?
+  status         DisputeStatus @default(PENDING)
+  resolutionNote String?
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  salaryRecord   SalaryRecord  @relation(fields: [salaryRecordId], references: [id])
+
+  @@index([salaryRecordId])
+  @@index([userId])
+}
+
+model PayrollAudit {
+  id             String        @id @default(cuid())
+  salaryRecordId String
+  action         PayrollAction
+  performedBy    String
+  changes        Json?
+  timestamp      DateTime      @default(now())
+  ipAddress      String?
+  userAgent      String?
+  salaryRecord   SalaryRecord  @relation(fields: [salaryRecordId], references: [id])
+
+  @@index([salaryRecordId])
+  @@index([action, timestamp])
+}
+
+model SalaryTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  rules       Json     // Stores salary calculation rules (allowances, deductions, etc.)
+  orgId       String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  organization Organization @relation(fields: [orgId], references: [id])
+  createdBy    User         @relation(fields: [createdById], references: [id])
+  users        User[]       @relation("UserSalaryTemplate")
+
+  @@unique([orgId, name])
+  @@index([orgId, isActive])
+}
+
+model CalculationRule {
+  id        String   @id @default(cuid())
+  name      String
+  formula   String
+  type      RuleType
+  isActive  Boolean  @default(true)
+  orgId     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, name])
+  @@index([orgId, type])
+}
+
+model WorkflowStep {
+  id             String       @id @default(cuid())
+  title          String
+  description    String?
+  phase          WorkflowPhase
+  order          Int
+  status         StepStatus   @default(pending)
+  assignedTo     String?      // User ID or role type (admin, manager, employee, system)
+  estimatedHours Int?
+  dependencies   String[]     // Array of step IDs that must be completed first
+  comments       String?
+  month          Int
+  year           Int
+  orgId          String
+  cycleId        String?
+  createdById    String
+  completedById  String?
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  organization Organization  @relation(fields: [orgId], references: [id])
+  cycle        PayrollCycle? @relation(fields: [cycleId], references: [id])
+  createdBy    User          @relation("WorkflowStepCreatedBy", fields: [createdById], references: [id])
+  completedBy  User?         @relation("WorkflowStepCompletedBy", fields: [completedById], references: [id])
+
+  @@unique([orgId, phase, order, month, year])
+  @@index([orgId, status])
+  @@index([cycleId])
+}
+
 enum GroupRole {
   ADMIN
   MEMBER
@@ -1239,4 +1395,51 @@ enum ShiftStatus {
   ACTIVE
   INACTIVE
   TEMPORARY
+}
+
+enum PayrollCycleStatus {
+  DRAFT
+  IN_PROGRESS
+  REVIEW
+  APPROVED
+  COMPLETED
+  CANCELLED
+}
+
+enum DisputeStatus {
+  PENDING
+  UNDER_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+enum PayrollAction {
+  GENERATED
+  APPROVED
+  REJECTED
+  MODIFIED
+  PAID
+  DISPUTED
+  RESOLVED
+}
+
+enum RuleType {
+  allowance
+  deduction
+  tax
+}
+
+enum WorkflowPhase {
+  setup
+  cycle
+  review
+  reporting
+  employee
+}
+
+enum StepStatus {
+  pending
+  in_progress
+  completed
+  blocked
 }
