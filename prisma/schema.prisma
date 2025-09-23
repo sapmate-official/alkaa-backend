@@ -49,6 +49,7 @@ model Organization {
   shiftTemplates        ShiftTemplate[]
   tasks                 Task[]
   taskGroups            TaskGroup[]
+  trackingSessions      TrackingSession[]
   users                 User[]
 }
 
@@ -227,6 +228,7 @@ model User {
   taskGroupMemberships         TaskGroupMember[]           @relation("TaskGroupMemberships")
   taskUpdates                  TaskUpdate[]                @relation("TaskUpdater")
   tempLoginSessions            TempLoginSession[]
+  trackingSessions             TrackingSession[]
   receivedTransactions         TransactionTable[]          @relation("ReceiverTransaction")
   sentTransactions             TransactionTable[]          @relation("SenderTransaction")
   department                   Department?                 @relation("UserDepartment", fields: [departmentId], references: [id])
@@ -345,6 +347,7 @@ model AttendanceRecord {
   geofenceViolations  GeofenceViolation[]
   locationValidations LocationValidationLog[]
   complianceRecords   ShiftComplianceRecord[]
+  trackingSessions    TrackingSession[]
   UserDailyReport     UserDailyReport[]
 
   @@unique([userId, date, sessionNumber])
@@ -920,21 +923,38 @@ model AttendanceAlert {
 }
 
 model GeofenceViolation {
-  id           String               @id @default(cuid())
-  userId       String
-  attendanceId String?
-  latitude     Decimal              @db.Decimal(10, 8)
-  longitude    Decimal              @db.Decimal(11, 8)
-  distance     Decimal              @db.Decimal(10, 2)
-  geofenceId   String
-  action       LocationActionType
-  timestamp    DateTime             @default(now())
-  attendance   AttendanceRecord?    @relation(fields: [attendanceId], references: [id])
-  geofence     OrganizationGeofence @relation(fields: [geofenceId], references: [id])
-  user         User                 @relation(fields: [userId], references: [id])
+  id                 String               @id @default(cuid())
+  userId             String
+  attendanceId       String?
+  sessionId          String?
+  geofenceId         String?
+  violationType      String
+  severity           ViolationSeverity    @default(MINOR)
+  startLocation      Json
+  currentLocation    Json?
+  resolutionLocation Json?
+  startTime          DateTime             @default(now())
+  lastViolationTime  DateTime?
+  resolvedAt         DateTime?
+  resolutionType     String?
+  resolutionNote     String?
+  resolvedBy         String?
+  violationCount     Int                  @default(1)
+  isBreakRelated     Boolean              @default(false)
+  metadata           Json?
+  latitude           Decimal?             @db.Decimal(10, 8)
+  longitude          Decimal?             @db.Decimal(11, 8)
+  distance           Decimal?             @db.Decimal(10, 2)
+  action             LocationActionType?
+  timestamp          DateTime?
+  attendance         AttendanceRecord?    @relation(fields: [attendanceId], references: [id])
+  geofence           OrganizationGeofence? @relation(fields: [geofenceId], references: [id])
+  session            TrackingSession?     @relation(fields: [sessionId], references: [id])
+  user               User                 @relation(fields: [userId], references: [id])
 
-  @@index([userId, timestamp])
-  @@index([geofenceId, timestamp])
+  @@index([userId, startTime])
+  @@index([sessionId, resolvedAt])
+  @@index([geofenceId, startTime])
 }
 
 model ShiftTemplate {
@@ -1239,4 +1259,59 @@ enum ShiftStatus {
   ACTIVE
   INACTIVE
   TEMPORARY
+}
+
+model TrackingSession {
+  id                   String               @id @default(cuid())
+  userId               String
+  orgId                String
+  attendanceId         String
+  workMode             WorkMode             @default(OFFICE)
+  startLocation        Json
+  currentLocation      Json?
+  endLocation          Json?
+  startTime            DateTime             @default(now())
+  endTime              DateTime?
+  lastLocationUpdate   DateTime?
+  isActive             Boolean              @default(true)
+  endReason            String?
+  endedBy              String?
+  updatedBy            String?
+  outstationData       Json?
+  settings             Json?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  attendance           AttendanceRecord     @relation(fields: [attendanceId], references: [id])
+  organization         Organization         @relation(fields: [orgId], references: [id])
+  user                 User                 @relation(fields: [userId], references: [id])
+  violations           GeofenceViolation[]
+  locationUpdates      LocationUpdate[]
+
+  @@index([userId, isActive])
+  @@index([orgId, startTime])
+}
+
+model LocationUpdate {
+  id                String          @id @default(cuid())
+  sessionId         String
+  latitude          Float
+  longitude         Float
+  accuracy          Float?
+  address           String?
+  timestamp         DateTime        @default(now())
+  isCompliant       Boolean         @default(true)
+  validationNotes   String?
+  isBreakActive     Boolean         @default(false)
+  breakId           String?
+  validationSkipped Boolean         @default(false)
+  session           TrackingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, timestamp])
+}
+
+enum WorkMode {
+  OFFICE
+  OUTSTATION
+  REMOTE
+  CLIENT_SITE
 }
