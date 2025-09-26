@@ -1,6 +1,7 @@
 import { scheduleJob } from 'node-schedule';
 // import { runNotificationProcessor } from './notificationProcessor.js';
 import { checkMissingCheckouts } from './attendanceProcessor.js';
+import { sendUpcomingHolidayReminders } from './holidayReminderProcessor.js';
 import { processBirthdayEmails } from './birthdayService.js';
 
 /**
@@ -16,6 +17,12 @@ export const startScheduledJobs = () => {
     // await runNotificationProcessor();
   });
   
+  // Send holiday reminders each day at 9 AM server time
+  scheduleJob('0 9 * * *', async () => {
+    console.log('Running scheduled holiday reminder processor...');
+    await sendUpcomingHolidayReminders();
+  });
+
   // Check for missing checkouts every 30 minutes between 5 PM and midnight
   // Runs at 5:30 PM, 6:00 PM, 6:30 PM, etc. until midnight
   scheduleJob('30,0 17-23 * * *', async () => {
