@@ -225,6 +225,9 @@ model User {
   PushSubscription             PushSubscription[]
   salaryParameter              SalaryParameter?
   salaryRecords                SalaryRecord[]
+  processedPayrollCycles       PayrollCycle[]             @relation("PayrollCycleProcessor")
+  approvedPayrollCycles        PayrollCycle[]             @relation("PayrollCycleApprover")
+  payrollCycleAuditEntries     PayrollCycleAudit[]        @relation("PayrollCycleAuditActor")
   createdTasks                 Task[]                      @relation("TaskCreator")
   assignedToTasks              TaskAssignment[]            @relation("TaskAssigner")
   assignedTasks                TaskAssignment[]            @relation("TaskAssignee")
@@ -404,6 +407,7 @@ model SalaryRecord {
   cycle              PayrollCycle?            @relation(fields: [cycleId], references: [id])
   salaryTransactions salaryTransactionTable[]
   auditLogs          PayrollAudit[]
+  cycleAuditEntries PayrollCycleAudit[] @relation("SalaryRecordCycleAudit")
   disputes           SalaryDispute[]
 
   @@unique([userId, month, year])
@@ -1042,6 +1046,7 @@ model PayrollTemplate {
   updatedAt    DateTime     @updatedAt
   createdBy    String
   organization Organization @relation(fields: [orgId], references: [id])
+  cycles       PayrollCycle[]
 
   @@unique([orgId, name])
   @@index([orgId, isActive])
@@ -1058,17 +1063,40 @@ model PayrollCycle {
   startedBy      String?
   approvedBy     String?
   approvedAt     DateTime?
+  templateId     String?
   totalEmployees Int                @default(0)
   processedCount Int                @default(0)
+  failedCount    Int                @default(0)
   totalAmount    Float              @default(0)
+  notes          Json?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
   salaryRecords  SalaryRecord[]
   workflowSteps  WorkflowStep[]
+  template       PayrollTemplate?   @relation(fields: [templateId], references: [id])
+  processor      User?              @relation("PayrollCycleProcessor", fields: [startedBy], references: [id])
+  approver       User?              @relation("PayrollCycleApprover", fields: [approvedBy], references: [id])
+  auditLogs      PayrollCycleAudit[]
   organization   Organization       @relation(fields: [orgId], references: [id])
 
   @@unique([orgId, month, year])
   @@index([orgId, status])
+}
+
+model PayrollCycleAudit {
+  id             String              @id @default(cuid())
+  cycleId        String
+  salaryRecordId String?
+  action         PayrollCycleAction
+  previousData   Json?
+  newData        Json?
+  userId         String?
+  createdAt      DateTime            @default(now())
+  cycle          PayrollCycle        @relation(fields: [cycleId], references: [id])
+  salaryRecord   SalaryRecord?       @relation("SalaryRecordCycleAudit", fields: [salaryRecordId], references: [id])
+  actor          User?               @relation("PayrollCycleAuditActor", fields: [userId], references: [id])
+
+  @@index([cycleId, createdAt])
 }
 
 model SalaryDispute {
@@ -1424,6 +1452,16 @@ enum PayrollCycleStatus {
   APPROVED
   COMPLETED
   CANCELLED
+}
+
+enum PayrollCycleAction {
+  CYCLE_CREATED
+  CYCLE_STARTED
+  SALARY_GENERATED
+  CYCLE_REVIEW_READY
+  CYCLE_APPROVED
+  CYCLE_CANCELLED
+  NOTE_ADDED
 }
 
 enum DisputeStatus {
