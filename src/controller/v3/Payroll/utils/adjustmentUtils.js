@@ -3,16 +3,28 @@ import prisma from "../../../../db/connectDb.js";
 /**
  * Process pending leave adjustments that need compensation
  */
-export async function processLeaveAdjustments(targetUserId, currentSalaryKey) {
+export async function processLeaveAdjustments(targetUserId, currentSalaryKey, client = prisma) {
     let adjustmentAmount = 0;
+    const [yearPart, monthPart] = currentSalaryKey.split('-');
+    const evaluationStart = new Date(parseInt(yearPart), parseInt(monthPart) - 2, 1);
+
+    const userOrg = await client.user.findUnique({
+        where: { id: targetUserId },
+        select: { orgId: true }
+    });
+
+    const orgId = userOrg?.orgId;
+    if (!orgId) {
+        return adjustmentAmount;
+    }
 
     // Check for late leave approvals that need compensation
-    const pendingLeaveAdjustments = await prisma.leaveRequest.findMany({
+    const pendingLeaveAdjustments = await client.leaveRequest.findMany({
         where: {
             userId: targetUserId,
             status: "APPROVED",
             approvedAt: {
-                gte: new Date(parseInt(currentSalaryKey.split('-')[0]), parseInt(currentSalaryKey.split('-')[1]) - 2, 1),
+                gte: evaluationStart,
             },
             OR: [
                 { contributedToSalary: { equals: null } },
@@ -25,12 +37,16 @@ export async function processLeaveAdjustments(targetUserId, currentSalaryKey) {
     });
 
     for (const leave of pendingLeaveAdjustments) {
+        if (!leave.approvedAt) {
+            continue;
+        }
+
         const leaveStartDate = new Date(leave.startDate);
         const leaveEndDate = new Date(leave.endDate);
         const approvedDate = new Date(leave.approvedAt);
         
         // Check if this leave was approved after any salary was generated
-        const affectedSalaryRecords = await prisma.salaryRecord.findMany({
+        const affectedSalaryRecords = await client.salaryRecord.findMany({
             where: {
                 userId: targetUserId,
                 createdAt: { lt: approvedDate },
@@ -54,11 +70,11 @@ export async function processLeaveAdjustments(targetUserId, currentSalaryKey) {
             }
 
             // Calculate working days and compensation
-            const compensation = await calculateLeaveCompensation(leave, salaryRecord, targetUserId);
+            const compensation = await calculateLeaveCompensation(leave, salaryRecord, orgId, client);
             adjustmentAmount += compensation;
 
             // Update contribution tracking
-            await updateLeaveContributionTracking(leave.id, salaryMonthKey);
+            await updateLeaveContributionTracking(leave.id, salaryMonthKey, client);
         }
     }
 
@@ -68,16 +84,28 @@ export async function processLeaveAdjustments(targetUserId, currentSalaryKey) {
 /**
  * Process pending attendance adjustments that need compensation
  */
-export async function processAttendanceAdjustments(targetUserId, currentSalaryKey) {
+export async function processAttendanceAdjustments(targetUserId, currentSalaryKey, client = prisma) {
     let adjustmentAmount = 0;
+    const [yearPart, monthPart] = currentSalaryKey.split('-');
+    const evaluationStart = new Date(parseInt(yearPart), parseInt(monthPart) - 2, 1);
+
+    const userOrg = await client.user.findUnique({
+        where: { id: targetUserId },
+        select: { orgId: true }
+    });
+
+    const orgId = userOrg?.orgId;
+    if (!orgId) {
+        return adjustmentAmount;
+    }
 
     // Check for late attendance verifications that need compensation  
-    const pendingAttendanceAdjustments = await prisma.attendanceRecord.findMany({
+    const pendingAttendanceAdjustments = await client.attendanceRecord.findMany({
         where: {
             userId: targetUserId,
             verificationStatus: "VERIFIED",
             verifiedAt: {
-                gte: new Date(parseInt(currentSalaryKey.split('-')[0]), parseInt(currentSalaryKey.split('-')[1]) - 2, 1),
+                gte: evaluationStart,
             },
             OR: [
                 { contributedToSalary: { equals: null } },
@@ -87,11 +115,15 @@ export async function processAttendanceAdjustments(targetUserId, currentSalaryKe
     });
 
     for (const attendance of pendingAttendanceAdjustments) {
+        if (!attendance.verifiedAt) {
+            continue;
+        }
+
         const attendanceDate = new Date(attendance.date);
         const verifiedDate = new Date(attendance.verifiedAt);
         
         // Find affected salary record
-        const affectedSalaryRecord = await prisma.salaryRecord.findFirst({
+        const affectedSalaryRecord = await client.salaryRecord.findFirst({
             where: {
                 userId: targetUserId,
                 createdAt: { lt: verifiedDate },
@@ -110,11 +142,11 @@ export async function processAttendanceAdjustments(targetUserId, currentSalaryKe
             }
 
             // Calculate compensation
-            const compensation = await calculateAttendanceCompensation(attendance, affectedSalaryRecord, targetUserId);
+            const compensation = await calculateAttendanceCompensation(attendance, affectedSalaryRecord, orgId, client);
             adjustmentAmount += compensation;
 
             // Update contribution tracking
-            await updateAttendanceContributionTracking(attendance.id, salaryMonthKey);
+            await updateAttendanceContributionTracking(attendance.id, salaryMonthKey, client);
         }
     }
 
@@ -124,7 +156,7 @@ export async function processAttendanceAdjustments(targetUserId, currentSalaryKe
 /**
  * Calculate leave compensation amount
  */
-async function calculateLeaveCompensation(leave, salaryRecord, targetUserId) {
+async function calculateLeaveCompensation(leave, salaryRecord, orgId, client) {
     if (!leave.leaveType.isPaid) {
         return 0; // No compensation for unpaid leave
     }
@@ -135,9 +167,9 @@ async function calculateLeaveCompensation(leave, salaryRecord, targetUserId) {
     const salaryMonthDays = salaryMonthEnd.getDate();
     
     // Get holidays and weekend settings for that month
-    const salaryMonthHolidays = await prisma.holiday.findMany({
+    const salaryMonthHolidays = await client.holiday.findMany({
         where: {
-            orgId: (await prisma.user.findUnique({ where: { id: targetUserId }, select: { orgId: true } }))?.orgId,
+            orgId,
             date: {
                 gte: salaryMonthStart,
                 lt: new Date(salaryRecord.year, salaryRecord.month, 1)
@@ -145,9 +177,9 @@ async function calculateLeaveCompensation(leave, salaryRecord, targetUserId) {
         }
     });
 
-    const orgSettings = await prisma.organizationSettings.findFirst({
+    const orgSettings = await client.organizationSettings.findFirst({
         where: {
-            orgId: (await prisma.user.findUnique({ where: { id: targetUserId }, select: { orgId: true } }))?.orgId
+            orgId
         }
     });
 
@@ -163,6 +195,10 @@ async function calculateLeaveCompensation(leave, salaryRecord, targetUserId) {
             !salaryMonthHolidays.some(h => new Date(h.date).getDate() === day)) {
             salaryMonthWorkingDays++;
         }
+    }
+
+    if (salaryMonthWorkingDays === 0) {
+        return 0;
     }
 
     // Calculate days that need compensation in this salary month
@@ -195,16 +231,16 @@ async function calculateLeaveCompensation(leave, salaryRecord, targetUserId) {
 /**
  * Calculate attendance compensation amount
  */
-async function calculateAttendanceCompensation(attendance, salaryRecord, targetUserId) {
+async function calculateAttendanceCompensation(attendance, salaryRecord, orgId, client) {
     // Get working days for affected salary month
     const salaryMonthStart = new Date(salaryRecord.year, salaryRecord.month - 1, 1);
     const salaryMonthEnd = new Date(salaryRecord.year, salaryRecord.month, 0);
     const salaryMonthDays = salaryMonthEnd.getDate();
     
     // Get organization settings and holidays
-    const salaryMonthHolidays = await prisma.holiday.findMany({
+    const salaryMonthHolidays = await client.holiday.findMany({
         where: {
-            orgId: (await prisma.user.findUnique({ where: { id: targetUserId }, select: { orgId: true } }))?.orgId,
+            orgId,
             date: {
                 gte: salaryMonthStart,
                 lt: new Date(salaryRecord.year, salaryRecord.month, 1)
@@ -212,9 +248,9 @@ async function calculateAttendanceCompensation(attendance, salaryRecord, targetU
         }
     });
 
-    const orgSettings = await prisma.organizationSettings.findFirst({
+    const orgSettings = await client.organizationSettings.findFirst({
         where: {
-            orgId: (await prisma.user.findUnique({ where: { id: targetUserId }, select: { orgId: true } }))?.orgId
+            orgId
         }
     });
 
@@ -232,6 +268,10 @@ async function calculateAttendanceCompensation(attendance, salaryRecord, targetU
         }
     }
 
+    if (salaryMonthWorkingDays === 0) {
+        return 0;
+    }
+
     // Calculate compensation (1 day or 0.5 day)
     const compensationDays = attendance.status === "HALF_DAY" ? 0.5 : 1;
     const perDaySalary = salaryRecord.basicSalary / salaryMonthWorkingDays;
@@ -242,15 +282,15 @@ async function calculateAttendanceCompensation(attendance, salaryRecord, targetU
 /**
  * Update leave contribution tracking
  */
-async function updateLeaveContributionTracking(leaveId, salaryMonthKey) {
-    const leave = await prisma.leaveRequest.findUnique({
+async function updateLeaveContributionTracking(leaveId, salaryMonthKey, client) {
+    const leave = await client.leaveRequest.findUnique({
         where: { id: leaveId }
     });
 
     const updatedContribution = leave.contributedToSalary || {};
     updatedContribution[salaryMonthKey] = "adjustment";
 
-    await prisma.leaveRequest.update({
+    await client.leaveRequest.update({
         where: { id: leaveId },
         data: {
             contributedToSalary: updatedContribution
@@ -261,15 +301,15 @@ async function updateLeaveContributionTracking(leaveId, salaryMonthKey) {
 /**
  * Update attendance contribution tracking
  */
-async function updateAttendanceContributionTracking(attendanceId, salaryMonthKey) {
-    const attendance = await prisma.attendanceRecord.findUnique({
+async function updateAttendanceContributionTracking(attendanceId, salaryMonthKey, client) {
+    const attendance = await client.attendanceRecord.findUnique({
         where: { id: attendanceId }
     });
 
     const updatedContribution = attendance.contributedToSalary || {};
     updatedContribution[salaryMonthKey] = "adjustment";
 
-    await prisma.attendanceRecord.update({
+    await client.attendanceRecord.update({
         where: { id: attendanceId },
         data: {
             contributedToSalary: updatedContribution

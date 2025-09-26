@@ -407,6 +407,12 @@ const deleteOrganization = [
                     where: { orgId: id }
                 });
                 
+                // Delete activity logs before deleting users (due to foreign key constraints)
+                console.log('Deleting activity logs...');
+                await tx.activityLog.deleteMany({
+                    where: { orgId: id }
+                });
+                
                 // Delete users (this should be done after all related records)
                 console.log('Deleting users...');
                 await tx.user.deleteMany({
@@ -421,12 +427,6 @@ const deleteOrganization = [
                 // Delete billing records
                 await tx.billingRecord.deleteMany({
                     where: { organizationId: id }
-                });
-                
-                // Delete activity logs (should be last before organization)
-                console.log('Deleting activity logs...');
-                await tx.activityLog.deleteMany({
-                    where: { orgId: id }
                 });
                 
                 // Finally delete the organization itself
