@@ -312,6 +312,267 @@ export const createCalculationRule = async (req, res) => {
     }
 };
 
+// Update calculation rule
+export const updateCalculationRule = async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation errors',
+                errors: errors.array()
+            });
+        }
+
+        const { orgId } = req.user;
+        const { ruleId } = req.params;
+        const { name, formula, type, isActive } = req.body;
+
+        const existingRule = await prisma.calculationRule.findFirst({
+            where: {
+                id: ruleId,
+                orgId
+            }
+        });
+
+        if (!existingRule) {
+            return res.status(404).json({
+                success: false,
+                message: 'Calculation rule not found'
+            });
+        }
+
+        const data = {};
+        if (name !== undefined) data.name = name;
+        if (formula !== undefined) data.formula = formula;
+        if (type !== undefined) data.type = type;
+        if (typeof isActive === 'boolean') data.isActive = isActive;
+
+        if (Object.keys(data).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No fields provided for update'
+            });
+        }
+
+        const updatedRule = await prisma.calculationRule.update({
+            where: { id: ruleId },
+            data
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Calculation rule updated successfully',
+            data: updatedRule
+        });
+    } catch (error) {
+        console.error('Error updating calculation rule:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to update calculation rule',
+            error: error.message
+        });
+    }
+};
+
+// Delete calculation rule
+export const deleteCalculationRule = async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation errors',
+                errors: errors.array()
+            });
+        }
+
+        const { orgId } = req.user;
+        const { ruleId } = req.params;
+
+        const existingRule = await prisma.calculationRule.findFirst({
+            where: {
+                id: ruleId,
+                orgId
+            }
+        });
+
+        if (!existingRule) {
+            return res.status(404).json({
+                success: false,
+                message: 'Calculation rule not found'
+            });
+        }
+
+        await prisma.calculationRule.delete({
+            where: { id: ruleId }
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Calculation rule deleted successfully'
+        });
+    } catch (error) {
+        console.error('Error deleting calculation rule:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to delete calculation rule',
+            error: error.message
+        });
+    }
+};
+
+// Get template assignment summary
+export const getTemplateAssignments = async (req, res) => {
+    try {
+        const { orgId } = req.user;
+
+        const templates = await prisma.salaryTemplate.findMany({
+            where: { orgId },
+            select: {
+                id: true,
+                name: true,
+                description: true,
+                isDefault: true,
+                isActive: true,
+                createdAt: true,
+                updatedAt: true,
+                _count: {
+                    select: {
+                        users: true
+                    }
+                }
+            },
+            orderBy: [
+                { isDefault: 'desc' },
+                { createdAt: 'desc' }
+            ]
+        });
+
+        const departmentBreakdown = await prisma.user.groupBy({
+            by: ['salaryTemplateId', 'departmentId'],
+            where: {
+                orgId,
+                salaryTemplateId: { not: null },
+                departmentId: { not: null }
+            },
+            _count: {
+                _all: true
+            }
+        });
+
+        const departmentIds = [...new Set(departmentBreakdown.map(item => item.departmentId))];
+
+        const departments = departmentIds.length
+            ? await prisma.department.findMany({
+                where: { id: { in: departmentIds } },
+                select: {
+                    id: true,
+                    name: true
+                }
+            })
+            : [];
+
+        const departmentMap = new Map(departments.map(dep => [dep.id, dep.name]));
+
+        const departmentsByTemplate = departmentBreakdown.reduce((acc, item) => {
+            if (!acc[item.salaryTemplateId]) {
+                acc[item.salaryTemplateId] = [];
+            }
+
+            acc[item.salaryTemplateId].push({
+                departmentId: item.departmentId,
+                departmentName: departmentMap.get(item.departmentId) || 'Unknown Department',
+                employeeCount: item._count._all
+            });
+
+            return acc;
+        }, {});
+
+        const data = templates.map(template => ({
+            id: template.id,
+            name: template.name,
+            description: template.description,
+            isDefault: template.isDefault,
+            isActive: template.isActive,
+            createdAt: template.createdAt,
+            updatedAt: template.updatedAt,
+            assignedEmployees: template._count.users,
+            departments: departmentsByTemplate[template.id] || []
+        }));
+
+        return res.status(200).json({
+            success: true,
+            message: 'Template assignment summary retrieved successfully',
+            data
+        });
+    } catch (error) {
+        console.error('Error fetching template assignments:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch template assignments',
+            error: error.message
+        });
+    }
+};
+
+// Get available assignment targets (employees and departments)
+export const getAssignmentTargets = async (req, res) => {
+    try {
+        const { orgId } = req.user;
+
+        const [employees, departments] = await Promise.all([
+            prisma.user.findMany({
+                where: { orgId },
+                select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                    salaryTemplateId: true,
+                    department: {
+                        select: {
+                            id: true,
+                            name: true
+                        }
+                    }
+                },
+                orderBy: [
+                    { firstName: 'asc' },
+                    { lastName: 'asc' }
+                ]
+            }),
+            prisma.department.findMany({
+                where: {
+                    orgId,
+                    status: true
+                },
+                select: {
+                    id: true,
+                    name: true
+                },
+                orderBy: { name: 'asc' }
+            })
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Assignment targets retrieved successfully',
+            data: {
+                employees,
+                departments
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching assignment targets:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch assignment targets',
+            error: error.message
+        });
+    }
+};
+
 // Assign template to employees
 export const assignTemplate = async (req, res) => {
     try {

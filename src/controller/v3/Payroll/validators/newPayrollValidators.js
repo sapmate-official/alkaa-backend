@@ -118,6 +118,42 @@ export const createCalculationRuleValidation = [
         .withMessage('isActive must be a boolean')
 ];
 
+export const updateCalculationRuleValidation = [
+    param('ruleId')
+        .isString()
+        .notEmpty()
+        .withMessage('Valid rule ID is required'),
+
+    body('name')
+        .optional()
+        .trim()
+        .isLength({ min: 2, max: 100 })
+        .withMessage('Rule name must be between 2 and 100 characters'),
+
+    body('formula')
+        .optional()
+        .trim()
+        .isLength({ min: 1, max: 500 })
+        .withMessage('Formula must not exceed 500 characters'),
+
+    body('type')
+        .optional()
+        .isIn(['allowance', 'deduction', 'tax'])
+        .withMessage('Type must be allowance, deduction, or tax'),
+
+    body('isActive')
+        .optional()
+        .isBoolean()
+        .withMessage('isActive must be a boolean')
+];
+
+export const deleteCalculationRuleValidation = [
+    param('ruleId')
+        .isString()
+        .notEmpty()
+        .withMessage('Valid rule ID is required')
+];
+
 // Template assignment validation
 export const assignTemplateValidation = [
     body('templateId')

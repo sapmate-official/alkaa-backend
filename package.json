@@ -13,7 +13,8 @@
     "vercel-build": "prisma generate && echo 'Build completed'",
     "build": "prisma generate",
     "seed:org": "node src/seed/runSeeder.js",
-    "seed:organization": "node src/seed/OrganizationSeeder.js"
+    "seed:organization": "node src/seed/OrganizationSeeder.js",
+    "seed:payroll-permissions": "node src/seed/runPayrollSeeder.js"
   },
   "author": "",
   "license": "ISC",

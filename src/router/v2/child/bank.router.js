@@ -8,11 +8,11 @@ const router = express.Router();
 router.use(validateToken);
 
 // Add user bank details route with proper protection
-router.get("/user/:Userid", getBankByUserId);
+router.get("user/:Userid", getBankByUserId);
 router.get("/", getBank);
 router.get("/:id", getBankById);
 router.post("/", createBank);
-router.put("/", updateBank);
+router.put("/", updateBank);    
 router.patch("/", updateBank);
 router.delete("/", deleteBank);
 
