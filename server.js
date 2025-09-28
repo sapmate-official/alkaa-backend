@@ -86,6 +86,7 @@ import validateTokenMiddlewear from './src/middleware/validateToken.js'
 
 // Conditional middleware that skips validation for specific public routes
 app.use("/api/v2/", (req, res, next) => {
+  console.log(`V2 Request Method: ${req.method}, Request URL: ${req.url}`);
   // Public routes that don't require authentication
   const publicRoutes = [
     '/onboarding/verify/',

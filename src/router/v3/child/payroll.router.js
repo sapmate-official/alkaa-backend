@@ -31,7 +31,11 @@ import {
     deleteSalaryTemplate,
     getCalculationRules,
     createCalculationRule,
-    assignTemplate
+    updateCalculationRule,
+    deleteCalculationRule,
+    assignTemplate,
+    getTemplateAssignments,
+    getAssignmentTargets
 } from "../../../controller/v3/Payroll/templateController.js";
 
 // Import manager review controllers
@@ -53,12 +57,19 @@ import {
     initializeWorkflow
 } from "../../../controller/v3/Payroll/workflowController.js";
 
+import {
+    getEmployeeDisputes,
+    submitEmployeeDispute
+} from "../../../controller/v3/Payroll/employeeController.js";
+
 // Import validation middleware
 import {
     createTemplateValidation,
     updateTemplateValidation,
     deleteTemplateValidation,
     createCalculationRuleValidation,
+    updateCalculationRuleValidation,
+    deleteCalculationRuleValidation,
     assignTemplateValidation,
     approveRejectRecordValidation,
     rejectRecordValidation,
@@ -96,6 +107,10 @@ router.get("/cycles/review", validateToken, getCyclesNeedingReview);
 router.get("/statistics", validateToken, getPayrollStatistics);
 router.post("/bulk-generate", validateToken, bulkGenerateSalaries);
 
+// Employee self-service routes
+router.get("/employee/disputes", validateToken, getEmployeeDisputes);
+router.post("/employee/disputes", validateToken, submitEmployeeDispute);
+
 // Template management routes
 router.get("/templates", validateToken, getSalaryTemplates);
 router.post("/templates", validateToken, createTemplateValidation, createSalaryTemplate);
@@ -103,7 +118,11 @@ router.put("/templates/:templateId", validateToken, updateTemplateValidation, up
 router.delete("/templates/:templateId", validateToken, deleteTemplateValidation, deleteSalaryTemplate);
 router.get("/templates/calculation-rules", validateToken, getCalculationRules);
 router.post("/templates/calculation-rules", validateToken, createCalculationRuleValidation, createCalculationRule);
+router.put("/templates/calculation-rules/:ruleId", validateToken, updateCalculationRuleValidation, updateCalculationRule);
+router.delete("/templates/calculation-rules/:ruleId", validateToken, deleteCalculationRuleValidation, deleteCalculationRule);
 router.post("/templates/assign", validateToken, assignTemplateValidation, assignTemplate);
+router.get("/templates/assignment-summary", validateToken, getTemplateAssignments);
+router.get("/templates/assignment-targets", validateToken, getAssignmentTargets);
 
 // Manager review routes
 router.get("/manager/team-payroll", validateToken, monthYearQueryValidation, statusQueryValidation, getTeamPayrollRecords);
