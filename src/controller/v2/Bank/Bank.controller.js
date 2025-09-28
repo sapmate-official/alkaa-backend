@@ -208,12 +208,12 @@ export const deleteBank = async (req, res) => {
 };
 
 export const getBankByUserId = async (req, res) => {
-    const { Userid } = req.params;
+    const { userId } = req.params;
     try {
         const currentUserId = req.user.id;
         
         // Check if the user is viewing their own bank details
-        const isSelf = Userid === currentUserId;
+        const isSelf = userId === currentUserId;
         
         if (!isSelf) {
             // Check if user has permission to view all bank details
@@ -253,7 +253,7 @@ export const getBankByUserId = async (req, res) => {
             if (hasViewSubordinatesPermission) {
                 const subordinate = await prisma.user.findFirst({
                     where: {
-                        id: Userid,
+                        id: userId,
                         managerId: currentUserId
                     }
                 });
@@ -263,20 +263,31 @@ export const getBankByUserId = async (req, res) => {
             // Deny if they don't have appropriate permissions
             if (!hasViewAllPermission && !isSubordinate) {
                 return res.status(403).json({ 
-                    error: 'You do not have permission to view this user\'s bank details' 
+                    success: false,
+                    message: 'You do not have permission to view this user\'s bank details'
                 });
             }
         }
         
         const bank = await prisma.bankDetails.findFirst({
-            where: { userId: Userid },
+            where: { userId },
         });
-        if (bank) {
-            res.status(200).json(bank);
-        } else {
-            res.status(404).json({ error: 'Bank details not found' });
+        if (!bank) {
+            return res.status(200).json({
+                success: true,
+                data: null,
+                message: "We couldn't find bank details for this user yet."
+            });
         }
+
+        return res.status(200).json({
+            success: true,
+            data: bank
+        });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch bank details' });
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch bank details'
+        });
     }
 }

@@ -52,9 +52,10 @@ export const createPayrollCycle = async (req, res) => {
 
     } catch (error) {
         console.error("Error creating payroll cycle:", error);
-        return res.status(500).json({
+        const isDuplicate = error.message && error.message.includes("already exists");
+        return res.status(isDuplicate ? 409 : 500).json({
             success: false,
-            message: error.message.includes("already exists") ? error.message : "Failed to create payroll cycle",
+            message: isDuplicate ? error.message : "Failed to create payroll cycle",
             error: error.message
         });
     }

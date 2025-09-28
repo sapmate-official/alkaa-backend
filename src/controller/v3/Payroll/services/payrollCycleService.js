@@ -331,10 +331,10 @@ export class PayrollCycleService {
      * Create audit log entry
      */
     static async createAuditLog(cycleId, salaryId, action, previousData, newData, userId) {
-        return await prisma.payrollAudit.create({
+        return await prisma.payrollCycleAudit.create({
             data: {
                 cycleId,
-                salaryId,
+                salaryRecordId: salaryId,
                 action,
                 previousData,
                 newData,
