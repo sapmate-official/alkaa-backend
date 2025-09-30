@@ -15,8 +15,11 @@ import {
     createPayrollCycle,
     startPayrollCycle,
     approvePayrollCycle,
+    deletePayrollCycle,
+    submitPayrollCycleForReview,
     getPayrollCycles,
     getPayrollCycleDetails,
+    getPayrollCycleProcessingStatus,
     getCyclesNeedingReview,
     getPayrollStatistics,
     bulkGenerateSalaries,
@@ -62,6 +65,12 @@ import {
     submitEmployeeDispute
 } from "../../../controller/v3/Payroll/employeeController.js";
 
+import {
+    recordSalaryPayment,
+    listSalaryTransactions,
+    getSalaryTransactionsForRecord
+} from "../../../controller/v3/Payroll/salaryTransactionController.js";
+
 // Import validation middleware
 import {
     createTemplateValidation,
@@ -78,7 +87,9 @@ import {
     initializeWorkflowValidation,
     monthYearQueryValidation,
     statusQueryValidation,
-    workflowQueryValidation
+    workflowQueryValidation,
+    recordSalaryPaymentValidation,
+    paymentStatusQueryValidation
 } from "../../../controller/v3/Payroll/validators/newPayrollValidators.js";
 
 const router = e.Router();
@@ -100,9 +111,12 @@ router.get("/pre-stats/:month/:year/:userId", validateToken, preStatsSalaryGener
 router.get("/dashboard", validateToken, getPayrollDashboard);
 router.post("/cycle/create", validateToken, createPayrollCycle);
 router.post("/cycle/start/:cycleId", validateToken, startPayrollCycle);
+router.post("/cycle/submit/:cycleId", validateToken, submitPayrollCycleForReview);
 router.post("/cycle/approve/:cycleId", validateToken, approvePayrollCycle);
+router.delete("/cycle/:cycleId", validateToken, deletePayrollCycle);
 router.get("/cycles", validateToken, getPayrollCycles);
 router.get("/cycle/:cycleId", validateToken, getPayrollCycleDetails);
+router.get("/cycle/:cycleId/status", validateToken, getPayrollCycleProcessingStatus);
 router.get("/cycles/review", validateToken, getCyclesNeedingReview);
 router.get("/statistics", validateToken, getPayrollStatistics);
 router.post("/bulk-generate", validateToken, bulkGenerateSalaries);
@@ -110,6 +124,11 @@ router.post("/bulk-generate", validateToken, bulkGenerateSalaries);
 // Employee self-service routes
 router.get("/employee/disputes", validateToken, getEmployeeDisputes);
 router.post("/employee/disputes", validateToken, submitEmployeeDispute);
+
+// Salary transaction routes
+router.post("/transactions/pay", validateToken, recordSalaryPaymentValidation, recordSalaryPayment);
+router.get("/transactions", validateToken, paymentStatusQueryValidation, statusQueryValidation, listSalaryTransactions);
+router.get("/transactions/:salaryRecordId", validateToken, getSalaryTransactionsForRecord);
 
 // Template management routes
 router.get("/templates", validateToken, getSalaryTemplates);

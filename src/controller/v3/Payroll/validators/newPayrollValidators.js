@@ -238,6 +238,31 @@ export const bulkApproveValidation = [
         .withMessage('Comments must not exceed 1000 characters')
 ];
 
+export const recordSalaryPaymentValidation = [
+    body('salaryRecordId')
+        .isString()
+        .notEmpty()
+        .withMessage('Salary record ID is required'),
+
+    body('paymentMode')
+        .optional()
+        .isString()
+        .isLength({ min: 2, max: 50 })
+        .withMessage('Payment mode must be between 2 and 50 characters'),
+
+    body('paymentReference')
+        .optional()
+        .isString()
+        .isLength({ min: 2, max: 100 })
+        .withMessage('Payment reference must be between 2 and 100 characters'),
+
+    body('notes')
+        .optional()
+        .isString()
+        .isLength({ max: 500 })
+        .withMessage('Notes must not exceed 500 characters')
+];
+
 // Workflow validation
 export const updateWorkflowStepValidation = [
     param('stepId')
@@ -293,8 +318,15 @@ export const monthYearQueryValidation = [
 export const statusQueryValidation = [
     query('status')
         .optional()
-        .isIn(['PENDING', 'PROCESSED', 'APPROVED', 'REJECTED', 'PAID'])
-        .withMessage('Status must be PENDING, PROCESSED, APPROVED, REJECTED, or PAID')
+        .isIn(['PENDING', 'PROCESSING', 'PROCESSED', 'REVIEW', 'APPROVED', 'REJECTED', 'PAID'])
+        .withMessage('Status must be PENDING, PROCESSING, PROCESSED, REVIEW, APPROVED, REJECTED, or PAID')
+];
+
+export const paymentStatusQueryValidation = [
+    query('paymentStatus')
+        .optional()
+        .isIn(['PENDING', 'INITIATED', 'COMPLETED', 'FAILED'])
+        .withMessage('paymentStatus must be PENDING, INITIATED, COMPLETED, or FAILED')
 ];
 
 export const workflowQueryValidation = [

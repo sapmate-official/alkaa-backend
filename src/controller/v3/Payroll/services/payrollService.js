@@ -54,8 +54,10 @@ export class PayrollService {
     /**
      * Generate salary for a user
      */
-    static async generateSalary(targetUserId, month, year, cycleId = null) {
+    static async generateSalary(targetUserId, month, year, cycleId = null, options = {}) {
         console.log("[SALARY_GENERATE] Starting salary generation for user:", targetUserId);
+
+        const { replaceExisting = false, initiatedBy = null } = options;
 
         // Check if salary already exists
         const existingSalary = await prisma.salaryRecord.findUnique({
@@ -68,7 +70,7 @@ export class PayrollService {
             }
         });
 
-        if (existingSalary) {
+        if (existingSalary && !replaceExisting) {
             throw new Error("Salary for this month and year already exists");
         }
 
@@ -76,7 +78,7 @@ export class PayrollService {
         const adjustmentAmount = await this.processPendingAdjustments(targetUserId, month, year);
 
         // Fetch user data
-        const user = await this.fetchUserData(targetUserId);
+    const user = await this.fetchUserData(targetUserId);
         
         // Get salary parameters
         const salaryParams = user.salaryParameter || this.getDefaultSalaryParams();
@@ -97,9 +99,12 @@ export class PayrollService {
         const netSalary = calculateNetSalary(baseSalary, allowances, deductions);
 
         // Create salary record with cycle reference
+        const wasReplaced = Boolean(existingSalary);
+
         const salaryRecord = await this.createSalaryRecord({
             userId: targetUserId,
             cycleId, // Add cycle reference
+            orgId: user.orgId,
             month: parseInt(month),
             year: parseInt(year),
             basicSalary: baseSalary,
@@ -107,9 +112,17 @@ export class PayrollService {
             allowances: allowances.breakdown,
             deductions: deductions.breakdown,
             adjustmentAmount
+        }, existingSalary, {
+            initiatedBy,
+            adjustmentAmount,
+            replaceExisting
         });
 
-        return salaryRecord;
+        return {
+            ...salaryRecord,
+            wasReplaced,
+            initiatedBy
+        };
     }
 
     /**
@@ -162,6 +175,7 @@ export class PayrollService {
                     id: true,
                     status: true,
                     netSalary: true,
+                    paymentStatus: true,
                     createdAt: true
                 }
             });
@@ -172,6 +186,7 @@ export class PayrollService {
                 status: existingRecord.status,
                 salaryRecordId: existingRecord.id,
                 netSalary: existingRecord.netSalary,
+                paymentStatus: existingRecord.paymentStatus,
                 createdAt: existingRecord.createdAt
             } : {
                 exists: false
@@ -186,14 +201,19 @@ export class PayrollService {
      */
     static async bulkApproveSalaries(salaryRecordIds, approvedBy, notes = null) {
         try {
+            const now = new Date();
             const result = await prisma.salaryRecord.updateMany({
                 where: {
                     id: { in: salaryRecordIds },
-                    status: 'PENDING'
+                    status: 'PROCESSED'
                 },
                 data: {
-                    status: 'PROCESSED',
-                    processedAt: new Date(),
+                    status: 'APPROVED',
+                    paymentStatus: 'PENDING',
+                    processedAt: now,
+                    reviewedAt: now,
+                    reviewedById: approvedBy,
+                    reviewComments: notes,
                     remarks: notes ? `${notes} - Bulk approved` : 'Bulk approved'
                 }
             });
@@ -272,21 +292,51 @@ export class PayrollService {
             additionalAllowances: {},
             additionalDeductions: {}
         };
-    }    static async createSalaryRecord(salaryData) {
+    }
+
+    static async createSalaryRecord(salaryData, existingRecord = null, metadata = {}) {
         const monthName = new Date(salaryData.year, salaryData.month - 1, 1).toLocaleString('default', { month: 'long' });
-        
+
+        const { adjustmentAmount = 0 } = metadata;
+
         // Remove adjustmentAmount from salaryData as it's not a valid field in SalaryRecord
-        const { adjustmentAmount, ...validSalaryData } = salaryData;
-        
+        const { adjustmentAmount: _ignoredAdjustment, ...validSalaryData } = salaryData;
+
+        const processedAt = new Date();
+        const taxAmount = validSalaryData.deductions?.tax || 0;
+
+        const baseData = {
+            ...validSalaryData,
+            tax: taxAmount,
+            status: "PROCESSED",
+            paymentStatus: 'PENDING',
+            processedAt,
+            reviewedById: null,
+            reviewedAt: null,
+            reviewComments: null,
+            paymentMode: null,
+            paymentRef: null,
+            remarks: `Salary for ${monthName} ${salaryData.year}${adjustmentAmount > 0 ? ` (includes adjustment of ${adjustmentAmount.toFixed(2)})` : ''}`
+        };
+
+        if (existingRecord) {
+            return await prisma.salaryRecord.update({
+                where: { id: existingRecord.id },
+                data: {
+                    ...baseData,
+                    salaryTransactions: {
+                        deleteMany: {}
+                    }
+                }
+            });
+        }
+
         return await prisma.salaryRecord.create({
-            data: {
-                ...validSalaryData,
-                tax: salaryData.deductions.tax || 0,
-                status: "PENDING",
-                remarks: `Salary for ${monthName} ${salaryData.year}${adjustmentAmount > 0 ? ` (includes adjustment of ${adjustmentAmount.toFixed(2)})` : ''}`
-            }
+            data: baseData
         });
-    }    static async getAdditionalStatisticsData(salaryRecord) {
+    }
+
+    static async getAdditionalStatisticsData(salaryRecord) {
         const { month, year, userId } = salaryRecord;
 
         // Get working days calculation

@@ -156,6 +156,52 @@ export class PayrollPermissions {
         return !!hasPermission;
     }
 
+    static async canDeletePayrollCycle(currentUserId, cycleId = null) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "delete_payroll_cycle"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!hasPermission) {
+            return await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canSubmitPayrollCycle(currentUserId, cycleId = null) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "submit_payroll_cycle"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!hasPermission) {
+            return !!(await this.hasAdminPermission(currentUserId) || await this.hasManagerPermission(currentUserId));
+        }
+
+        return !!hasPermission;
+    }
+
     static async canViewPayrollCycles(currentUserId) {
         const hasPermission = await prisma.rolePermission.findFirst({
             where: {

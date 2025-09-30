@@ -46,11 +46,13 @@ export const getPaySlipBasedOnParams = async (req, res) => {
 
         // Format response data
         const formattedPayslips = formatPayslipData(payslips);
+        const singleRecord = formattedPayslips.length > 0 ? formattedPayslips[0] : null;
 
         return res.status(200).json({
             success: true,
             count: formattedPayslips.length,
-            data: formattedPayslips
+            data: singleRecord,
+            collection: formattedPayslips
         });
 
     } catch (error) {
@@ -92,8 +94,19 @@ export const generateSalaryBasedOnParams = async (req, res) => {
             });
         }
 
+        const forceReplace = req?.body?.force === true || req?.query?.force === 'true';
+
         // Generate salary using service
-        const salaryRecord = await PayrollService.generateSalary(targetUserId, validMonth, validYear);
+        const salaryRecord = await PayrollService.generateSalary(
+            targetUserId,
+            validMonth,
+            validYear,
+            null,
+            {
+                replaceExisting: forceReplace,
+                initiatedBy: currentUserId
+            }
+        );
 
         await EmailService.sendEmail(targetUserId,salaryRecord)
         console.log("[SALARY_GENERATE] Salary generated successfully", {
@@ -268,7 +281,7 @@ export const checkMultiplePayslipStatus = async (req, res) => {
         const statusMap = await PayrollService.checkMultiplePayslipStatus(validatedData);
 
         // Format response data
-        const formattedStatus = formatMultiplePayslipStatus(statusMap);
+    const formattedStatus = formatMultiplePayslipStatus(statusMap);
 
         return res.status(200).json({
             success: true,

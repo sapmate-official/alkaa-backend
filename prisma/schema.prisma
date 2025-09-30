@@ -56,6 +56,7 @@ model Organization {
   salaryTemplates       SalaryTemplate[]
   calculationRules      CalculationRule[]
   workflowSteps         WorkflowStep[]
+  salaryRecords         SalaryRecord[]
 }
 
 model Organization_admin {
@@ -251,6 +252,7 @@ model User {
   salaryTemplateId             String?
   createdWorkflowSteps         WorkflowStep[]              @relation("WorkflowStepCreatedBy")
   completedWorkflowSteps       WorkflowStep[]              @relation("WorkflowStepCompletedBy")
+  reviewedSalaryRecords        SalaryRecord[]              @relation("SalaryRecordReviewer")
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -384,35 +386,44 @@ model SalaryParameter {
 }
 
 model SalaryRecord {
-  id                 String                   @id @default(cuid())
-  userId             String
-  cycleId            String?
-  month              Int
-  year               Int
-  basicSalary        Float
-  tax                Float                    @default(0)
-  netSalary          Float
-  status             PayrollStatus            @default(PENDING)
-  processedAt        DateTime?
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
-  allowances         Json?
-  paymentMode        String?
-  paymentRef         String?
-  remarks            String?
-  deductions         Json?
-  incentive          Float?
-  bonus              Float?
-  user               User                     @relation(fields: [userId], references: [id])
-  cycle              PayrollCycle?            @relation(fields: [cycleId], references: [id])
-  salaryTransactions salaryTransactionTable[]
-  auditLogs          PayrollAudit[]
-  cycleAuditEntries PayrollCycleAudit[] @relation("SalaryRecordCycleAudit")
-  disputes           SalaryDispute[]
+  id                  String                   @id @default(cuid())
+  userId              String
+  cycleId             String?
+  orgId               String?
+  month               Int
+  year                Int
+  basicSalary         Float
+  tax                 Float                    @default(0)
+  netSalary           Float
+  status              PayrollStatus            @default(PENDING)
+  paymentStatus       SalaryPaymentStatus      @default(PENDING)
+  processedAt         DateTime?
+  reviewedById        String?
+  reviewedAt          DateTime?
+  reviewComments      String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  allowances          Json?
+  deductions          Json?
+  anomalies           Json?
+  paymentMode         String?
+  paymentRef          String?
+  remarks             String?
+  incentive           Float?
+  bonus               Float?
+  user                User                     @relation(fields: [userId], references: [id])
+  reviewedBy          User?                    @relation("SalaryRecordReviewer", fields: [reviewedById], references: [id])
+  cycle               PayrollCycle?            @relation(fields: [cycleId], references: [id])
+  organization        Organization?            @relation(fields: [orgId], references: [id])
+  salaryTransactions  salaryTransactionTable[]
+  auditLogs           PayrollAudit[]
+  cycleAuditEntries   PayrollCycleAudit[]      @relation("SalaryRecordCycleAudit")
+  disputes            SalaryDispute[]
 
   @@unique([userId, month, year])
   @@index([userId, year, month])
   @@index([cycleId])
+  @@index([orgId])
 }
 
 model NotificationTemplate {
@@ -1266,10 +1277,20 @@ enum AttendanceStatus {
 
 enum PayrollStatus {
   PENDING
+  PROCESSING
   PROCESSED
+  REVIEW
+  APPROVED
+  REJECTED
   PAID
   FAILED
-  PROCESSING
+}
+
+enum SalaryPaymentStatus {
+  PENDING
+  INITIATED
+  COMPLETED
+  FAILED
 }
 
 enum NotificationType {
