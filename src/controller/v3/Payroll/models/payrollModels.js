@@ -13,7 +13,10 @@ export function formatPayslipData(payslips) {
             basicSalary: payslip.basicSalary,
             netSalary: payslip.netSalary,
             status: payslip.status,
+            paymentStatus: payslip.paymentStatus,
             processedAt: payslip.processedAt,
+            reviewedAt: payslip.reviewedAt,
+            reviewComments: payslip.reviewComments,
             createdAt: payslip.createdAt,
             updatedAt: payslip.updatedAt,
             allowances: payslip.allowances,
@@ -23,6 +26,7 @@ export function formatPayslipData(payslips) {
             remarks: payslip.remarks,
             incentive: payslip.incentive,
             bonus: payslip.bonus,
+            anomalies: payslip.anomalies,
             employee: {
                 firstName: payslip.user?.firstName,
                 lastName: payslip.user?.lastName,
@@ -237,6 +241,7 @@ export function formatPayslipForFrontendPDF(salaryRecord, additionalData) {
         payDate,
         period,
         status: salaryRecord.status,
+        paymentStatus: salaryRecord.paymentStatus,
         paymentMode: salaryRecord.paymentMode || 'MANUAL',
         paymentRef: salaryRecord.paymentRef,
         

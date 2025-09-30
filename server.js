@@ -8,6 +8,8 @@ import { configDotenv } from 'dotenv'
 // import fs from 'fs'
 import ServerlessHttp from 'serverless-http'
 import { startScheduledJobs } from './src/jobs/scheduler.js'
+import { bootstrapPayrollCycleQueue } from './src/jobs/payrollCycleQueue.js'
+import { PayrollCycleService } from './src/controller/v3/Payroll/services/payrollCycleService.js'
 // import morgan from 'morgan'
 // import winston from 'winston'
 // import 'winston-daily-rotate-file'
@@ -133,6 +135,10 @@ app.post("/api/public/demo-request", sendDemoRequestEmail);
 app.get('/', (req, res) => {
     res.sendFile(path.join(dirname, 'public', 'interface.html'))
 })
+
+bootstrapPayrollCycleQueue((job) => PayrollCycleService.processPayrollCycleJob(job))
+  .then(() => console.log('Payroll cycle queue ready'))
+  .catch((error) => console.error('Failed to bootstrap payroll cycle queue:', error));
 
 // Start server
 if (process.env.NODE_ENV !== 'production') {

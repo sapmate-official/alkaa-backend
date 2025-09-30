@@ -47,6 +47,18 @@ export const createCandidate = [
                 hiredDate 
             } = req.body;
 
+            const normalizeRelationId = (value) => {
+                if (value === undefined || value === null) return null;
+                if (typeof value === 'string') {
+                    const trimmed = value.trim();
+                    return trimmed.length ? trimmed : null;
+                }
+                return value || null;
+            };
+
+            const sanitizedDepartmentId = normalizeRelationId(departmentId);
+            const sanitizedManagerId = normalizeRelationId(managerId);
+
             // Calculate annual/monthly salary if one is provided
             let calculatedAnnualPackage = annualPackage;
             let calculatedMonthlySalary = monthlySalary;
@@ -75,10 +87,10 @@ export const createCandidate = [
             }
             
             // Validate manager exists if provided
-            if (managerId) {
+            if (sanitizedManagerId) {
                 const manager = await prisma.user.findFirst({
                     where: {
-                        id: managerId,
+                        id: sanitizedManagerId,
                         orgId: req.user.orgId
                     }
                 });
@@ -88,10 +100,10 @@ export const createCandidate = [
             }
 
             // Validate department exists if provided
-            if (departmentId) {
+            if (sanitizedDepartmentId) {
                 const department = await prisma.department.findFirst({
                     where: {
-                        id: departmentId,
+                        id: sanitizedDepartmentId,
                         orgId: req.user.orgId
                     }
                 });
@@ -115,15 +127,15 @@ export const createCandidate = [
                         tokenExpiry,
                         orgId: req.user.orgId,
                         createdById: req.user.id,
-                        departmentId,
-                        managerId, // Add manager assignment
+                        departmentId: sanitizedDepartmentId,
+                        managerId: sanitizedManagerId, // Add manager assignment
                         annualPackage: calculatedAnnualPackage,
                         monthlySalary: calculatedMonthlySalary,
                         hiredDate: hiredDate ? new Date(hiredDate) : null,
                         formData: {
                             initialData: {
-                                departmentId,
-                                managerId,
+                                departmentId: sanitizedDepartmentId,
+                                managerId: sanitizedManagerId,
                                 annualPackage: calculatedAnnualPackage,
                                 monthlySalary: calculatedMonthlySalary,
                                 hiredDate
@@ -145,15 +157,15 @@ export const createCandidate = [
                     tokenExpiry,
                     orgId: req.user.orgId,
                     createdById: req.user.id,
-                    departmentId,
-                    managerId, // Add manager assignment
+                    departmentId: sanitizedDepartmentId,
+                    managerId: sanitizedManagerId, // Add manager assignment
                     annualPackage: calculatedAnnualPackage,
                     monthlySalary: calculatedMonthlySalary,
                     hiredDate: hiredDate ? new Date(hiredDate) : null,
                     formData: {
                         initialData: {
-                            departmentId,
-                            managerId,
+                            departmentId: sanitizedDepartmentId,
+                            managerId: sanitizedManagerId,
                             annualPackage: calculatedAnnualPackage,
                             monthlySalary: calculatedMonthlySalary,
                             hiredDate
