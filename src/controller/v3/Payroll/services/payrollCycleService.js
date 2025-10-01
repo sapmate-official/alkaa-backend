@@ -690,7 +690,9 @@ export class PayrollCycleService {
                 status: 'APPROVED',
                 paymentStatus: 'PENDING',
                 reviewedAt: reviewDate,
-                reviewedById: userId
+                reviewedById: userId,
+                paymentMode: null,
+                paymentRef: null
             };
 
             if (notes) {
@@ -715,7 +717,12 @@ export class PayrollCycleService {
                     approvedBy: userId,
                     approvedAt: new Date(),
                     completedAt: new Date(),
-                    notes
+                    notes,
+                    payoutStatus: 'NOT_STARTED',
+                    payoutInitiatedAt: null,
+                    payoutInitiatedBy: null,
+                    payoutCompletedAt: null,
+                    payoutSummary: null
                 }
             });
 
@@ -822,6 +829,16 @@ export class PayrollCycleService {
                                 },
                                 department: {
                                     select: { name: true }
+                                },
+                                bankDetails: {
+                                    select: {
+                                        id: true,
+                                        accountHolder: true,
+                                        accountNumber: true,
+                                        bankName: true,
+                                        ifscCode: true,
+                                        updatedAt: true
+                                    }
                                 }
                             }
                         }
@@ -869,6 +886,20 @@ export class PayrollCycleService {
                             email: user.email ?? null,
                             employeeId: user.employeeId ?? null,
                             salaryTemplateId: user.salaryTemplateId ?? null,
+                            bankDetails: user.bankDetails
+                                ? {
+                                    id: user.bankDetails.id,
+                                    accountHolder: user.bankDetails.accountHolder ?? null,
+                                    accountHolderName: user.bankDetails.accountHolder ?? null,
+                                    accountNumber: user.bankDetails.accountNumber ?? null,
+                                    maskedAccountNumber: user.bankDetails.accountNumber
+                                        ? `****${user.bankDetails.accountNumber.slice(-4)}`
+                                        : null,
+                                    bankName: user.bankDetails.bankName ?? null,
+                                    ifscCode: user.bankDetails.ifscCode ?? null,
+                                    updatedAt: user.bankDetails.updatedAt ?? null
+                                }
+                                : null,
                             department: user.department
                                 ? { name: user.department.name ?? null }
                                 : null

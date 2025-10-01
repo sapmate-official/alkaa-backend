@@ -70,6 +70,10 @@ import {
     listSalaryTransactions,
     getSalaryTransactionsForRecord
 } from "../../../controller/v3/Payroll/salaryTransactionController.js";
+import {
+    initiateCyclePayout,
+    getCyclePayoutSummary
+} from "../../../controller/v3/Payroll/payrollPayoutController.js";
 
 // Import validation middleware
 import {
@@ -89,7 +93,9 @@ import {
     statusQueryValidation,
     workflowQueryValidation,
     recordSalaryPaymentValidation,
-    paymentStatusQueryValidation
+    paymentStatusQueryValidation,
+    initiatePayoutValidation,
+    payoutSummaryValidation
 } from "../../../controller/v3/Payroll/validators/newPayrollValidators.js";
 
 const router = e.Router();
@@ -117,6 +123,8 @@ router.delete("/cycle/:cycleId", validateToken, deletePayrollCycle);
 router.get("/cycles", validateToken, getPayrollCycles);
 router.get("/cycle/:cycleId", validateToken, getPayrollCycleDetails);
 router.get("/cycle/:cycleId/status", validateToken, getPayrollCycleProcessingStatus);
+router.post("/cycle/:cycleId/payout/initiate", validateToken, initiatePayoutValidation, initiateCyclePayout);
+router.get("/cycle/:cycleId/payout/summary", validateToken, payoutSummaryValidation, getCyclePayoutSummary);
 router.get("/cycles/review", validateToken, getCyclesNeedingReview);
 router.get("/statistics", validateToken, getPayrollStatistics);
 router.post("/bulk-generate", validateToken, bulkGenerateSalaries);
