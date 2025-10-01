@@ -228,6 +228,7 @@ model User {
   salaryRecords                SalaryRecord[]
   processedPayrollCycles       PayrollCycle[]             @relation("PayrollCycleProcessor")
   approvedPayrollCycles        PayrollCycle[]             @relation("PayrollCycleApprover")
+  initiatedPayrollPayouts      PayrollCycle[]             @relation("PayrollCyclePayoutInitiator")
   payrollCycleAuditEntries     PayrollCycleAudit[]        @relation("PayrollCycleAuditActor")
   createdTasks                 Task[]                      @relation("TaskCreator")
   assignedToTasks              TaskAssignment[]            @relation("TaskAssigner")
@@ -1069,8 +1070,11 @@ model PayrollCycle {
   month          Int
   year           Int
   status         PayrollCycleStatus @default(DRAFT)
+  payoutStatus   PayrollPayoutStatus @default(NOT_STARTED)
   startedAt      DateTime?
   completedAt    DateTime?
+  payoutInitiatedAt DateTime?
+  payoutCompletedAt DateTime?
   startedBy      String?
   approvedBy     String?
   approvedAt     DateTime?
@@ -1080,6 +1084,8 @@ model PayrollCycle {
   failedCount    Int                @default(0)
   totalAmount    Float              @default(0)
   notes          Json?
+  payoutSummary  Json?
+  payoutInitiatedBy String?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
   salaryRecords  SalaryRecord[]
@@ -1087,11 +1093,13 @@ model PayrollCycle {
   template       PayrollTemplate?   @relation(fields: [templateId], references: [id])
   processor      User?              @relation("PayrollCycleProcessor", fields: [startedBy], references: [id])
   approver       User?              @relation("PayrollCycleApprover", fields: [approvedBy], references: [id])
+  payoutInitiator User?             @relation("PayrollCyclePayoutInitiator", fields: [payoutInitiatedBy], references: [id])
   auditLogs      PayrollCycleAudit[]
   organization   Organization       @relation(fields: [orgId], references: [id])
 
   @@unique([orgId, month, year])
   @@index([orgId, status])
+  @@index([payoutStatus])
 }
 
 model PayrollCycleAudit {
@@ -1291,6 +1299,15 @@ enum SalaryPaymentStatus {
   INITIATED
   COMPLETED
   FAILED
+  NO_PAYOUT_REQUIRED
+}
+
+enum PayrollPayoutStatus {
+  NOT_STARTED
+  INITIATED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
 }
 
 enum NotificationType {
@@ -1483,6 +1500,10 @@ enum PayrollCycleAction {
   CYCLE_APPROVED
   CYCLE_CANCELLED
   NOTE_ADDED
+  PAYOUT_INITIATED
+  PAYMENT_RECORDED
+  PAYMENT_MARKED_NO_PAYOUT
+  PAYOUT_SUMMARY_UPDATED
 }
 
 enum DisputeStatus {

@@ -25,7 +25,15 @@ export const getBank = async (req, res) => {
         }
         
         const banks = await prisma.bankDetails.findMany();
-        res.status(200).json(banks);
+        
+        // Transform accountHolder to accountHolderName for frontend compatibility
+        const transformedBanks = banks.map(bank => ({
+            ...bank,
+            accountHolderName: bank.accountHolder,
+            accountHolder: undefined
+        }));
+        
+        res.status(200).json(transformedBanks);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch bank details' });
     }
@@ -97,7 +105,13 @@ export const getBankById = async (req, res) => {
         });
         
         if (bank) {
-            res.status(200).json(bank);
+            // Transform accountHolder to accountHolderName for frontend compatibility
+            const transformedBank = {
+                ...bank,
+                accountHolderName: bank.accountHolder,
+                accountHolder: undefined
+            };
+            res.status(200).json(transformedBank);
         } else {
             res.status(204  ).json({ message: 'Bank not found' });
         }
@@ -107,35 +121,59 @@ export const getBankById = async (req, res) => {
 };
 
 export const createBank = async (req, res) => {
-    const { userId, accountHolder, accountNumber, ifscCode, bankName } = req.body;
+    const { userId, accountHolderName, accountNumber, ifscCode, bankName } = req.body;
 
     try {
-        const newBank = await prisma.bankDetails.create({
-            data: {
+        // Use upsert to either create or update bank details
+        const bankDetails = await prisma.bankDetails.upsert({
+            where: { userId },
+            update: {
+                accountHolder: accountHolderName,
+                accountNumber,
+                ifscCode,
+                bankName,
+            },
+            create: {
                 userId,
-                accountHolder,
+                accountHolder: accountHolderName,
                 accountNumber,
                 ifscCode,
                 bankName,
             },
         });
-        res.status(201).json(newBank);
+        
+        // Transform accountHolder to accountHolderName for frontend compatibility
+        const transformedBank = {
+            ...bankDetails,
+            accountHolderName: bankDetails.accountHolder,
+            accountHolder: undefined
+        };
+        
+        res.status(201).json({
+            success: true,
+            data: transformedBank,
+            message: 'Bank details saved successfully'
+        });
     } catch (error) {
         console.log(error);
         
-        res.status(500).json({ error: 'Failed to create bank details' });
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to save bank details',
+            error: error.message
+        });
     }
 };
 
 export const updateBank = async (req, res) => {
-    const { userId, accountHolder, accountNumber, ifscCode, bankName } = req.body;
+    const { userId, accountHolderName, accountNumber, ifscCode, bankName } = req.body;
     
     // Validation
     if (!userId) {
         return res.status(400).json({ error: 'User ID is required' });
     }
     
-    if (!accountHolder || accountHolder.trim() === '') {
+    if (!accountHolderName || accountHolderName.trim() === '') {
         return res.status(400).json({ error: 'Account holder name is required' });
     }
     
@@ -164,7 +202,7 @@ export const updateBank = async (req, res) => {
             result = await prisma.bankDetails.update({
                 where: { userId },
                 data: {
-                    accountHolder,
+                    accountHolder: accountHolderName,
                     accountNumber,
                     ifscCode,
                     bankName,
@@ -175,7 +213,7 @@ export const updateBank = async (req, res) => {
             result = await prisma.bankDetails.create({
                 data: {
                     userId,
-                    accountHolder,
+                    accountHolder: accountHolderName,
                     accountNumber,
                     ifscCode,
                     bankName,
@@ -183,7 +221,14 @@ export const updateBank = async (req, res) => {
             });
         }
         
-        res.status(200).json(result);
+        // Transform accountHolder to accountHolderName for frontend compatibility
+        const transformedResult = {
+            ...result,
+            accountHolderName: result.accountHolder,
+            accountHolder: undefined
+        };
+        
+        res.status(200).json(transformedResult);
     } catch (error) {
         console.log(error);
         
@@ -280,9 +325,16 @@ export const getBankByUserId = async (req, res) => {
             });
         }
 
+        // Transform accountHolder to accountHolderName for frontend compatibility
+        const transformedBank = bank ? {
+            ...bank,
+            accountHolderName: bank.accountHolder,
+            accountHolder: undefined
+        } : null;
+
         return res.status(200).json({
             success: true,
-            data: bank
+            data: transformedBank
         });
     } catch (error) {
         res.status(500).json({

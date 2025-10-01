@@ -1,5 +1,6 @@
 import { validationResult } from "express-validator";
 import { SalaryTransactionService } from "./services/salaryTransactionService.js";
+import { PayrollPermissions } from "./validators/payrollValidators.js";
 
 export const recordSalaryPayment = async (req, res) => {
     const errors = validationResult(req);
@@ -12,18 +13,46 @@ export const recordSalaryPayment = async (req, res) => {
     }
 
     try {
-        const { salaryRecordId, paymentMode, paymentReference, notes } = req.body;
-        const result = await SalaryTransactionService.recordPayment({
-            salaryRecordId,
-            senderUserId: req.user.id,
-            paymentMode,
-            paymentReference,
-            notes
-        });
+        const payload = {
+            salaryRecordId: req.body.salaryRecordId,
+            paymentMode: req.body.paymentMode,
+            paymentReference: req.body.paymentReference,
+            notes: req.body.notes,
+            incentive: req.body.incentive,
+            bonus: req.body.bonus,
+            processedAt: req.body.processedAt,
+            records: req.body.records,
+            senderUserId: req.user.id
+        };
+
+        const salaryRecordIds = Array.isArray(payload.records) && payload.records.length > 0
+            ? payload.records.map((record) => record.salaryRecordId).filter(Boolean)
+            : (payload.salaryRecordId ? [payload.salaryRecordId] : []);
+
+        if (salaryRecordIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Provide salaryRecordId or a non-empty records array"
+            });
+        }
+
+        for (const recordId of salaryRecordIds) {
+            const canProcess = await PayrollPermissions.canProcessSalaryPayment(req.user.id, recordId);
+            if (!canProcess) {
+                return res.status(403).json({
+                    success: false,
+                    message: "You don't have permission to process one or more salary payments"
+                });
+            }
+        }
+
+        const result = await SalaryTransactionService.recordPayment(payload);
 
         return res.status(201).json({
             success: true,
-            message: "Salary payment recorded successfully",
+            message: salaryRecordIds.length > 1
+                ? `${salaryRecordIds.length} salary payments recorded successfully`
+                : "Salary payment recorded successfully",
             data: result
         });
     } catch (error) {

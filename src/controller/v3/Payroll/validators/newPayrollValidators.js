@@ -240,11 +240,27 @@ export const bulkApproveValidation = [
 
 export const recordSalaryPaymentValidation = [
     body('salaryRecordId')
+        .optional()
         .isString()
-        .notEmpty()
-        .withMessage('Salary record ID is required'),
+        .withMessage('Salary record ID must be a string'),
+
+    body('records')
+        .optional()
+        .isArray({ min: 1 })
+        .withMessage('records must be a non-empty array'),
+
+    body('records.*.salaryRecordId')
+        .optional()
+        .isString()
+        .withMessage('Each payment entry must include salaryRecordId'),
 
     body('paymentMode')
+        .optional()
+        .isString()
+        .isLength({ min: 2, max: 50 })
+        .withMessage('Payment mode must be between 2 and 50 characters'),
+
+    body('records.*.paymentMode')
         .optional()
         .isString()
         .isLength({ min: 2, max: 50 })
@@ -256,11 +272,92 @@ export const recordSalaryPaymentValidation = [
         .isLength({ min: 2, max: 100 })
         .withMessage('Payment reference must be between 2 and 100 characters'),
 
+    body('records.*.paymentReference')
+        .optional()
+        .isString()
+        .isLength({ min: 2, max: 100 })
+        .withMessage('Payment reference must be between 2 and 100 characters'),
+
     body('notes')
         .optional()
         .isString()
         .isLength({ max: 500 })
-        .withMessage('Notes must not exceed 500 characters')
+        .withMessage('Notes must not exceed 500 characters'),
+
+    body('records.*.notes')
+        .optional()
+        .isString()
+        .isLength({ max: 500 })
+        .withMessage('Notes must not exceed 500 characters'),
+
+    body('incentive')
+        .optional()
+        .isNumeric()
+        .withMessage('Incentive must be numeric'),
+
+    body('bonus')
+        .optional()
+        .isNumeric()
+        .withMessage('Bonus must be numeric'),
+
+    body('records.*.incentive')
+        .optional()
+        .isNumeric()
+        .withMessage('Incentive must be numeric'),
+
+    body('records.*.bonus')
+        .optional()
+        .isNumeric()
+        .withMessage('Bonus must be numeric'),
+
+    body('processedAt')
+        .optional()
+        .isISO8601()
+        .withMessage('processedAt must be a valid ISO 8601 date'),
+
+    body('records.*.processedAt')
+        .optional()
+        .isISO8601()
+        .withMessage('processedAt must be a valid ISO 8601 date'),
+
+    body()
+        .custom((value) => {
+            const hasSingle = Boolean(value.salaryRecordId);
+            const hasBulk = Array.isArray(value.records) && value.records.length > 0;
+            if (!hasSingle && !hasBulk) {
+                throw new Error('Provide salaryRecordId or a non-empty records array');
+            }
+            return true;
+        })
+];
+
+export const initiatePayoutValidation = [
+    param('cycleId')
+        .isString()
+        .notEmpty()
+        .withMessage('Valid cycle ID is required'),
+
+    body('requireBankDetails')
+        .optional()
+        .isBoolean()
+        .withMessage('requireBankDetails must be a boolean'),
+
+    body('salaryRecordIds')
+        .optional()
+        .isArray()
+        .withMessage('salaryRecordIds must be an array'),
+
+    body('salaryRecordIds.*')
+        .optional()
+        .isString()
+        .withMessage('Each salaryRecordId must be a string')
+];
+
+export const payoutSummaryValidation = [
+    param('cycleId')
+        .isString()
+        .notEmpty()
+        .withMessage('Valid cycle ID is required')
 ];
 
 // Workflow validation

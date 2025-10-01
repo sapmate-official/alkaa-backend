@@ -279,6 +279,64 @@ export class PayrollPermissions {
         return !!hasPermission;
     }
 
+    static async canInitiatePayout(currentUserId, cycleId = null) {
+        const hasGlobalPermission = await this.hasPermissionKeys(currentUserId, ["send_salary_to_all"]);
+        if (hasGlobalPermission) {
+            return true;
+        }
+
+        if (cycleId) {
+            const cycle = await prisma.payrollCycle.findUnique({
+                where: { id: cycleId },
+                select: { orgId: true }
+            });
+
+            if (!cycle) {
+                return false;
+            }
+        }
+
+        return !!(await this.hasAdminPermission(currentUserId));
+    }
+
+    static async canProcessPayment(currentUserId, targetUserId) {
+        if (currentUserId === targetUserId) {
+            return !!(await this.hasPermissionKeys(currentUserId, ["send_salary_to_myself"]));
+        }
+
+        const hasGlobalPermission = await this.hasPermissionKeys(currentUserId, ["send_salary_to_all"]);
+        if (hasGlobalPermission) {
+            return true;
+        }
+
+        const hasSubordinatePermission = await this.hasPermissionKeys(currentUserId, ["send_salary_to_subordinates"]);
+        if (!hasSubordinatePermission) {
+            return false;
+        }
+
+        const isManagerOfTarget = await prisma.user.findFirst({
+            where: {
+                id: targetUserId,
+                managerId: currentUserId
+            }
+        });
+
+        return !!isManagerOfTarget;
+    }
+
+    static async canProcessSalaryPayment(currentUserId, salaryRecordId) {
+        const salaryRecord = await prisma.salaryRecord.findUnique({
+            where: { id: salaryRecordId },
+            select: { userId: true }
+        });
+
+        if (!salaryRecord) {
+            return false;
+        }
+
+        return await this.canProcessPayment(currentUserId, salaryRecord.userId);
+    }
+
     static async canBulkGenerateSalaries(currentUserId) {
         const hasPermission = await prisma.rolePermission.findFirst({
             where: {
@@ -311,6 +369,29 @@ export class PayrollPermissions {
             where: {
                 permission: {
                     key: "access_payroll"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    static async hasPermissionKeys(currentUserId, permissionKeys = []) {
+        if (!permissionKeys || permissionKeys.length === 0) {
+            return null;
+        }
+
+        return await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: {
+                        in: permissionKeys
+                    }
                 },
                 role: {
                     users: {
