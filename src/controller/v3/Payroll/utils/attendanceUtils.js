@@ -36,14 +36,17 @@ export async function calculateWorkingDays(month, year, orgId, client = prisma) 
         }
     }
 
-    return { workingDays, weekendDays, holidays };
+    return { workingDays, weekendDays, holidays, daysInMonth };
 }
 
 /**
  * Calculate attendance statistics for a user
  */
 export async function calculateAttendanceStats(userId, month, year, orgId, client = prisma) {
-    const { workingDays, weekendDays, holidays } = await calculateWorkingDays(month, year, orgId, client);
+    const { workingDays, weekendDays, holidays, daysInMonth } = await calculateWorkingDays(month, year, orgId, client);
+
+    const monthStart = new Date(parseInt(year), parseInt(month) - 1, 1);
+    const nextMonthStart = new Date(parseInt(year), parseInt(month), 1);
 
     // Get attendance records
     const attendanceRecords = await client.attendanceRecord.findMany({
@@ -51,8 +54,26 @@ export async function calculateAttendanceStats(userId, month, year, orgId, clien
             userId: userId,
             verificationStatus: 'VERIFIED',
             date: {
-                gte: new Date(parseInt(year), parseInt(month) - 1, 1),
-                lt: new Date(parseInt(year), parseInt(month), 1)
+                gte: monthStart,
+                lt: nextMonthStart
+            }
+        },
+        include: {
+            ruleViolations: {
+                include: {
+                    rule: true
+                }
+            },
+            breakRecords: true,
+            geofenceViolations: {
+                include: {
+                    geofence: true
+                }
+            },
+            locationValidations: {
+                include: {
+                    geofence: true
+                }
             }
         }
     });
@@ -75,14 +96,14 @@ export async function calculateAttendanceStats(userId, month, year, orgId, clien
             OR: [
                 {
                     startDate: {
-                        gte: new Date(parseInt(year), parseInt(month) - 1, 1),
-                        lt: new Date(parseInt(year), parseInt(month), 1)
+                        gte: monthStart,
+                        lt: nextMonthStart
                     }
                 },
                 {
                     endDate: {
-                        gte: new Date(parseInt(year), parseInt(month) - 1, 1),
-                        lt: new Date(parseInt(year), parseInt(month), 1)
+                        gte: monthStart,
+                        lt: nextMonthStart
                     }
                 }
             ]
@@ -177,6 +198,15 @@ export async function calculateAttendanceStats(userId, month, year, orgId, clien
             paidLeaveDays,
             unpaidLeaveDays,
             attendancePercentage: parseFloat(attendancePercentage.toFixed(2))
+        },
+        records: attendanceRecords,
+        leaveRequests,
+        metadata: {
+            weekendDays,
+            holidays,
+            daysInMonth,
+            monthStart,
+            nextMonthStart
         }
     };
 }
