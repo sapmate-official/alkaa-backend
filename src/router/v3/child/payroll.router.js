@@ -66,6 +66,13 @@ import {
 } from "../../../controller/v3/Payroll/employeeController.js";
 
 import {
+    getOrganizationDisputes,
+    getManagerDisputes,
+    updateOrganizationDisputeStatus,
+    updateManagerDisputeStatus
+} from "../../../controller/v3/Payroll/disputeController.js";
+
+import {
     recordSalaryPayment,
     listSalaryTransactions,
     getSalaryTransactionsForRecord
@@ -95,7 +102,9 @@ import {
     recordSalaryPaymentValidation,
     paymentStatusQueryValidation,
     initiatePayoutValidation,
-    payoutSummaryValidation
+    payoutSummaryValidation,
+    disputeListQueryValidation,
+    disputeUpdateValidation
 } from "../../../controller/v3/Payroll/validators/newPayrollValidators.js";
 
 const router = e.Router();
@@ -132,6 +141,12 @@ router.post("/bulk-generate", validateToken, bulkGenerateSalaries);
 // Employee self-service routes
 router.get("/employee/disputes", validateToken, getEmployeeDisputes);
 router.post("/employee/disputes", validateToken, submitEmployeeDispute);
+
+// Admin & manager dispute management routes
+router.get("/admin/disputes", validateToken, ...disputeListQueryValidation, getOrganizationDisputes);
+router.patch("/admin/disputes/:disputeId", validateToken, ...disputeUpdateValidation, updateOrganizationDisputeStatus);
+router.get("/manager/disputes", validateToken, ...disputeListQueryValidation, getManagerDisputes);
+router.patch("/manager/disputes/:disputeId", validateToken, ...disputeUpdateValidation, updateManagerDisputeStatus);
 
 // Salary transaction routes
 router.post("/transactions/pay", validateToken, recordSalaryPaymentValidation, recordSalaryPayment);
