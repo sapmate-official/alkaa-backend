@@ -1,5 +1,7 @@
 import { body, param, query } from 'express-validator';
 
+export const DISPUTE_STATUS_VALUES = ['PENDING', 'UNDER_REVIEW', 'RESOLVED', 'REJECTED'];
+
 // Template validation rules
 export const createTemplateValidation = [
     body('name')
@@ -358,6 +360,95 @@ export const payoutSummaryValidation = [
         .isString()
         .notEmpty()
         .withMessage('Valid cycle ID is required')
+];
+
+export const disputeListQueryValidation = [
+    query('status')
+        .optional()
+        .isString()
+        .withMessage('status must be a comma separated string')
+        .custom((value) => {
+            const statuses = String(value)
+                .split(',')
+                .map((entry) => entry.trim().toUpperCase())
+                .filter(Boolean);
+            const invalid = statuses.filter((status) => !DISPUTE_STATUS_VALUES.includes(status));
+            if (invalid.length > 0) {
+                throw new Error(`Invalid dispute status: ${invalid.join(', ')}`);
+            }
+            return true;
+        }),
+
+    query('page')
+        .optional()
+        .isInt({ min: 1 })
+        .withMessage('page must be at least 1'),
+
+    query('pageSize')
+        .optional()
+        .isInt({ min: 1, max: 200 })
+        .withMessage('pageSize must be between 1 and 200'),
+
+    query('month')
+        .optional()
+        .isInt({ min: 1, max: 12 })
+        .withMessage('month must be between 1 and 12'),
+
+    query('year')
+        .optional()
+        .isInt({ min: 2000, max: 2100 })
+        .withMessage('year must be between 2000 and 2100'),
+
+    query('cycleId')
+        .optional()
+        .isString()
+        .withMessage('cycleId must be a string'),
+
+    query('managerId')
+        .optional()
+        .isString()
+        .withMessage('managerId must be a string'),
+
+    query('employeeId')
+        .optional()
+        .isString()
+        .withMessage('employeeId must be a string'),
+
+    query('search')
+        .optional()
+        .isString()
+        .withMessage('search must be a string'),
+
+    query('updatedSince')
+        .optional()
+        .isISO8601()
+        .withMessage('updatedSince must be a valid ISO8601 date')
+];
+
+export const disputeUpdateValidation = [
+    param('disputeId')
+        .isString()
+        .notEmpty()
+        .withMessage('Valid dispute ID is required'),
+
+    body('status')
+        .isString()
+        .notEmpty()
+        .withMessage('Status is required')
+        .custom((value) => {
+            const normalized = value.trim().toUpperCase();
+            if (!DISPUTE_STATUS_VALUES.includes(normalized)) {
+                throw new Error('Invalid dispute status provided');
+            }
+            return true;
+        }),
+
+    body('resolutionNote')
+        .optional()
+        .isString()
+        .trim()
+        .isLength({ min: 3, max: 2000 })
+        .withMessage('Resolution note must be between 3 and 2000 characters')
 ];
 
 // Workflow validation

@@ -361,6 +361,54 @@ export class PayrollPermissions {
         return !!hasPermission;
     }
 
+    static async canViewAllDisputes(currentUserId) {
+        const hasExplicitPermission = await this.hasPermissionKeys(currentUserId, ["view_salary_disputes_all"]);
+        if (hasExplicitPermission) {
+            return true;
+        }
+
+        return !!(await this.hasAdminPermission(currentUserId));
+    }
+
+    static async canManageAllDisputes(currentUserId) {
+        const hasExplicitPermission = await this.hasPermissionKeys(currentUserId, [
+            "manage_salary_disputes_all",
+            "resolve_salary_disputes_all"
+        ]);
+
+        if (hasExplicitPermission) {
+            return true;
+        }
+
+        return !!(await this.hasAdminPermission(currentUserId));
+    }
+
+    static async canViewTeamDisputes(currentUserId) {
+        const hasTeamPermission = await this.hasPermissionKeys(currentUserId, ["view_salary_disputes_team"]);
+        if (hasTeamPermission) {
+            return true;
+        }
+
+        return !!(await this.hasManagerPermission(currentUserId));
+    }
+
+    static async canManageTeamDisputes(currentUserId) {
+        const hasTeamPermission = await this.hasPermissionKeys(currentUserId, [
+            "manage_salary_disputes_team",
+            "resolve_salary_disputes_team"
+        ]);
+
+        if (hasTeamPermission) {
+            return true;
+        }
+
+        if (await this.hasManagerPermission(currentUserId)) {
+            return true;
+        }
+
+        return !!(await this.hasAdminPermission(currentUserId));
+    }
+
     /**
      * Helper method to check basic payroll permission
      */
