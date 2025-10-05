@@ -39,6 +39,177 @@ class GeofencingService {
     }
 
     /**
+     * Convert value into floating point number with fallback
+     * @param {any} value - Input value (number|string|Decimal)
+     * @param {number} fallback - Fallback when value is invalid
+     * @returns {number}
+     */
+    toNumber(value, fallback = 0) {
+        if (value === null || value === undefined) {
+            return fallback;
+        }
+
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return value;
+        }
+
+        if (typeof value === 'string') {
+            const parsed = parseFloat(value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        }
+
+        if (typeof value === 'object') {
+            if (typeof value.toNumber === 'function') {
+                try {
+                    const decimalValue = value.toNumber();
+                    return Number.isFinite(decimalValue) ? decimalValue : fallback;
+                } catch (error) {
+                    return fallback;
+                }
+            }
+
+            if ('value' in value) {
+                return this.toNumber(value.value, fallback);
+            }
+        }
+
+        return fallback;
+    }
+
+    /**
+     * Normalize a coordinate-like input to { latitude, longitude }
+     * @param {any} point - Coordinate input
+     * @returns {{ latitude: number, longitude: number }}
+     */
+    toLatLng(point) {
+        if (Array.isArray(point) && point.length >= 2) {
+            const [lat, lng] = point;
+            return {
+                latitude: this.toNumber(lat, 0),
+                longitude: this.toNumber(lng, 0)
+            };
+        }
+
+        if (point && typeof point === 'object') {
+            const latitude = point.latitude ?? point.lat;
+            const longitude = point.longitude ?? point.lng;
+
+            if (latitude !== undefined && longitude !== undefined) {
+                return {
+                    latitude: this.toNumber(latitude, 0),
+                    longitude: this.toNumber(longitude, 0)
+                };
+            }
+        }
+
+        throw new Error('Invalid coordinate value provided');
+    }
+
+    /**
+     * Normalize polygon points to array of [lat, lng]
+     * @param {any[]} points - Raw points array
+     * @returns {Array<[number, number]>}
+     */
+    normalizePolygonPoints(points = []) {
+        if (!Array.isArray(points)) {
+            return [];
+        }
+
+        return points
+            .map((point) => {
+                try {
+                    const { latitude, longitude } = this.toLatLng(point);
+                    return [latitude, longitude];
+                } catch (error) {
+                    return null;
+                }
+            })
+            .filter(Boolean);
+    }
+
+    /**
+     * Prepare consistent geofence coordinates JSON for persistence
+     * @param {Object} coordinates - Request coordinates
+     * @param {'CIRCLE'|'POLYGON'} shape - Geofence shape
+     * @param {number|null} radius - Radius for circle geofence
+     * @param {number} allowedDeviation - Allowed deviation buffer in meters
+     * @returns {Object}
+     */
+    serializeCoordinates(coordinates = {}, shape = 'CIRCLE', radius = null, allowedDeviation = 0) {
+        if (shape === 'CIRCLE') {
+            const centerInput = coordinates.center ?? coordinates;
+            const { latitude, longitude } = this.toLatLng(centerInput);
+
+            return {
+                shape: 'CIRCLE',
+                center: { latitude, longitude },
+                radius,
+                allowedDeviation,
+                address: coordinates.address ?? null,
+                metadata: coordinates.metadata ?? null
+            };
+        }
+
+        const rawPoints = coordinates.points ?? coordinates.vertices ?? [];
+        const points = this.normalizePolygonPoints(rawPoints);
+
+        return {
+            shape: 'POLYGON',
+            points,
+            allowedDeviation,
+            address: coordinates.address ?? null,
+            metadata: coordinates.metadata ?? null
+        };
+    }
+
+    /**
+     * Extract normalized geometry information from geofence record
+     * @param {Object} geofence - Geofence record
+     * @returns {{shape: string, radius: number|null, allowedDeviation: number, effectiveRadius: number|null, center?: {latitude: number, longitude: number}, points: Array<[number, number]>}}
+     */
+    getGeofenceGeometry(geofence) {
+        const coordinates = geofence?.coordinates || {};
+        const rawShape = coordinates.shape || coordinates.type || geofence?.shape || null;
+        const hasRadius = geofence?.radius !== null && geofence?.radius !== undefined;
+        const inferredShape = hasRadius ? 'CIRCLE' : 'POLYGON';
+        const shape = (rawShape || inferredShape).toString().toUpperCase();
+
+        const allowedDeviation = this.toNumber(
+            geofence?.allowedDeviation ?? coordinates.allowedDeviation,
+            this.geofenceTypes?.[geofence?.type]?.allowedDeviation ?? 50
+        );
+
+        if (shape === 'CIRCLE') {
+            const centerInput = coordinates.center ?? coordinates;
+            const center = this.toLatLng(centerInput);
+            const radius = this.toNumber(
+                geofence?.radius ?? coordinates.radius,
+                0
+            );
+            const effectiveRadius = radius + allowedDeviation;
+
+            return {
+                shape: 'CIRCLE',
+                radius,
+                allowedDeviation,
+                effectiveRadius,
+                center
+            };
+        }
+
+        const rawPoints = coordinates.points ?? coordinates.vertices ?? [];
+        const points = this.normalizePolygonPoints(rawPoints);
+
+        return {
+            shape: 'POLYGON',
+            radius: null,
+            allowedDeviation,
+            effectiveRadius: null,
+            points
+        };
+    }
+
+    /**
      * Validate location against organization geofences
      * @param {number} lat - Latitude
      * @param {number} lng - Longitude
@@ -77,7 +248,8 @@ class GeofencingService {
                         valid: true,
                         geofence: geofence,
                         deviation: validationResult.distance,
-                        message: `Location validated against ${geofence.name}`
+                        message: `Location validated against ${geofence.name}`,
+                        details: validationResult.details || null
                     };
                 }
             }
@@ -103,10 +275,12 @@ class GeofencingService {
                 valid: false,
                 reason: 'OUTSIDE_GEOFENCE',
                 nearestGeofence: nearestGeofence,
+                deviation: nearestGeofence?.distance ?? null,
                 message: nearestGeofence ? 
                     `Location is ${Math.round(nearestGeofence.distance)}m away from ${nearestGeofence.name}` :
                     'Location is outside all defined geofences',
-                requiresApproval: true
+                requiresApproval: true,
+                details: nearestGeofence?.metrics || nearestGeofence?.geometry || null
             };
 
         } catch (error) {
@@ -154,6 +328,7 @@ class GeofencingService {
             const {
                 name,
                 type,
+                shape,
                 coordinates,
                 radius,
                 strictMode = false,
@@ -161,20 +336,36 @@ class GeofencingService {
                 isActive = false // Default to disabled
             } = geofenceData;
 
+            const normalizedShape = (shape || coordinates?.shape || (radius ? 'CIRCLE' : 'POLYGON')).toString().toUpperCase();
+            const allowedDeviationValue = this.toNumber(
+                allowedDeviation ?? coordinates?.allowedDeviation,
+                this.geofenceTypes?.[type]?.allowedDeviation ?? 50
+            );
+            const normalizedRadius = normalizedShape === 'CIRCLE'
+                ? this.toNumber(radius ?? coordinates?.radius, 0)
+                : null;
+
             // Validate coordinates
-            if (!this.validateCoordinates(coordinates, type)) {
-                throw new Error('Invalid coordinates for geofence type');
+            if (!this.validateCoordinates(coordinates, normalizedShape)) {
+                throw new Error('Invalid coordinates for geofence shape');
             }
+
+            const serializedCoordinates = this.serializeCoordinates(
+                coordinates,
+                normalizedShape,
+                normalizedRadius,
+                allowedDeviationValue
+            );
 
             return await prisma.organizationGeofence.create({
                 data: {
                     orgId,
                     name,
                     type,
-                    coordinates,
-                    radius: radius ? parseFloat(radius) : null,
+                    coordinates: serializedCoordinates,
+                    radius: normalizedRadius,
                     strictMode,
-                    allowedDeviation: parseFloat(allowedDeviation),
+                    allowedDeviation: allowedDeviationValue,
                     isActive
                 }
             });
@@ -192,10 +383,52 @@ class GeofencingService {
      */
     async updateGeofence(geofenceId, updateData) {
         try {
+            const existing = await prisma.organizationGeofence.findUnique({
+                where: { id: geofenceId }
+            });
+
+            if (!existing) {
+                throw new Error('Geofence not found');
+            }
+
+            const coordinatesInput = updateData.coordinates ?? existing.coordinates ?? {};
+            const shapeInput = updateData.shape || coordinatesInput.shape || existing.coordinates?.shape;
+            const defaultShape = existing.radius !== null && existing.radius !== undefined ? 'CIRCLE' : 'POLYGON';
+            const normalizedShape = (shapeInput || defaultShape).toString().toUpperCase();
+
+            const allowedDeviationValue = updateData.allowedDeviation !== undefined
+                ? this.toNumber(updateData.allowedDeviation, existing.allowedDeviation)
+                : this.toNumber(existing.allowedDeviation);
+
+            const normalizedRadius = normalizedShape === 'CIRCLE'
+                ? this.toNumber(
+                    updateData.radius ?? coordinatesInput.radius ?? existing.radius,
+                    existing.radius ?? 0
+                )
+                : null;
+
+            if (!this.validateCoordinates(coordinatesInput, normalizedShape)) {
+                throw new Error('Invalid coordinates for geofence shape');
+            }
+
+            const serializedCoordinates = this.serializeCoordinates(
+                coordinatesInput,
+                normalizedShape,
+                normalizedRadius,
+                allowedDeviationValue
+            );
+
             return await prisma.organizationGeofence.update({
                 where: { id: geofenceId },
                 data: {
-                    ...updateData,
+                    name: updateData.name ?? existing.name,
+                    type: updateData.type ?? existing.type,
+                    coordinates: serializedCoordinates,
+                    radius: normalizedRadius,
+                    strictMode: updateData.strictMode ?? existing.strictMode,
+                    allowedDeviation: allowedDeviationValue,
+                    isActive: updateData.isActive ?? existing.isActive,
+                    description: updateData.description ?? existing.description,
                     updatedAt: new Date()
                 }
             });
@@ -214,13 +447,13 @@ class GeofencingService {
      */
     isWithinGeofence(lat, lng, geofence) {
         try {
-            if (geofence.radius) {
-                // Circular geofence
-                return this.isWithinCircularGeofence(lat, lng, geofence);
-            } else {
-                // Polygon geofence
-                return this.isWithinPolygonGeofence(lat, lng, geofence);
+            const geometry = this.getGeofenceGeometry(geofence);
+
+            if (geometry.shape === 'CIRCLE') {
+                return this.isWithinCircularGeofence(lat, lng, geofence, geometry);
             }
+
+            return this.isWithinPolygonGeofence(lat, lng, geofence, geometry);
         } catch (error) {
             console.error('Error checking geofence:', error);
             return { valid: false, distance: Infinity };
@@ -234,15 +467,23 @@ class GeofencingService {
      * @param {Object} geofence - Circular geofence
      * @returns {Object} Validation result
      */
-    isWithinCircularGeofence(lat, lng, geofence) {
-        const center = geofence.coordinates;
-        const distance = this.calculateDistance(lat, lng, center.lat, center.lng);
-        const effectiveRadius = geofence.radius + geofence.allowedDeviation;
+    isWithinCircularGeofence(lat, lng, geofence, geometry = this.getGeofenceGeometry(geofence)) {
+        const currentPoint = { latitude: this.toNumber(lat, 0), longitude: this.toNumber(lng, 0) };
+        const centerPoint = geometry.center;
+        const distanceToCenter = this.calculateDistance(currentPoint, centerPoint);
+        const allowedRadius = geometry.effectiveRadius;
+        const deviation = Math.max(distanceToCenter - allowedRadius, 0);
 
         return {
-            valid: distance <= effectiveRadius,
-            distance: distance,
-            allowedRadius: effectiveRadius
+            valid: deviation <= 0,
+            distance: deviation,
+            details: {
+                shape: 'CIRCLE',
+                distanceToCenter,
+                radius: geometry.radius,
+                allowedDeviation: geometry.allowedDeviation,
+                allowedRadius
+            }
         };
     }
 
@@ -253,21 +494,36 @@ class GeofencingService {
      * @param {Object} geofence - Polygon geofence
      * @returns {Object} Validation result
      */
-    isWithinPolygonGeofence(lat, lng, geofence) {
-        const polygon = geofence.coordinates.points || [];
-        const isInside = this.pointInPolygon([lat, lng], polygon);
-        
-        if (isInside) {
-            return { valid: true, distance: 0 };
+    isWithinPolygonGeofence(lat, lng, geofence, geometry = this.getGeofenceGeometry(geofence)) {
+        const point = [this.toNumber(lat, 0), this.toNumber(lng, 0)];
+        const polygonPoints = geometry.points || [];
+        const insidePolygon = this.pointInPolygon(point, polygonPoints);
+
+        if (insidePolygon) {
+            return {
+                valid: true,
+                distance: 0,
+                details: {
+                    shape: 'POLYGON',
+                    insidePolygon: true,
+                    distanceToEdge: 0,
+                    allowedDeviation: geometry.allowedDeviation
+                }
+            };
         }
 
-        // Calculate distance to polygon edge
-        const distanceToEdge = this.distanceToPolygon([lat, lng], polygon);
-        const isWithinTolerance = distanceToEdge <= geofence.allowedDeviation;
+        const distanceToEdge = this.distanceToPolygon(point, polygonPoints);
+        const deviation = Math.max(distanceToEdge - geometry.allowedDeviation, 0);
 
         return {
-            valid: isWithinTolerance,
-            distance: distanceToEdge
+            valid: deviation <= 0,
+            distance: deviation,
+            details: {
+                shape: 'POLYGON',
+                insidePolygon: false,
+                distanceToEdge,
+                allowedDeviation: geometry.allowedDeviation
+            }
         };
     }
 
@@ -279,7 +535,10 @@ class GeofencingService {
      * @param {number} lng2 - Longitude 2
      * @returns {number} Distance in meters
      */
-    calculateDistance(lat1, lng1, lat2, lng2) {
+    calculateDistance(pointA, pointB) {
+        const { latitude: lat1, longitude: lng1 } = this.toLatLng(pointA);
+        const { latitude: lat2, longitude: lng2 } = this.toLatLng(pointB);
+
         const R = 6371e3; // Earth's radius in meters
         const φ1 = lat1 * Math.PI / 180;
         const φ2 = lat2 * Math.PI / 180;
@@ -301,6 +560,10 @@ class GeofencingService {
      * @returns {boolean} True if inside polygon
      */
     pointInPolygon(point, polygon) {
+        if (!Array.isArray(polygon) || polygon.length < 3) {
+            return false;
+        }
+
         const [x, y] = point;
         let inside = false;
 
@@ -323,6 +586,10 @@ class GeofencingService {
      * @returns {number} Distance in meters
      */
     distanceToPolygon(point, polygon) {
+        if (!Array.isArray(polygon) || polygon.length < 2) {
+            return Infinity;
+        }
+
         let minDistance = Infinity;
 
         for (let i = 0; i < polygon.length; i++) {
@@ -372,7 +639,7 @@ class GeofencingService {
             yy = y1 + param * D;
         }
 
-        return this.calculateDistance(px, py, xx, yy);
+        return this.calculateDistance([px, py], [xx, yy]);
     }
 
     /**
@@ -386,22 +653,41 @@ class GeofencingService {
         let nearest = null;
         let minDistance = Infinity;
 
-        for (const geofence of geofences) {
-            let distance;
+        const currentPoint = { latitude: this.toNumber(lat, 0), longitude: this.toNumber(lng, 0) };
 
-            if (geofence.radius) {
-                // Circular geofence
-                const center = geofence.coordinates;
-                distance = this.calculateDistance(lat, lng, center.lat, center.lng);
-            } else {
-                // Polygon geofence
-                const polygon = geofence.coordinates.points || [];
-                distance = this.distanceToPolygon([lat, lng], polygon);
+        for (const geofence of geofences) {
+            const geometry = this.getGeofenceGeometry(geofence);
+            let deviation = Infinity;
+            let metrics = {};
+
+            if (geometry.shape === 'CIRCLE') {
+                const distanceToCenter = this.calculateDistance(currentPoint, geometry.center);
+                deviation = Math.max(distanceToCenter - geometry.effectiveRadius, 0);
+                metrics = {
+                    distanceToCenter,
+                    effectiveRadius: geometry.effectiveRadius,
+                    allowedDeviation: geometry.allowedDeviation
+                };
+            } else if (geometry.points && geometry.points.length >= 3) {
+                const polygonDistance = this.distanceToPolygon(
+                    [currentPoint.latitude, currentPoint.longitude],
+                    geometry.points
+                );
+                deviation = Math.max(polygonDistance - geometry.allowedDeviation, 0);
+                metrics = {
+                    polygonDistance,
+                    allowedDeviation: geometry.allowedDeviation
+                };
             }
 
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearest = { ...geofence, distance };
+            if (deviation < minDistance) {
+                minDistance = deviation;
+                nearest = {
+                    ...geofence,
+                    distance: deviation,
+                    geometry,
+                    metrics
+                };
             }
         }
 
@@ -447,9 +733,8 @@ class GeofencingService {
         // Check approved remote locations
         for (const approvedLocation of userOverrides.approvedLocations || []) {
             const distance = this.calculateDistance(
-                lat, lng, 
-                approvedLocation.lat, 
-                approvedLocation.lng
+                { latitude: this.toNumber(lat, 0), longitude: this.toNumber(lng, 0) },
+                { latitude: this.toNumber(approvedLocation.lat, 0), longitude: this.toNumber(approvedLocation.lng, 0) }
             );
 
             if (distance <= approvedLocation.radius) {
@@ -533,18 +818,27 @@ class GeofencingService {
      * @param {string} type - Geofence type
      * @returns {boolean} True if valid
      */
-    validateCoordinates(coordinates, type) {
+    validateCoordinates(coordinates, shape = 'POLYGON') {
         if (!coordinates) return false;
 
-        if (type === 'RADIUS') {
-            return coordinates.lat && coordinates.lng && 
-                   typeof coordinates.lat === 'number' && 
-                   typeof coordinates.lng === 'number';
-        } else {
-            return coordinates.points && 
-                   Array.isArray(coordinates.points) && 
-                   coordinates.points.length >= 3;
+        const normalizedShape = shape?.toString().toUpperCase();
+
+        if (normalizedShape === 'RADIUS' || normalizedShape === 'CIRCLE') {
+            try {
+                this.toLatLng(coordinates.center ?? coordinates);
+                return true;
+            } catch (error) {
+                return false;
+            }
         }
+
+        if (normalizedShape === 'POLYGON') {
+            const points = coordinates.points ?? coordinates.vertices ?? [];
+            const normalizedPoints = this.normalizePolygonPoints(points);
+            return normalizedPoints.length >= 3;
+        }
+
+        return false;
     }
 
     /**

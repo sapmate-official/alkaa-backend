@@ -251,39 +251,60 @@ class ContinuousTrackingService {
                 };
             }
 
-            let nearestGeofence = null;
-            let shortestDistance = Infinity;
-            let isWithinAnyGeofence = false;
+            const latitude = Number(location.latitude ?? location.lat);
+            const longitude = Number(location.longitude ?? location.lng);
+
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                return {
+                    isCompliant: false,
+                    nearestGeofence: null,
+                    distanceToNearest: Infinity,
+                    reason: 'INVALID_LOCATION',
+                    message: 'Invalid coordinates provided for location validation.'
+                };
+            }
+
+            let matchedGeofence = null;
 
             for (const geofence of geofences) {
-                const coords = geofence.coordinates;
-                if (!coords || !coords.latitude || !coords.longitude) continue;
-
-                const distance = this.geofencingService.calculateDistance(
-                    location,
-                    { latitude: parseFloat(coords.latitude), longitude: parseFloat(coords.longitude) }
-                );
-
-                if (distance < shortestDistance) {
-                    shortestDistance = distance;
-                    nearestGeofence = geofence;
-                }
-
-                const radius = parseFloat(geofence.radius) || 100;
-                if (distance <= radius) {
-                    isWithinAnyGeofence = true;
+                const validation = this.geofencingService.isWithinGeofence(latitude, longitude, geofence);
+                if (validation.valid) {
+                    matchedGeofence = {
+                        geofence,
+                        validation
+                    };
                     break;
                 }
             }
 
+            const nearestGeofence = await this.geofencingService.findNearestGeofence(latitude, longitude, geofences);
+            const nearestDistance = Number.isFinite(nearestGeofence?.distance)
+                ? Math.max(nearestGeofence.distance, 0)
+                : Infinity;
+            const roundedDistance = Number.isFinite(nearestDistance) ? Math.round(nearestDistance) : Infinity;
+
+            if (matchedGeofence) {
+                return {
+                    isCompliant: true,
+                    nearestGeofence: matchedGeofence.geofence,
+                    distanceToNearest: 0,
+                    reason: 'WITHIN_GEOFENCE',
+                    message: `Location is within ${matchedGeofence.geofence.name}`,
+                    deviation: matchedGeofence.validation.distance,
+                    details: matchedGeofence.validation.details || null
+                };
+            }
+
             return {
-                isCompliant: isWithinAnyGeofence,
-                nearestGeofence,
-                distanceToNearest: Math.round(shortestDistance),
-                reason: isWithinAnyGeofence ? 'WITHIN_GEOFENCE' : 'OUTSIDE_ALL_GEOFENCES',
-                message: isWithinAnyGeofence 
-                    ? 'Location is within approved geofence'
-                    : `Location is ${Math.round(shortestDistance)}m from nearest geofence`
+                isCompliant: false,
+                nearestGeofence: nearestGeofence || null,
+                distanceToNearest: roundedDistance,
+                reason: 'OUTSIDE_GEOFENCE',
+                message: nearestGeofence
+                    ? `Location is approximately ${roundedDistance}m outside ${nearestGeofence.name}`
+                    : 'Location is outside all defined geofences',
+                deviation: nearestDistance,
+                details: nearestGeofence?.metrics || nearestGeofence?.geometry || null
             };
         } catch (error) {
             console.error('Error validating location against geofences:', error);

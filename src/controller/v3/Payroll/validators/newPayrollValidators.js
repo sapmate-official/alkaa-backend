@@ -425,6 +425,76 @@ export const disputeListQueryValidation = [
         .withMessage('updatedSince must be a valid ISO8601 date')
 ];
 
+export const payslipHistoryQueryValidation = [
+    query('months')
+        .optional()
+        .isInt({ min: 1, max: 24 })
+        .withMessage('months must be between 1 and 24'),
+
+    query('page')
+        .optional()
+        .isInt({ min: 1 })
+        .withMessage('page must be at least 1'),
+
+    query('pageSize')
+        .optional()
+        .isInt({ min: 1, max: 500 })
+        .withMessage('pageSize must be between 1 and 500'),
+
+    query('status')
+        .optional()
+        .isString()
+        .withMessage('status must be a comma separated string'),
+
+    query('paymentStatus')
+        .optional()
+        .isString()
+        .withMessage('paymentStatus must be a comma separated string'),
+
+    query('search')
+        .optional()
+        .isString()
+        .withMessage('search must be a string')
+
+];
+
+export const taxSummaryQueryValidation = [
+    query('months')
+        .optional()
+        .isInt({ min: 1, max: 24 })
+        .withMessage('months must be between 1 and 24'),
+
+    query('status')
+        .optional()
+        .isString()
+        .withMessage('status must be a comma separated string'),
+
+    query('paymentStatus')
+        .optional()
+        .isString()
+        .withMessage('paymentStatus must be a comma separated string'),
+
+    query('departmentIds')
+        .optional()
+        .isString()
+        .withMessage('departmentIds must be a comma separated string'),
+
+    query('search')
+        .optional()
+        .isString()
+        .withMessage('search must be a string'),
+
+    query('minTax')
+        .optional()
+        .isFloat({ min: 0 })
+        .withMessage('minTax must be a positive number'),
+
+    query('maxTax')
+        .optional()
+        .isFloat({ min: 0 })
+        .withMessage('maxTax must be a positive number')
+];
+
 export const disputeUpdateValidation = [
     param('disputeId')
         .isString()

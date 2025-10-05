@@ -279,6 +279,19 @@ export class PayrollPermissions {
         return !!hasPermission;
     }
 
+    static async canViewOrganizationPayslips(currentUserId) {
+        const hasGlobalPermission = await this.hasPermissionKeys(currentUserId, ["view_salary_slip_of_all"]);
+        if (hasGlobalPermission) {
+            return true;
+        }
+
+        return !!(await this.hasAdminPermission(currentUserId));
+    }
+
+    static async canViewOrganizationTaxSummaries(currentUserId) {
+        return await this.canViewOrganizationPayslips(currentUserId);
+    }
+
     static async canInitiatePayout(currentUserId, cycleId = null) {
         const hasGlobalPermission = await this.hasPermissionKeys(currentUserId, ["send_salary_to_all"]);
         if (hasGlobalPermission) {

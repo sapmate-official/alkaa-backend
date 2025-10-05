@@ -3,21 +3,93 @@ import prisma from "../../../db/connectDb.js";
 
 const geofencingService = new GeofencingService();
 
+const toNumber = (value) => {
+    if (value === null || value === undefined || value === '') {
+        return undefined;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const toBoolean = (value, fallback = false) => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+        if (value.toLowerCase() === 'true') return true;
+        if (value.toLowerCase() === 'false') return false;
+    }
+    if (value === 1) return true;
+    if (value === 0) return false;
+    return fallback;
+};
+
+const normalizePolygonPointsFromRequest = (points = []) => {
+    if (!Array.isArray(points)) {
+        return [];
+    }
+
+    return points
+        .map((point) => {
+            if (Array.isArray(point) && point.length >= 2) {
+                const [lat, lng] = point;
+                const latitude = toNumber(lat);
+                const longitude = toNumber(lng);
+                if (latitude === undefined || longitude === undefined) {
+                    return null;
+                }
+                return { latitude, longitude };
+            }
+
+            if (point && typeof point === 'object') {
+                const latitude = toNumber(point.latitude ?? point.lat);
+                const longitude = toNumber(point.longitude ?? point.lng);
+                if (latitude === undefined || longitude === undefined) {
+                    return null;
+                }
+                return { latitude, longitude };
+            }
+
+            return null;
+        })
+        .filter(Boolean);
+};
+
+const formatGeofenceResponse = (geofence) => {
+    if (!geofence) {
+        return geofence;
+    }
+
+    const geometry = geofencingService.getGeofenceGeometry(geofence);
+
+    return {
+        ...geofence,
+        shape: geometry.shape,
+        radius: geometry.shape === 'CIRCLE' ? geometry.radius : null,
+        allowedDeviation: geometry.allowedDeviation,
+        geometry
+    };
+};
+
 /**
  * Create a new geofence for organization
  */
 export const createGeofence = async (req, res) => {
     try {
         const { orgId } = req.params;
-        const { 
-            name, 
-            type, 
-            latitude, 
-            longitude, 
-            radius, 
-            address,
+        const {
+            name,
+            type,
+            shape,
+            coordinates,
+            points,
+            polygonPoints,
+            latitude,
+            longitude,
+            radius,
+            allowedDeviation,
+            strictMode,
             isActive = true,
-            description 
+            description,
+            address
         } = req.body;
 
         if (req.user.orgId !== orgId) {
@@ -26,56 +98,91 @@ export const createGeofence = async (req, res) => {
             });
         }
 
-        // Validate required fields
-        if (!name || !type || !latitude || !longitude) {
+        if (!name || !type) {
             return res.status(400).json({
                 error: "Missing required fields",
-                message: "name, type, latitude, and longitude are required"
+                message: "name and type are required"
             });
         }
 
-        // Validate geofence type
+        const normalizedType = type.toUpperCase();
         const validTypes = ['MAIN_OFFICE', 'BRANCH_OFFICE', 'CLIENT_SITE', 'REMOTE_ZONE'];
-        if (!validTypes.includes(type.toUpperCase())) {
+        if (!validTypes.includes(normalizedType)) {
             return res.status(400).json({
                 error: "Invalid geofence type",
                 message: `Type must be one of: ${validTypes.join(', ')}`
             });
         }
 
-        // Validate coordinates
-        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-            return res.status(400).json({
-                error: "Invalid coordinates",
-                message: "Latitude must be between -90 and 90, longitude between -180 and 180"
-            });
+        const normalizedShape = (shape || coordinates?.shape || (latitude !== undefined || longitude !== undefined || radius !== undefined ? 'CIRCLE' : 'POLYGON'))
+            .toString()
+            .toUpperCase();
+
+        const coordinatePayload = { ...(coordinates || {}) };
+
+        if (normalizedShape === 'CIRCLE') {
+            const latValue = toNumber(coordinatePayload?.center?.latitude ?? latitude);
+            const lngValue = toNumber(coordinatePayload?.center?.longitude ?? longitude);
+
+            if (latValue === undefined || lngValue === undefined) {
+                return res.status(400).json({
+                    error: "Missing coordinates",
+                    message: "latitude and longitude are required for circular geofences"
+                });
+            }
+
+            if (latValue < -90 || latValue > 90 || lngValue < -180 || lngValue > 180) {
+                return res.status(400).json({
+                    error: "Invalid coordinates",
+                    message: "Latitude must be between -90 and 90, longitude between -180 and 180"
+                });
+            }
+
+            coordinatePayload.center = {
+                latitude: latValue,
+                longitude: lngValue
+            };
+        } else {
+            const manualPoints = normalizePolygonPointsFromRequest(
+                coordinatePayload.points || points || polygonPoints
+            );
+
+            if (manualPoints.length < 3) {
+                return res.status(400).json({
+                    error: "Invalid polygon",
+                    message: "Polygon geofence requires at least 3 coordinate points"
+                });
+            }
+
+            coordinatePayload.points = manualPoints;
         }
 
-        const geofence = await prisma.organizationGeofence.create({
-            data: {
-                orgId,
-                name,
-                type: type.toUpperCase(),
-                coordinates: {
-                    latitude: parseFloat(latitude),
-                    longitude: parseFloat(longitude),
-                    address
-                },
-                radius: radius || 100, // Default 100m radius
-                isActive: Boolean(isActive)
-            }
+        if (address && !coordinatePayload.address) {
+            coordinatePayload.address = address;
+        }
+
+        const geofence = await geofencingService.createGeofence(orgId, {
+            name,
+            type: normalizedType,
+            shape: normalizedShape,
+            coordinates: coordinatePayload,
+            radius: normalizedShape === 'CIRCLE' ? toNumber(radius) : undefined,
+            allowedDeviation: toNumber(allowedDeviation),
+            strictMode: toBoolean(strictMode, false),
+            isActive: toBoolean(isActive, true),
+            description
         });
 
         res.status(201).json({
             success: true,
-            data: geofence,
+            data: formatGeofenceResponse(geofence),
             message: "Geofence created successfully"
         });
     } catch (error) {
         console.error('Error creating geofence:', error);
         res.status(500).json({
             error: "Internal server error",
-            message: "Failed to create geofence"
+            message: error.message || "Failed to create geofence"
         });
     }
 };
@@ -120,10 +227,13 @@ export const getOrganizationGeofences = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: geofences.map(geo => ({
-                ...geo,
-                recentValidations: geo._count.validationLogs
-            }))
+            data: geofences.map((geo) => {
+                const { _count, ...geofenceRecord } = geo;
+                return {
+                    ...formatGeofenceResponse(geofenceRecord),
+                    recentValidations: _count.validationLogs
+                };
+            })
         });
     } catch (error) {
         console.error('Error getting geofences:', error);
@@ -140,7 +250,22 @@ export const getOrganizationGeofences = async (req, res) => {
 export const updateGeofence = async (req, res) => {
     try {
         const { orgId, geofenceId } = req.params;
-        const updateData = req.body;
+        const {
+            name,
+            type,
+            shape,
+            coordinates,
+            points,
+            polygonPoints,
+            latitude,
+            longitude,
+            radius,
+            allowedDeviation,
+            strictMode,
+            isActive,
+            description,
+            address
+        } = req.body;
 
         if (req.user.orgId !== orgId) {
             return res.status(403).json({
@@ -148,35 +273,101 @@ export const updateGeofence = async (req, res) => {
             });
         }
 
-        // Validate coordinates if provided
-        if (updateData.latitude && (updateData.latitude < -90 || updateData.latitude > 90)) {
-            return res.status(400).json({
-                error: "Invalid latitude",
-                message: "Latitude must be between -90 and 90"
-            });
-        }
-
-        if (updateData.longitude && (updateData.longitude < -180 || updateData.longitude > 180)) {
-            return res.status(400).json({
-                error: "Invalid longitude", 
-                message: "Longitude must be between -180 and 180"
-            });
-        }
-
-        const geofence = await prisma.organizationGeofence.update({
-            where: {
-                id: geofenceId,
-                orgId
-            },
-            data: {
-                ...updateData,
-                updatedAt: new Date()
-            }
+        const existingGeofence = await prisma.organizationGeofence.findFirst({
+            where: { id: geofenceId, orgId }
         });
+
+        if (!existingGeofence) {
+            return res.status(404).json({
+                error: "Geofence not found",
+                message: "The requested geofence does not exist"
+            });
+        }
+
+        const updatePayload = {};
+
+        if (name !== undefined) {
+            updatePayload.name = name;
+        }
+
+        if (type) {
+            updatePayload.type = type.toUpperCase();
+        }
+
+        if (shape) {
+            updatePayload.shape = shape.toUpperCase();
+        }
+
+        if (allowedDeviation !== undefined) {
+            updatePayload.allowedDeviation = toNumber(allowedDeviation);
+        }
+
+        if (strictMode !== undefined) {
+            updatePayload.strictMode = toBoolean(strictMode, existingGeofence.strictMode);
+        }
+
+        if (isActive !== undefined) {
+            updatePayload.isActive = toBoolean(isActive, existingGeofence.isActive);
+        }
+
+        if (radius !== undefined) {
+            updatePayload.radius = toNumber(radius);
+        }
+
+        if (description !== undefined) {
+            updatePayload.description = description;
+        }
+
+        let coordinatePayload = coordinates ? { ...coordinates } : undefined;
+
+        if (latitude !== undefined || longitude !== undefined) {
+            const latValue = toNumber(latitude);
+            const lngValue = toNumber(longitude);
+
+            if ((latValue !== undefined && (latValue < -90 || latValue > 90)) ||
+                (lngValue !== undefined && (lngValue < -180 || lngValue > 180))) {
+                return res.status(400).json({
+                    error: "Invalid coordinates",
+                    message: "Latitude must be between -90 and 90, longitude between -180 and 180"
+                });
+            }
+
+            if (latValue !== undefined && lngValue !== undefined) {
+                coordinatePayload = coordinatePayload || {};
+                coordinatePayload.center = {
+                    latitude: latValue,
+                    longitude: lngValue
+                };
+            }
+        }
+
+        const polygonCandidate = points || polygonPoints;
+        if (polygonCandidate) {
+            const manualPoints = normalizePolygonPointsFromRequest(polygonCandidate);
+            if (manualPoints.length < 3) {
+                return res.status(400).json({
+                    error: "Invalid polygon",
+                    message: "Polygon geofence requires at least 3 coordinate points"
+                });
+            }
+            coordinatePayload = coordinatePayload || {};
+            coordinatePayload.points = manualPoints;
+        }
+
+        if (address !== undefined) {
+            coordinatePayload = coordinatePayload || {};
+            coordinatePayload.address = address;
+        }
+
+        if (coordinatePayload) {
+            updatePayload.coordinates = coordinatePayload;
+        }
+
+        const geofence = await geofencingService.updateGeofence(geofenceId, updatePayload);
 
         res.status(200).json({
             success: true,
-            data: geofence,
+            data: formatGeofenceResponse(geofence),
             message: "Geofence updated successfully"
         });
     } catch (error) {
@@ -227,7 +418,7 @@ export const deleteGeofence = async (req, res) => {
 export const validateLocation = async (req, res) => {
     try {
         const { orgId } = req.params;
-        const { latitude, longitude, userId } = req.body;
+        const { latitude, longitude, userId, actionType } = req.body;
 
         if (req.user.orgId !== orgId) {
             return res.status(403).json({
@@ -235,21 +426,43 @@ export const validateLocation = async (req, res) => {
             });
         }
 
-        if (!latitude || !longitude) {
+        if (latitude === undefined || longitude === undefined) {
             return res.status(400).json({
                 error: "Missing location data",
                 message: "latitude and longitude are required"
             });
         }
 
-        const targetUserId = userId || req.user.id;
-        const location = { latitude: parseFloat(latitude), longitude: parseFloat(longitude) };
+        const latValue = toNumber(latitude);
+        const lngValue = toNumber(longitude);
 
-        const validationResult = await geofencingService.validateLocation(targetUserId, location);
+        if (latValue === undefined || lngValue === undefined ||
+            latValue < -90 || latValue > 90 || lngValue < -180 || lngValue > 180) {
+            return res.status(400).json({
+                error: "Invalid coordinates",
+                message: "Valid latitude and longitude are required"
+            });
+        }
+
+        const targetUserId = userId || req.user.id;
+
+        const validationResult = await geofencingService.validateLocation(
+            latValue,
+            lngValue,
+            orgId,
+            targetUserId,
+            actionType
+        );
 
         res.status(200).json({
             success: true,
-            data: validationResult
+            data: {
+                ...validationResult,
+                geofence: validationResult.geofence ? formatGeofenceResponse(validationResult.geofence) : null,
+                nearestGeofence: validationResult.nearestGeofence
+                    ? formatGeofenceResponse(validationResult.nearestGeofence)
+                    : null
+            }
         });
     } catch (error) {
         console.error('Error validating location:', error);
@@ -471,8 +684,8 @@ export const getGeofencingAnalytics = async (req, res) => {
  */
 export const getNearbyGeofences = async (req, res) => {
     try {
-        const { orgId } = req.params;
-        const { latitude, longitude, radius = 5000 } = req.query; // Default 5km radius
+    const { orgId } = req.params;
+    const { latitude, longitude, radius: radiusParam = 5000 } = req.query; // Default 5km radius
 
         if (req.user.orgId !== orgId) {
             return res.status(403).json({
@@ -480,16 +693,28 @@ export const getNearbyGeofences = async (req, res) => {
             });
         }
 
-        if (!latitude || !longitude) {
+        if (latitude === undefined || longitude === undefined) {
             return res.status(400).json({
                 error: "Missing location data",
                 message: "latitude and longitude are required"
             });
         }
 
-        const location = { 
-            latitude: parseFloat(latitude), 
-            longitude: parseFloat(longitude) 
+        const latValue = toNumber(latitude);
+        const lngValue = toNumber(longitude);
+        const searchRadius = toNumber(radiusParam) ?? 5000;
+
+        if (latValue === undefined || lngValue === undefined ||
+            latValue < -90 || latValue > 90 || lngValue < -180 || lngValue > 180) {
+            return res.status(400).json({
+                error: "Invalid coordinates",
+                message: "Valid latitude and longitude are required"
+            });
+        }
+
+        const location = {
+            latitude: latValue,
+            longitude: lngValue
         };
 
         const geofences = await prisma.organizationGeofence.findMany({
@@ -501,31 +726,54 @@ export const getNearbyGeofences = async (req, res) => {
 
         // Find nearby geofences
         const nearbyGeofences = geofences
-            .map(geofence => {
-                const coords = geofence.coordinates;
-                if (!coords || !coords.latitude || !coords.longitude) {
-                    return null;
+            .map((geofence) => {
+                const geometry = geofencingService.getGeofenceGeometry(geofence);
+                const validation = geofencingService.isWithinGeofence(latValue, lngValue, geofence);
+
+                let distanceFromLocation = Infinity;
+                let distanceToBoundary = Infinity;
+                let deviation = Infinity;
+                const metrics = { shape: geometry.shape };
+
+                if (geometry.shape === 'CIRCLE' && geometry.center) {
+                    const distanceToCenter = geofencingService.calculateDistance(location, geometry.center);
+                    distanceFromLocation = distanceToCenter;
+                    distanceToBoundary = Math.max(distanceToCenter - geometry.radius, 0);
+                    deviation = Math.max(distanceToCenter - geometry.effectiveRadius, 0);
+                    metrics.distanceToCenter = distanceToCenter;
+                    metrics.radius = geometry.radius;
+                    metrics.allowedRadius = geometry.effectiveRadius;
+                    metrics.allowedDeviation = geometry.allowedDeviation;
+                } else if (geometry.points && geometry.points.length >= 3) {
+                    const distanceToPolygon = geofencingService.distanceToPolygon(
+                        [latValue, lngValue],
+                        geometry.points
+                    );
+                    distanceFromLocation = distanceToPolygon;
+                    distanceToBoundary = distanceToPolygon;
+                    deviation = Math.max(distanceToPolygon - geometry.allowedDeviation, 0);
+                    metrics.distanceToEdge = distanceToPolygon;
+                    metrics.allowedDeviation = geometry.allowedDeviation;
                 }
-                
-                const distance = geofencingService.calculateDistance(
-                    location,
-                    { latitude: parseFloat(coords.latitude), longitude: parseFloat(coords.longitude) }
-                );
-                
+
                 return {
-                    ...geofence,
-                    distance: Math.round(distance),
-                    isWithin: distance <= parseFloat(geofence.radius || 100)
+                    geofence: formatGeofenceResponse(geofence),
+                    distanceFromLocation: Number.isFinite(distanceFromLocation) ? Math.round(distanceFromLocation) : Infinity,
+                    distanceToBoundary: Number.isFinite(distanceToBoundary) ? Math.round(distanceToBoundary) : Infinity,
+                    deviation: Number.isFinite(deviation) ? Math.max(Math.round(deviation), 0) : Infinity,
+                    isWithin: Boolean(validation.valid),
+                    validationDetails: validation.details || null,
+                    metrics
                 };
             })
-            .filter(geo => geo && geo.distance <= parseInt(radius))
-            .sort((a, b) => a.distance - b.distance);
+            .filter((entry) => Number.isFinite(entry.distanceFromLocation) && entry.distanceFromLocation <= searchRadius)
+            .sort((a, b) => a.distanceFromLocation - b.distanceFromLocation);
 
         res.status(200).json({
             success: true,
             data: {
                 location,
-                searchRadius: parseInt(radius),
+                searchRadius,
                 nearby: nearbyGeofences,
                 withinGeofences: nearbyGeofences.filter(geo => geo.isWithin)
             }
@@ -560,37 +808,77 @@ export const bulkImportGeofences = async (req, res) => {
             });
         }
 
-        // Validate each geofence
-        const validatedGeofences = geofences.map((geo, index) => {
-            if (!geo.name || !geo.type || !geo.latitude || !geo.longitude) {
-                throw new Error(`Invalid geofence at index ${index}: missing required fields`);
-            }
-            return {
-                orgId,
-                name: geo.name,
-                type: geo.type.toUpperCase(),
-                coordinates: {
-                    latitude: parseFloat(geo.latitude),
-                    longitude: parseFloat(geo.longitude),
-                    address: geo.address
-                },
-                radius: geo.radius || 100,
-                isActive: geo.isActive !== false
-            };
-        });
+        const createdGeofences = [];
 
-        const results = await prisma.organizationGeofence.createMany({
-            data: validatedGeofences,
-            skipDuplicates: true
-        });
+        for (let index = 0; index < geofences.length; index++) {
+            const geo = geofences[index];
+
+            if (!geo || !geo.name || !geo.type) {
+                throw new Error(`Invalid geofence at index ${index}: name and type are required`);
+            }
+
+            const normalizedType = geo.type.toUpperCase();
+            const normalizedShape = (geo.shape || geo.coordinates?.shape || (geo.radius !== undefined || geo.latitude !== undefined ? 'CIRCLE' : 'POLYGON'))
+                .toString()
+                .toUpperCase();
+
+            const coordinatePayload = { ...(geo.coordinates || {}) };
+
+            if (normalizedShape === 'CIRCLE') {
+                const latValue = toNumber(coordinatePayload?.center?.latitude ?? geo.latitude);
+                const lngValue = toNumber(coordinatePayload?.center?.longitude ?? geo.longitude);
+
+                if (latValue === undefined || lngValue === undefined) {
+                    throw new Error(`Invalid geofence at index ${index}: latitude and longitude are required for circular geofence`);
+                }
+
+                if (latValue < -90 || latValue > 90 || lngValue < -180 || lngValue > 180) {
+                    throw new Error(`Invalid geofence at index ${index}: latitude/longitude out of range`);
+                }
+
+                coordinatePayload.center = {
+                    latitude: latValue,
+                    longitude: lngValue
+                };
+            } else {
+                const manualPoints = normalizePolygonPointsFromRequest(
+                    coordinatePayload.points || geo.points || geo.polygonPoints
+                );
+
+                if (manualPoints.length < 3) {
+                    throw new Error(`Invalid geofence at index ${index}: polygon requires at least 3 points`);
+                }
+
+                coordinatePayload.points = manualPoints;
+            }
+
+            if (!coordinatePayload.address && geo.address) {
+                coordinatePayload.address = geo.address;
+            }
+
+            const created = await geofencingService.createGeofence(orgId, {
+                name: geo.name,
+                type: normalizedType,
+                shape: normalizedShape,
+                coordinates: coordinatePayload,
+                radius: normalizedShape === 'CIRCLE' ? toNumber(geo.radius) : undefined,
+                allowedDeviation: toNumber(geo.allowedDeviation),
+                strictMode: toBoolean(geo.strictMode, false),
+                isActive: toBoolean(geo.isActive, true),
+                description: geo.description
+            });
+
+            createdGeofences.push(created);
+        }
 
         res.status(201).json({
             success: true,
             data: {
-                imported: results.count,
-                total: geofences.length
+                imported: createdGeofences.length,
+                total: geofences.length,
+                geofences: createdGeofences.map(formatGeofenceResponse)
             },
-            message: `${results.count} geofences imported successfully`
+            message: `${createdGeofences.length} geofences imported successfully`
         });
     } catch (error) {
         console.error('Error bulk importing geofences:', error);
