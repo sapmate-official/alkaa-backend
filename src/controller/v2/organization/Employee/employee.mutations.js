@@ -33,6 +33,7 @@ const createEmployee = async (req, res) => {
             departmentId,
             roleIds,
             managerId,
+            salaryTemplateId,
         } = req.body.data;
         const orgId = req.body.orgId;
 
@@ -86,7 +87,8 @@ const createEmployee = async (req, res) => {
             managerId,
             email,
             employeeId,
-            roleIds
+            roleIds,
+            salaryTemplateId
         });
         const organizationValidation = await prisma.organization.findUnique({
             where:{
@@ -98,6 +100,20 @@ const createEmployee = async (req, res) => {
         })
         if(!organizationValidation){
             return res.status(400).json({ error: 'Organization not found' });
+        }
+
+        if (salaryTemplateId) {
+            const salaryTemplate = await prisma.salaryTemplate.findFirst({
+                where: {
+                    id: salaryTemplateId,
+                    orgId,
+                    isActive: true
+                }
+            });
+
+            if (!salaryTemplate) {
+                return res.status(400).json({ error: 'Invalid salary template selected' });
+            }
         }
 
         // Create user with nested creates for related data
@@ -120,6 +136,7 @@ const createEmployee = async (req, res) => {
                 status:'inactive',
                 annualPackage: annualPackage || 0,
                 monthlySalary: monthlySalary || 0,
+                salaryTemplateId: salaryTemplateId || null,
                 roles: {
                     create: roleIds?.map(roleId => ({
                         role: { connect: { id: roleId } }
@@ -135,7 +152,7 @@ const createEmployee = async (req, res) => {
                         }
                     }
                 } : {}),
-                ...(annualPackage || monthlySalary ? {
+                ...(!salaryTemplateId && (annualPackage || monthlySalary) ? {
                     salaryParameter: {
                         create: {
                             hraPercentage: hraPercentage ?? 40,

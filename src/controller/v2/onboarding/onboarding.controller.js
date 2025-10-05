@@ -1263,6 +1263,7 @@ export const completeOnboarding = [
     body('managerId').optional(),
     body('monthlySalary').optional().isNumeric().withMessage('Monthly salary must be a number'),
     body('annualPackage').optional().isNumeric().withMessage('Annual package must be a number'),
+    body('salaryTemplateId').optional().isString().withMessage('Salary template must be a string'),
 
     async (req, res) => {
         try {
@@ -1280,7 +1281,8 @@ export const completeOnboarding = [
                 roleId, 
                 managerId, 
                 monthlySalary, 
-                annualPackage 
+                annualPackage,
+                salaryTemplateId
             } = req.body;
 
             const candidate = await prisma.onboardingCandidate.findUnique({
@@ -1349,6 +1351,20 @@ export const completeOnboarding = [
 
             if (!role) {
                 return res.status(400).json({ error: 'Invalid role specified' });
+            }
+
+            if (salaryTemplateId) {
+                const salaryTemplate = await prisma.salaryTemplate.findFirst({
+                    where: {
+                        id: salaryTemplateId,
+                        orgId: candidate.orgId,
+                        isActive: true
+                    }
+                });
+
+                if (!salaryTemplate) {
+                    return res.status(400).json({ error: 'Invalid salary template specified' });
+                }
             }
 
             // Validate department if provided
@@ -1432,6 +1448,7 @@ export const completeOnboarding = [
                     status: 'inactive', // Same as createEmployee
                     annualPackage: annualPackage || 0,
                     monthlySalary: monthlySalary || 0,
+                    salaryTemplateId: salaryTemplateId || null,
                     roles: {
                         create: [{
                             role: { connect: { id: roleId } }
@@ -1450,7 +1467,7 @@ export const completeOnboarding = [
                         }
                     } : {}),
                     // Create salary parameters if salary is provided (same as createEmployee)
-                    ...(annualPackage || monthlySalary ? {
+                    ...(!salaryTemplateId && (annualPackage || monthlySalary) ? {
                         salaryParameter: {
                             create: {
                                 hraPercentage: 40,

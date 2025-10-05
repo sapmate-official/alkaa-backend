@@ -7,7 +7,9 @@ import {
     getPayslipDataForPDF,
     downloadPayslipAsPDF,
     checkMultiplePayslipStatus,
-    preStatsSalaryGeneration
+    preStatsSalaryGeneration,
+    getOrganizationPayslipHistory,
+    getOrganizationTaxSummaries
 } from "../../../controller/v3/Payroll/payroll.controller.js";
 
 // Import new cycle management controllers
@@ -104,7 +106,9 @@ import {
     initiatePayoutValidation,
     payoutSummaryValidation,
     disputeListQueryValidation,
-    disputeUpdateValidation
+    disputeUpdateValidation,
+    payslipHistoryQueryValidation,
+    taxSummaryQueryValidation
 } from "../../../controller/v3/Payroll/validators/newPayrollValidators.js";
 
 const router = e.Router();
@@ -121,6 +125,8 @@ router.get("/pdf-data/:salaryRecordId",validateToken, getPayslipDataForPDF);
 router.get("/download/:salaryRecordId",validateToken, downloadPayslipAsPDF);
 router.post("/check-multiple-status", validateToken, checkMultiplePayslipStatus);
 router.get("/pre-stats/:month/:year/:userId", validateToken, preStatsSalaryGeneration);
+router.get("/admin/payslip-history", validateToken, ...payslipHistoryQueryValidation, getOrganizationPayslipHistory);
+router.get("/admin/tax-summaries", validateToken, ...taxSummaryQueryValidation, getOrganizationTaxSummaries);
 
 // Cycle management routes
 router.get("/dashboard", validateToken, getPayrollDashboard);

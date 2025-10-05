@@ -51,6 +51,357 @@ export class PayrollService {
         return await prisma.salaryRecord.findMany(query);
     }
 
+    static async getOrganizationPayslipHistory(orgId, options = {}) {
+        const {
+            monthYearPairs = [],
+            statuses = [],
+            paymentStatuses = [],
+            search = '',
+            skip = 0,
+            take = 100
+        } = options;
+
+        const where = {
+            user: {
+                orgId
+            }
+        };
+
+        if (Array.isArray(statuses) && statuses.length > 0) {
+            where.status = {
+                in: statuses
+            };
+        }
+
+        if (Array.isArray(paymentStatuses) && paymentStatuses.length > 0) {
+            where.paymentStatus = {
+                in: paymentStatuses
+            };
+        }
+
+        const andConditions = [];
+
+        if (Array.isArray(monthYearPairs) && monthYearPairs.length > 0) {
+            andConditions.push({
+                OR: monthYearPairs.map(({ month, year }) => ({
+                    month,
+                    year
+                }))
+            });
+        }
+
+        const trimmedSearch = search?.trim();
+        if (trimmedSearch) {
+            andConditions.push({
+                OR: [
+                    { user: { firstName: { contains: trimmedSearch, mode: 'insensitive' } } },
+                    { user: { lastName: { contains: trimmedSearch, mode: 'insensitive' } } },
+                    { user: { employeeId: { contains: trimmedSearch, mode: 'insensitive' } } },
+                    { user: { department: { name: { contains: trimmedSearch, mode: 'insensitive' } } } }
+                ]
+            });
+        }
+
+        if (andConditions.length > 0) {
+            where.AND = andConditions;
+        }
+
+        const [records, total] = await prisma.$transaction([
+            prisma.salaryRecord.findMany({
+                where,
+                include: {
+                    user: {
+                        select: {
+                            firstName: true,
+                            lastName: true,
+                            employeeId: true,
+                            department: {
+                                select: {
+                                    name: true
+                                }
+                            },
+                            bankDetails: {
+                                select: {
+                                    accountNumber: true,
+                                    bankName: true,
+                                    ifscCode: true
+                                }
+                            }
+                        }
+                    }
+                },
+                orderBy: [
+                    { year: 'desc' },
+                    { month: 'desc' },
+                    { processedAt: 'desc' }
+                ],
+                skip,
+                take
+            }),
+            prisma.salaryRecord.count({ where })
+        ]);
+
+        return { records, total };
+    }
+
+    static async getOrganizationTaxSummaries(orgId, options = {}) {
+        const {
+            monthYearPairs = [],
+            statuses = [],
+            paymentStatuses = [],
+            departmentIds = [],
+            search = '',
+            minTax = null,
+            maxTax = null
+        } = options;
+
+        const userFilter = { orgId };
+
+        if (Array.isArray(departmentIds) && departmentIds.length > 0) {
+            userFilter.departmentId = { in: departmentIds };
+        }
+
+        const trimmedSearch = search?.trim();
+        if (trimmedSearch) {
+            userFilter.OR = [
+                { firstName: { contains: trimmedSearch, mode: 'insensitive' } },
+                { lastName: { contains: trimmedSearch, mode: 'insensitive' } },
+                { employeeId: { contains: trimmedSearch, mode: 'insensitive' } },
+                { department: { name: { contains: trimmedSearch, mode: 'insensitive' } } }
+            ];
+        }
+
+        const where = {
+            user: userFilter
+        };
+
+        if (Array.isArray(statuses) && statuses.length > 0) {
+            where.status = {
+                in: statuses
+            };
+        }
+
+        if (Array.isArray(paymentStatuses) && paymentStatuses.length > 0) {
+            where.paymentStatus = {
+                in: paymentStatuses
+            };
+        }
+
+        const andConditions = [];
+
+        if (Array.isArray(monthYearPairs) && monthYearPairs.length > 0) {
+            andConditions.push({
+                OR: monthYearPairs.map(({ month, year }) => ({
+                    month,
+                    year
+                }))
+            });
+        }
+
+        if (Number.isFinite(minTax) || Number.isFinite(maxTax)) {
+            const taxFilter = {};
+            if (Number.isFinite(minTax)) {
+                taxFilter.gte = minTax;
+            }
+            if (Number.isFinite(maxTax)) {
+                taxFilter.lte = maxTax;
+            }
+
+            where.tax = taxFilter;
+        }
+
+        if (andConditions.length > 0) {
+            where.AND = andConditions;
+        }
+
+        const records = await prisma.salaryRecord.findMany({
+            where,
+            select: {
+                id: true,
+                month: true,
+                year: true,
+                tax: true,
+                netSalary: true,
+                basicSalary: true,
+                paymentStatus: true,
+                status: true,
+                userId: true,
+                user: {
+                    select: {
+                        firstName: true,
+                        lastName: true,
+                        employeeId: true,
+                        department: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        }
+                    }
+                }
+            },
+            orderBy: [
+                { year: 'desc' },
+                { month: 'desc' }
+            ]
+        });
+
+        const totals = {
+            totalTax: 0,
+            totalNetSalary: 0,
+            totalGross: 0,
+            recordCount: 0,
+            uniqueEmployees: 0,
+            averageTaxPerEmployee: 0,
+            averageTaxPerRecord: 0
+        };
+
+        const uniqueEmployees = new Set();
+        const periodsMap = new Map();
+        const topEmployeesMap = new Map();
+        const departmentMap = new Map();
+        const paymentStatusBreakdown = {};
+        const statusBreakdown = {};
+
+        for (const record of records) {
+            const taxAmount = Number(record.tax ?? 0);
+            const netSalary = Number(record.netSalary ?? 0);
+            const grossSalary = Number(record.basicSalary ?? 0);
+            const paymentKey = record.paymentStatus ?? 'UNKNOWN';
+            const statusKey = record.status ?? 'UNKNOWN';
+
+            totals.totalTax += taxAmount;
+            totals.totalNetSalary += netSalary;
+            totals.totalGross += grossSalary;
+            totals.recordCount += 1;
+
+            uniqueEmployees.add(record.userId);
+
+            paymentStatusBreakdown[paymentKey] = (paymentStatusBreakdown[paymentKey] ?? 0) + 1;
+            statusBreakdown[statusKey] = (statusBreakdown[statusKey] ?? 0) + 1;
+
+            const periodKey = `${record.year}-${record.month}`;
+            let period = periodsMap.get(periodKey);
+            if (!period) {
+                period = {
+                    month: record.month,
+                    year: record.year,
+                    totalTax: 0,
+                    totalNetSalary: 0,
+                    totalGross: 0,
+                    recordCount: 0,
+                    employees: new Set(),
+                    paymentStatusBreakdown: {},
+                    statusBreakdown: {}
+                };
+                periodsMap.set(periodKey, period);
+            }
+
+            period.totalTax += taxAmount;
+            period.totalNetSalary += netSalary;
+            period.totalGross += grossSalary;
+            period.recordCount += 1;
+            period.employees.add(record.userId);
+            period.paymentStatusBreakdown[paymentKey] = (period.paymentStatusBreakdown[paymentKey] ?? 0) + 1;
+            period.statusBreakdown[statusKey] = (period.statusBreakdown[statusKey] ?? 0) + 1;
+
+            const employeeKey = record.userId;
+            const employeeName = `${record.user?.firstName ?? ''} ${record.user?.lastName ?? ''}`.trim() || record.user?.employeeId || record.userId;
+            let employee = topEmployeesMap.get(employeeKey);
+            if (!employee) {
+                employee = {
+                    userId: record.userId,
+                    employeeName,
+                    employeeId: record.user?.employeeId ?? null,
+                    departmentName: record.user?.department?.name ?? null,
+                    totalTax: 0,
+                    netSalary: 0,
+                    recordCount: 0
+                };
+                topEmployeesMap.set(employeeKey, employee);
+            }
+            employee.totalTax += taxAmount;
+            employee.netSalary += netSalary;
+            employee.recordCount += 1;
+
+            const departmentId = record.user?.department?.id ?? null;
+            const departmentName = record.user?.department?.name ?? 'Unassigned';
+            const departmentKey = departmentId ?? 'unassigned';
+            let department = departmentMap.get(departmentKey);
+            if (!department) {
+                department = {
+                    departmentId,
+                    departmentName,
+                    totalTax: 0,
+                    totalNetSalary: 0,
+                    totalGross: 0,
+                    recordCount: 0,
+                    employees: new Set()
+                };
+                departmentMap.set(departmentKey, department);
+            }
+
+            department.totalTax += taxAmount;
+            department.totalNetSalary += netSalary;
+            department.totalGross += grossSalary;
+            department.recordCount += 1;
+            department.employees.add(record.userId);
+        }
+
+        const periods = Array.from(periodsMap.values())
+            .map((period) => ({
+                month: period.month,
+                year: period.year,
+                totalTax: period.totalTax,
+                totalNetSalary: period.totalNetSalary,
+                totalGross: period.totalGross,
+                recordCount: period.recordCount,
+                employeeCount: period.employees.size,
+                averageTax: period.recordCount > 0 ? period.totalTax / period.recordCount : 0,
+                paymentStatusBreakdown: period.paymentStatusBreakdown,
+                statusBreakdown: period.statusBreakdown
+            }))
+            .sort((a, b) => {
+                if (a.year === b.year) {
+                    return b.month - a.month;
+                }
+                return b.year - a.year;
+            });
+
+        const departmentBreakdown = Array.from(departmentMap.values())
+            .map((department) => ({
+                departmentId: department.departmentId,
+                departmentName: department.departmentName,
+                totalTax: department.totalTax,
+                totalNetSalary: department.totalNetSalary,
+                totalGross: department.totalGross,
+                recordCount: department.recordCount,
+                employeeCount: department.employees.size,
+                averageTax: department.recordCount > 0 ? department.totalTax / department.recordCount : 0
+            }))
+            .sort((a, b) => b.totalTax - a.totalTax);
+
+        const topEmployees = Array.from(topEmployeesMap.values())
+            .map((employee) => ({
+                ...employee,
+                averageTax: employee.recordCount > 0 ? employee.totalTax / employee.recordCount : 0
+            }))
+            .sort((a, b) => b.totalTax - a.totalTax);
+
+        totals.uniqueEmployees = uniqueEmployees.size;
+        totals.averageTaxPerEmployee = totals.uniqueEmployees > 0 ? totals.totalTax / totals.uniqueEmployees : 0;
+        totals.averageTaxPerRecord = totals.recordCount > 0 ? totals.totalTax / totals.recordCount : 0;
+
+        return {
+            periods,
+            totals,
+            topEmployees: topEmployees.slice(0, 10),
+            departmentBreakdown,
+            paymentStatusBreakdown,
+            statusBreakdown
+        };
+    }
+
     /**
      * Generate salary for a user
      */

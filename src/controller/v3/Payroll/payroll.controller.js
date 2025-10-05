@@ -1,3 +1,4 @@
+import { validationResult } from "express-validator";
 import { PayrollService } from "./services/payrollService.js";
 import { PayrollCycleService } from "./services/payrollCycleService.js";
 import { PayslipPDFGenerator } from "./services/pdfGenerator.js";
@@ -60,6 +61,231 @@ export const getPaySlipBasedOnParams = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Failed to fetch payslips",
+            error: error.message
+        });
+    }
+};
+
+export const getOrganizationPayslipHistory = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(422).json({
+            success: false,
+            message: "Invalid query parameters",
+            errors: errors.array()
+        });
+    }
+
+    try {
+        const currentUserId = req.user?.id;
+        const orgId = req.user?.orgId;
+
+        if (!orgId) {
+            return res.status(400).json({
+                success: false,
+                message: "Organization context is required to fetch payslip history"
+            });
+        }
+
+        const canViewAll = await PayrollPermissions.canViewOrganizationPayslips(currentUserId);
+        if (!canViewAll) {
+            return res.status(403).json({
+                success: false,
+                message: "You do not have permission to view organization payslip history"
+            });
+        }
+
+        const rawMonths = parseInt(req.query?.months, 10);
+        const months = Number.isFinite(rawMonths) ? Math.min(Math.max(rawMonths, 1), 24) : 6;
+
+        const rawPage = parseInt(req.query?.page, 10);
+        const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+
+        const rawPageSize = parseInt(req.query?.pageSize, 10);
+        const pageSize = Number.isFinite(rawPageSize) && rawPageSize > 0 ? Math.min(rawPageSize, 500) : 100;
+
+        const statusFilter = req.query?.status
+            ? String(req.query.status)
+                  .split(',')
+                  .map((entry) => entry.trim().toUpperCase())
+                  .filter(Boolean)
+            : [];
+
+        const paymentStatusFilter = req.query?.paymentStatus
+            ? String(req.query.paymentStatus)
+                  .split(',')
+                  .map((entry) => entry.trim().toUpperCase())
+                  .filter(Boolean)
+            : [];
+
+        const searchTerm = req.query?.search ? PayrollValidators.sanitizeInput(String(req.query.search)) : '';
+
+        const now = new Date();
+        const monthYearPairs = [];
+        for (let index = 0; index < months; index += 1) {
+            const cursor = new Date(now.getFullYear(), now.getMonth() - index, 1);
+            monthYearPairs.push({
+                month: cursor.getMonth() + 1,
+                year: cursor.getFullYear()
+            });
+        }
+
+        const { records, total } = await PayrollService.getOrganizationPayslipHistory(orgId, {
+            monthYearPairs,
+            statuses: statusFilter,
+            paymentStatuses: paymentStatusFilter,
+            search: searchTerm,
+            skip: (page - 1) * pageSize,
+            take: pageSize
+        });
+
+        const formatted = formatPayslipData(records);
+
+        const summary = formatted.reduce(
+            (acc, record) => {
+                acc.total += 1;
+                const statusKey = record.status || 'UNKNOWN';
+                acc.byStatus[statusKey] = (acc.byStatus[statusKey] ?? 0) + 1;
+                const paymentKey = record.paymentStatus || 'UNKNOWN';
+                acc.byPaymentStatus[paymentKey] = (acc.byPaymentStatus[paymentKey] ?? 0) + 1;
+                return acc;
+            },
+            { total: 0, byStatus: {}, byPaymentStatus: {} }
+        );
+
+        return res.status(200).json({
+            success: true,
+            data: formatted,
+            meta: {
+                page,
+                pageSize,
+                total,
+                totalPages: Math.ceil(total / pageSize) || 0,
+                months
+            },
+            summary
+        });
+    } catch (error) {
+        console.error("Error fetching organization payslip history:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch organization payslip history",
+            error: error.message
+        });
+    }
+};
+
+export const getOrganizationTaxSummaries = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(422).json({
+            success: false,
+            message: "Invalid query parameters",
+            errors: errors.array()
+        });
+    }
+
+    try {
+        const currentUserId = req.user?.id;
+        const orgId = req.user?.orgId;
+
+        if (!orgId) {
+            return res.status(400).json({
+                success: false,
+                message: "Organization context is required to generate tax summaries"
+            });
+        }
+
+        const canView = await PayrollPermissions.canViewOrganizationTaxSummaries(currentUserId);
+        if (!canView) {
+            return res.status(403).json({
+                success: false,
+                message: "You do not have permission to view organization tax summaries"
+            });
+        }
+
+        const rawMonths = parseInt(req.query?.months, 10);
+        const months = Number.isFinite(rawMonths) ? Math.min(Math.max(rawMonths, 1), 24) : 6;
+
+        const parseCommaSeparated = (value) =>
+            String(value)
+                .split(',')
+                .map((entry) => entry.trim().toUpperCase())
+                .filter(Boolean);
+
+        const statusFilter = req.query?.status ? parseCommaSeparated(req.query.status) : [];
+        const paymentStatusFilter = req.query?.paymentStatus ? parseCommaSeparated(req.query.paymentStatus) : [];
+
+        const departmentIds = req.query?.departmentIds
+            ? String(req.query.departmentIds)
+                  .split(',')
+                  .map((entry) => entry.trim())
+                  .filter(Boolean)
+            : [];
+
+        const searchTerm = req.query?.search ? PayrollValidators.sanitizeInput(String(req.query.search)) : '';
+
+        const rawMinTax = Number.parseFloat(req.query?.minTax);
+        const minTax = Number.isFinite(rawMinTax) ? Math.max(rawMinTax, 0) : null;
+
+        const rawMaxTax = Number.parseFloat(req.query?.maxTax);
+        const maxTax = Number.isFinite(rawMaxTax) ? Math.max(rawMaxTax, 0) : null;
+
+        if (minTax !== null && maxTax !== null && maxTax < minTax) {
+            return res.status(422).json({
+                success: false,
+                message: "maxTax cannot be less than minTax"
+            });
+        }
+
+        const now = new Date();
+        const monthYearPairs = [];
+        for (let index = 0; index < months; index += 1) {
+            const cursor = new Date(now.getFullYear(), now.getMonth() - index, 1);
+            monthYearPairs.push({
+                month: cursor.getMonth() + 1,
+                year: cursor.getFullYear()
+            });
+        }
+
+        const summaries = await PayrollService.getOrganizationTaxSummaries(orgId, {
+            monthYearPairs,
+            statuses: statusFilter,
+            paymentStatuses: paymentStatusFilter,
+            departmentIds,
+            search: searchTerm,
+            minTax,
+            maxTax
+        });
+
+        const rangeStart = monthYearPairs[monthYearPairs.length - 1] ?? null;
+        const rangeEnd = monthYearPairs[0] ?? null;
+
+        return res.status(200).json({
+            success: true,
+            data: summaries,
+            meta: {
+                months,
+                filters: {
+                    statuses: statusFilter,
+                    paymentStatuses: paymentStatusFilter,
+                    departmentIds,
+                    search: searchTerm || null,
+                    minTax,
+                    maxTax
+                },
+                range: {
+                    from: rangeStart,
+                    to: rangeEnd
+                }
+            },
+            generatedAt: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error("Error fetching organization tax summaries:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch organization tax summaries",
             error: error.message
         });
     }
