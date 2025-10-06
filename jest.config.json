@@ -1,0 +1,17 @@
+{
+  "type": "module",
+  "testEnvironment": "node",
+  "transform": {},
+  "extensionsToTreatAsEsm": [".js"],
+  "globals": {
+    "NODE_ENV": "test"
+  },
+  "testMatch": [
+    "**/tests/**/*.test.js"
+  ],
+  "collectCoverageFrom": [
+    "src/**/*.js",
+    "!src/**/*.test.js"
+  ],
+  "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"]
+}

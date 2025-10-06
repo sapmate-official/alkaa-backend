@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'url';
 import path from 'path';
 import prisma from '../db/connectDb.js';
-import { format, addDays, isBefore } from 'date-fns';
+import { format, addDays, isBefore, isSameDay } from 'date-fns';
 
 /**
  * Seeds attendance records for a user for specified date range.
@@ -29,7 +29,7 @@ export async function seedPastAttendance({
   skipWeekends = true,
   defaultTasks = ["Completed assigned tasks", "Team meeting", "Documentation"]
 }) {
-  let weekendDays = [5]; // Default: Sunday, Saturday
+  let weekendDays = [0, 6]; // Default: Sunday, Saturday
 
   if (skipWeekends) {
     try {
@@ -39,7 +39,8 @@ export async function seedPastAttendance({
       });
       if (user) {
         const orgSettings = await prisma.organizationSettings.findFirst({
-          where: { orgId: user.orgId }
+          where: { orgId: user.orgId },
+          select: { settings: true }
         });
         if (orgSettings?.settings?.weekendDays) {
           weekendDays = orgSettings.settings.weekendDays;
@@ -53,44 +54,78 @@ export async function seedPastAttendance({
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const seedEndDate = endDate || new Date(today.setDate(today.getDate() - 1));
+  const seedEndDate = endDate || new Date(today.getTime() - 24 * 60 * 60 * 1000); // Yesterday
 
-  if (isBefore(seedEndDate, startDate)) {
-    console.error("End date must be after start date");
+  // Allow same start and end date for single day seeding
+  if (isBefore(seedEndDate, startDate) && !isSameDay(startDate, seedEndDate)) {
+    console.error("End date must be after or equal to start date");
     return;
   }
 
-  const locationString = `${latitude},${longitude}`;
+  const locationData = { latitude, longitude };
   let currentDate = new Date(startDate);
 
-  while (isBefore(currentDate, seedEndDate) || currentDate.getTime() === seedEndDate.getTime()) {
+  // Handle single day case
+  const shouldContinue = isSameDay(startDate, seedEndDate) 
+    ? () => isSameDay(currentDate, startDate)
+    : () => isBefore(currentDate, seedEndDate) || isSameDay(currentDate, seedEndDate);
+
+  while (shouldContinue()) {
     const dayOfWeek = currentDate.getDay();
     if (skipWeekends && weekendDays.includes(dayOfWeek)) {
+      if (isSameDay(startDate, seedEndDate)) break; // Don't skip single day even if weekend
       currentDate = addDays(currentDate, 1);
       continue;
     }
 
     const formattedDate = format(currentDate, 'yyyy-MM-dd');
+    const attendanceDate = new Date(currentDate);
+    attendanceDate.setHours(0, 0, 0, 0);
+
+    // Check for existing record
+    try {
+      const existingRecord = await prisma.attendanceRecord.findUnique({
+        where: {
+          userId_date_sessionNumber: {
+            userId,
+            date: attendanceDate,
+            sessionNumber: 1
+          }
+        }
+      });
+
+      if (existingRecord) {
+        console.log(`⚠ Skipping ${formattedDate} (already exists)`);
+        if (isSameDay(startDate, seedEndDate)) break;
+        currentDate = addDays(currentDate, 1);
+        continue;
+      }
+    } catch (error) {
+      console.error(`Error checking existing record for ${formattedDate}:`, error.message);
+      if (isSameDay(startDate, seedEndDate)) break;
+      currentDate = addDays(currentDate, 1);
+      continue;
+    }
+
     const [checkInHours, checkInMinutes] = checkInTime.split(':');
-    const checkInDateTime = new Date(currentDate);
+    const checkInDateTime = new Date(attendanceDate);
     checkInDateTime.setHours(parseInt(checkInHours, 10), parseInt(checkInMinutes, 10), 0);
 
     const [checkOutHours, checkOutMinutes] = checkOutTime.split(':');
-    const checkOutDateTime = new Date(currentDate);
+    const checkOutDateTime = new Date(attendanceDate);
     checkOutDateTime.setHours(parseInt(checkOutHours, 10), parseInt(checkOutMinutes, 10), 0);
 
-    const durationMs = checkOutDateTime.getTime() - checkInDateTime.getTime();
-    const hours = durationMs / (1000 * 60 * 60);
-    const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+    const durationMs = Math.max(0, checkOutDateTime.getTime() - checkInDateTime.getTime());
+    const totalMinutes = Math.round(durationMs / (1000 * 60));
     const sessionDuration = {
-      hours,
-      minutes,
-      totalMinutes: Math.floor(hours * 60 + minutes)
+      hours: Math.floor(totalMinutes / 60),
+      minutes: totalMinutes % 60,
+      totalMinutes
     };
 
     let status = 'PRESENT';
-    if (hours < 8) {
-      status = hours >= 4 ? 'HALF_DAY' : 'EARLY_DEPARTURE';
+    if (sessionDuration.totalMinutes < 480) {
+      status = sessionDuration.totalMinutes >= 240 ? 'HALF_DAY' : 'EARLY_DEPARTURE';
     }
 
     const reportData = {};
@@ -102,12 +137,12 @@ export async function seedPastAttendance({
       const attendanceRecord = await prisma.attendanceRecord.create({
         data: {
           userId,
-          date: new Date(formattedDate),
+          date: attendanceDate,
           sessionNumber: 1,
           checkInTime: checkInDateTime,
           checkOutTime: checkOutDateTime,
-          checkInLocation: locationString,
-          checkOutLocation: locationString,
+          checkInLocation: locationData,
+          checkOutLocation: locationData,
           status,
           notes: notes || `Backfilled attendance for ${formattedDate}`,
           duration: sessionDuration,
@@ -129,15 +164,16 @@ export async function seedPastAttendance({
       console.error(`✗ Failed for ${formattedDate}: ${error.message}`);
     }
 
+    if (isSameDay(startDate, seedEndDate)) break;
     currentDate = addDays(currentDate, 1);
   }
 }
 
 
 await seedPastAttendance({
-  userId: 'cm7ur350j0042p8ujvrk4jlfv',
-  startDate: new Date('2025-04-01'),
-  endDate: new Date('2025-04-30'),
-  latitude: 22.599190906390163,
-  longitude: 88.29336005463968
+  userId: 'cme1mypsa00cqr4vbfs90opd3',
+  startDate: new Date('2025-09-16'),
+  endDate: new Date('2025-09-26'),
+  latitude: 13.1011629,
+  longitude: 77.6318278
 });

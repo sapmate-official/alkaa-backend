@@ -83,6 +83,422 @@ export class PayrollPermissions {
         return await this.canViewStatistics(currentUserId, salaryRecord);
     }
 
+    // New cycle management permissions
+    static async canCreatePayrollCycle(currentUserId) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "create_payroll_cycle"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        // Fallback to admin permission
+        if (!hasPermission) {
+            return await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canStartPayrollCycle(currentUserId, cycleId = null) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "start_payroll_cycle"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        // Fallback to admin permission
+        if (!hasPermission) {
+            return await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canApprovePayrollCycle(currentUserId, cycleId = null) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "approve_payroll_cycle"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        // Fallback to admin permission
+        if (!hasPermission) {
+            return await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canDeletePayrollCycle(currentUserId, cycleId = null) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "delete_payroll_cycle"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!hasPermission) {
+            return await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canSubmitPayrollCycle(currentUserId, cycleId = null) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "submit_payroll_cycle"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!hasPermission) {
+            return !!(await this.hasAdminPermission(currentUserId) || await this.hasManagerPermission(currentUserId));
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canViewPayrollCycles(currentUserId) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "view_payroll_cycles"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        // Fallback to basic payroll permission
+        if (!hasPermission) {
+            return await this.hasBasicPayrollPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canViewPayrollCycleDetails(currentUserId, cycleId) {
+        // Same as viewing cycles for now
+        return await this.canViewPayrollCycles(currentUserId);
+    }
+
+    static async canReviewPayrollCycles(currentUserId) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "review_payroll_cycles"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        // Fallback to manager/admin permission
+        if (!hasPermission) {
+            return await this.hasManagerPermission(currentUserId) || await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canViewPayrollStatistics(currentUserId) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "view_payroll_statistics"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        // Fallback to manager/admin permission
+        if (!hasPermission) {
+            return await this.hasManagerPermission(currentUserId) || await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canViewOrganizationPayslips(currentUserId) {
+        const hasGlobalPermission = await this.hasPermissionKeys(currentUserId, ["view_salary_slip_of_all"]);
+        if (hasGlobalPermission) {
+            return true;
+        }
+
+        return !!(await this.hasAdminPermission(currentUserId));
+    }
+
+    static async canViewOrganizationTaxSummaries(currentUserId) {
+        return await this.canViewOrganizationPayslips(currentUserId);
+    }
+
+    static async canInitiatePayout(currentUserId, cycleId = null) {
+        const hasGlobalPermission = await this.hasPermissionKeys(currentUserId, ["send_salary_to_all"]);
+        if (hasGlobalPermission) {
+            return true;
+        }
+
+        if (cycleId) {
+            const cycle = await prisma.payrollCycle.findUnique({
+                where: { id: cycleId },
+                select: { orgId: true }
+            });
+
+            if (!cycle) {
+                return false;
+            }
+        }
+
+        return !!(await this.hasAdminPermission(currentUserId));
+    }
+
+    static async canProcessPayment(currentUserId, targetUserId) {
+        if (currentUserId === targetUserId) {
+            return !!(await this.hasPermissionKeys(currentUserId, ["send_salary_to_myself"]));
+        }
+
+        const hasGlobalPermission = await this.hasPermissionKeys(currentUserId, ["send_salary_to_all"]);
+        if (hasGlobalPermission) {
+            return true;
+        }
+
+        const hasSubordinatePermission = await this.hasPermissionKeys(currentUserId, ["send_salary_to_subordinates"]);
+        if (!hasSubordinatePermission) {
+            return false;
+        }
+
+        const isManagerOfTarget = await prisma.user.findFirst({
+            where: {
+                id: targetUserId,
+                managerId: currentUserId
+            }
+        });
+
+        return !!isManagerOfTarget;
+    }
+
+    static async canProcessSalaryPayment(currentUserId, salaryRecordId) {
+        const salaryRecord = await prisma.salaryRecord.findUnique({
+            where: { id: salaryRecordId },
+            select: { userId: true }
+        });
+
+        if (!salaryRecord) {
+            return false;
+        }
+
+        return await this.canProcessPayment(currentUserId, salaryRecord.userId);
+    }
+
+    static async canBulkGenerateSalaries(currentUserId) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "bulk_generate_salaries"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        // Fallback to admin permission
+        if (!hasPermission) {
+            return await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canViewAllDisputes(currentUserId) {
+        const hasExplicitPermission = await this.hasPermissionKeys(currentUserId, ["view_salary_disputes_all"]);
+        if (hasExplicitPermission) {
+            return true;
+        }
+
+        return !!(await this.hasAdminPermission(currentUserId));
+    }
+
+    static async canManageAllDisputes(currentUserId) {
+        const hasExplicitPermission = await this.hasPermissionKeys(currentUserId, [
+            "manage_salary_disputes_all",
+            "resolve_salary_disputes_all"
+        ]);
+
+        if (hasExplicitPermission) {
+            return true;
+        }
+
+        return !!(await this.hasAdminPermission(currentUserId));
+    }
+
+    static async canViewTeamDisputes(currentUserId) {
+        const hasTeamPermission = await this.hasPermissionKeys(currentUserId, ["view_salary_disputes_team"]);
+        if (hasTeamPermission) {
+            return true;
+        }
+
+        return !!(await this.hasManagerPermission(currentUserId));
+    }
+
+    static async canManageTeamDisputes(currentUserId) {
+        const hasTeamPermission = await this.hasPermissionKeys(currentUserId, [
+            "manage_salary_disputes_team",
+            "resolve_salary_disputes_team"
+        ]);
+
+        if (hasTeamPermission) {
+            return true;
+        }
+
+        if (await this.hasManagerPermission(currentUserId)) {
+            return true;
+        }
+
+        return !!(await this.hasAdminPermission(currentUserId));
+    }
+
+    /**
+     * Helper method to check basic payroll permission
+     */
+    static async hasBasicPayrollPermission(currentUserId) {
+        return await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "access_payroll"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    static async hasPermissionKeys(currentUserId, permissionKeys = []) {
+        if (!permissionKeys || permissionKeys.length === 0) {
+            return null;
+        }
+
+        return await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: {
+                        in: permissionKeys
+                    }
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Helper method to check manager permission
+     */
+    static async hasManagerPermission(currentUserId) {
+        // Check if user is a manager (has subordinates)
+        const hasSubordinates = await prisma.user.findFirst({
+            where: {
+                managerId: currentUserId
+            }
+        });
+
+        return !!hasSubordinates;
+    }
+
+    /**
+     * Helper method to check admin permission
+     */
+    static async hasAdminPermission(currentUserId) {
+        return await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: "admin_access"
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     // Private helper methods
     static async hasSelfPayslipPermission(userId) {
         const hasSelfPermission = await prisma.rolePermission.findFirst({
@@ -318,5 +734,75 @@ export class PayrollValidators {
         }
 
         return file;
+    }
+
+    // Pipeline-specific permissions
+    static async canViewPayrollRecords(currentUserId, orgId) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: { in: ["view_all_payroll", "manage_payroll", "generate_salary_of_all"] }
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!hasPermission) {
+            return await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canApprovePayrollRecords(currentUserId, orgId) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: { in: ["approve_payroll_cycle", "manage_payroll", "generate_salary_of_all"] }
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!hasPermission) {
+            return await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canEditPayrollRecords(currentUserId, orgId) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: { in: ["manage_payroll", "generate_salary_of_all", "edit_payroll"] }
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!hasPermission) {
+            return await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
     }
 }

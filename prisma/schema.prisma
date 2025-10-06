@@ -18,17 +18,16 @@ model SuperAdmin {
 }
 
 model Organization {
-  id                    String                 @id @default(cuid())
+  id                    String                        @id @default(cuid())
   name                  String
   industry              String?
   logo                  String?
   address               String?
-  timezone              String?                @default("UTC")
-  subscriptionStart     DateTime               @default(now())
+  subscriptionStart     DateTime                      @default(now())
   subscriptionEnd       DateTime?
-  isActive              Boolean                @default(true)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  isActive              Boolean                       @default(true)
+  createdAt             DateTime                      @default(now())
+  updatedAt             DateTime                      @updatedAt
   settings              Json?
   subscriptionPlanId    String?
   activityLogs          ActivityLog[]
@@ -39,15 +38,26 @@ model Organization {
   leaveTypes            LeaveType[]
   notificationTemplates NotificationTemplate[]
   onboardingCandidates  OnboardingCandidate[]
-  subscriptionPlan      SubscriptionPlan?      @relation(fields: [subscriptionPlanId], references: [id])
+  subscriptionPlan      SubscriptionPlan?             @relation(fields: [subscriptionPlanId], references: [id])
+  attendanceRules       OrganizationAttendanceRules[]
+  breakRules            OrganizationBreakRules[]
+  overtimeRules         OrganizationOvertimeRule[]
+  geofences             OrganizationGeofence[]
   OrganizationSettings  OrganizationSettings[]
   Organization_admin    Organization_admin[]
   PermissionPreset      PermissionPreset[]
   roles                 Role[]
-  users                 User[]
+  shiftTemplates        ShiftTemplate[]
   tasks                 Task[]
   taskGroups            TaskGroup[]
-  birthdayEmailLogs     BirthdayEmailLog[]
+  trackingSessions      TrackingSession[]
+  users                 User[]
+  payrollTemplates      PayrollTemplate[]
+  payrollCycles         PayrollCycle[]
+  salaryTemplates       SalaryTemplate[]
+  calculationRules      CalculationRule[]
+  workflowSteps         WorkflowStep[]
+  salaryRecords         SalaryRecord[]
 }
 
 model Organization_admin {
@@ -77,30 +87,27 @@ model Department {
   organization         Organization          @relation(fields: [orgId], references: [id])
   parentDepartment     Department?           @relation("DepartmentHierarchy", fields: [parentId], references: [id])
   subDepartments       Department[]          @relation("DepartmentHierarchy")
-  users                User[]                @relation("UserDepartment")
   onboardingCandidates OnboardingCandidate[]
-  // NEW: Multi-department relations
+  users                User[]                @relation("UserDepartment")
   userDepartments      UserDepartment[]
 
   @@unique([orgId, name])
   @@unique([orgId, code])
 }
 
-// NEW: Multi-department junction table
 model UserDepartment {
-  id           String   @id @default(cuid())
-  userId       String
-  departmentId String
-  isPrimary    Boolean  @default(false)
-  assignedAt   DateTime @default(now())
-  assignedBy   String?
-  role         String? // Role within this specific department
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  id             String     @id @default(cuid())
+  userId         String
+  departmentId   String
+  isPrimary      Boolean    @default(false)
+  assignedAt     DateTime   @default(now())
+  assignedBy     String?
+  role           String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
   assignedByUser User?      @relation("DepartmentAssignments", fields: [assignedBy], references: [id])
+  department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, departmentId])
   @@index([userId])
@@ -170,70 +177,84 @@ model RolePermission {
 }
 
 model User {
-  id                           String                @id @default(cuid())
+  id                           String                      @id @default(cuid())
   orgId                        String
   departmentId                 String?
   managerId                    String?
   email                        String
   hashedPassword               String?
   refreshToken                 String?
-  status                       UserStatus            @default(active)
-  verificationToken            String?               @unique
-  verificationTokenExpiry      DateTime?
-  annualPackage                Float?                @default(0.0)
-  monthlySalary                Float?                @default(0.0)
-  hiredDate                    DateTime?             @default(now())
+  status                       UserStatus                  @default(active)
+  verificationToken            String?                     @unique
+  annualPackage                Float?                      @default(0.0)
+  monthlySalary                Float?                      @default(0.0)
+  hiredDate                    DateTime?                   @default(now())
   dateOfBirth                  DateTime?
   address                      String?
   adharNumber                  String?
   panNumber                    String?
   mobileNumber                 String?
-  createdAt                    DateTime              @default(now())
-  updatedAt                    DateTime              @updatedAt
-  employeeId                   String                @unique @default(cuid())
+  createdAt                    DateTime                    @default(now())
+  updatedAt                    DateTime                    @updatedAt
+  employeeId                   String                      @unique @default(cuid())
   terminationDate              DateTime?
-  firstName                    String?               @default("unknown")
-  lastName                     String?               @default("unknown")
+  firstName                    String?                     @default("unknown")
+  lastName                     String?                     @default("unknown")
   emergencyContact             String?
-  twoFactorEnabled             Boolean               @default(false)
-  loginNotificationsEnabled    Boolean               @default(true)
-  activityLogs                 ActivityLog[]         @relation("ActivityActor")
-  targetedActivities           ActivityLog[]         @relation("ActivityTarget")
+  verificationTokenExpiry      DateTime?
+  loginNotificationsEnabled    Boolean                     @default(true)
+  twoFactorEnabled             Boolean                     @default(false)
+  activityLogs                 ActivityLog[]               @relation("ActivityActor")
+  targetedActivities           ActivityLog[]               @relation("ActivityTarget")
+  attendanceAlerts             AttendanceAlert[]
   attendanceRecords            AttendanceRecord[]
+  approvedViolations           AttendanceRuleViolation[]   @relation("ViolationApprover")
   bankDetails                  BankDetails?
-  createdOnboardingCandidates  OnboardingCandidate[] @relation("CreatedCandidates")
-  reviewedOnboardingCandidates OnboardingCandidate[] @relation("ReviewedCandidates")
-  managedCandidates            OnboardingCandidate[] @relation("CandidateManager")
-  Department                   Department[]          @relation("DepartmentHead")
+  approvedBreaks               BreakRecord[]               @relation("BreakApprover")
+  breakRecords                 BreakRecord[]
+  Department                   Department[]                @relation("DepartmentHead")
+  emailOtpVerifications        EmailOtpVerification[]
+  employeeShifts               EmployeeShift[]
+  geofenceViolations           GeofenceViolation[]
   leaveBalances                LeaveBalance[]
   leaveRequests                LeaveRequest[]
   notifications                Notification[]
+  createdOnboardingCandidates  OnboardingCandidate[]       @relation("CreatedCandidates")
+  managedCandidates            OnboardingCandidate[]       @relation("CandidateManager")
+  reviewedOnboardingCandidates OnboardingCandidate[]       @relation("ReviewedCandidates")
   Organization_admin           Organization_admin[]
+  penaltyHistory               ProgressivePenaltyHistory[]
   PushSubscription             PushSubscription[]
   salaryParameter              SalaryParameter?
   salaryRecords                SalaryRecord[]
-  receivedTransactions         TransactionTable[]    @relation("ReceiverTransaction")
-  sentTransactions             TransactionTable[]    @relation("SenderTransaction")
-  department                   Department?           @relation("UserDepartment", fields: [departmentId], references: [id])
-  manager                      User?                 @relation("UserManager", fields: [managerId], references: [id])
-  subordinates                 User[]                @relation("UserManager")
-  organization                 Organization          @relation(fields: [orgId], references: [id])
-  roles                        UserRole[]
-  // NEW: Multi-department relations
-  userDepartments              UserDepartment[]
-  assignedDepartments          UserDepartment[]      @relation("DepartmentAssignments")
-  // Task Management relations
-  createdTasks                 Task[]                @relation("TaskCreator")
-  createdTaskGroups            TaskGroup[]           @relation("TaskGroupCreator")
-  assignedTasks                TaskAssignment[]      @relation("TaskAssignee")
-  assignedToTasks              TaskAssignment[]      @relation("TaskAssigner")
-  taskUpdates                  TaskUpdate[]          @relation("TaskUpdater")
-  taskGroupMemberships         TaskGroupMember[]     @relation("TaskGroupMemberships")
-  addedGroupMembers            TaskGroupMember[]     @relation("TaskGroupMemberAdder")
-  // OTP and Session Management relations
-  emailOtpVerifications        EmailOtpVerification[]
+  processedPayrollCycles       PayrollCycle[]             @relation("PayrollCycleProcessor")
+  approvedPayrollCycles        PayrollCycle[]             @relation("PayrollCycleApprover")
+  initiatedPayrollPayouts      PayrollCycle[]             @relation("PayrollCyclePayoutInitiator")
+  payrollCycleAuditEntries     PayrollCycleAudit[]        @relation("PayrollCycleAuditActor")
+  createdTasks                 Task[]                      @relation("TaskCreator")
+  assignedToTasks              TaskAssignment[]            @relation("TaskAssigner")
+  assignedTasks                TaskAssignment[]            @relation("TaskAssignee")
+  createdTaskGroups            TaskGroup[]                 @relation("TaskGroupCreator")
+  addedGroupMembers            TaskGroupMember[]           @relation("TaskGroupMemberAdder")
+  taskGroupMemberships         TaskGroupMember[]           @relation("TaskGroupMemberships")
+  taskUpdates                  TaskUpdate[]                @relation("TaskUpdater")
   tempLoginSessions            TempLoginSession[]
-  birthdayEmailLogs            BirthdayEmailLog[]
+  trackingSessions             TrackingSession[]
+  receivedTransactions         TransactionTable[]          @relation("ReceiverTransaction")
+  sentTransactions             TransactionTable[]          @relation("SenderTransaction")
+  department                   Department?                 @relation("UserDepartment", fields: [departmentId], references: [id])
+  manager                      User?                       @relation("UserManager", fields: [managerId], references: [id])
+  subordinates                 User[]                      @relation("UserManager")
+  organization                 Organization                @relation(fields: [orgId], references: [id])
+  assignedDepartments          UserDepartment[]            @relation("DepartmentAssignments")
+  userDepartments              UserDepartment[]
+  roles                        UserRole[]
+  createdSalaryTemplates       SalaryTemplate[]
+  salaryTemplate               SalaryTemplate?             @relation("UserSalaryTemplate", fields: [salaryTemplateId], references: [id])
+  salaryTemplateId             String?
+  createdWorkflowSteps         WorkflowStep[]              @relation("WorkflowStepCreatedBy")
+  completedWorkflowSteps       WorkflowStep[]              @relation("WorkflowStepCompletedBy")
+  reviewedSalaryRecords        SalaryRecord[]              @relation("SalaryRecordReviewer")
 
   @@unique([orgId, email])
   @@index([orgId, departmentId])
@@ -338,6 +359,12 @@ model AttendanceRecord {
   verifiedAt          DateTime?
   verifiedBy          String?
   user                User                          @relation(fields: [userId], references: [id])
+  ruleViolations      AttendanceRuleViolation[]
+  breakRecords        BreakRecord[]
+  geofenceViolations  GeofenceViolation[]
+  locationValidations LocationValidationLog[]
+  complianceRecords   ShiftComplianceRecord[]
+  trackingSessions    TrackingSession[]
   UserDailyReport     UserDailyReport[]
 
   @@unique([userId, date, sessionNumber])
@@ -361,29 +388,44 @@ model SalaryParameter {
 }
 
 model SalaryRecord {
-  id                 String                   @id @default(cuid())
-  userId             String
-  month              Int
-  year               Int
-  basicSalary        Float
-  tax                Float                    @default(0)
-  netSalary          Float
-  status             PayrollStatus            @default(PENDING)
-  processedAt        DateTime?
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
-  allowances         Json?
-  paymentMode        String?
-  paymentRef         String?
-  remarks            String?
-  deductions         Json?
-  incentive          Float?
-  bonus              Float?
-  user               User                     @relation(fields: [userId], references: [id])
-  salaryTransactions salaryTransactionTable[]
+  id                  String                   @id @default(cuid())
+  userId              String
+  cycleId             String?
+  orgId               String?
+  month               Int
+  year                Int
+  basicSalary         Float
+  tax                 Float                    @default(0)
+  netSalary           Float
+  status              PayrollStatus            @default(PENDING)
+  paymentStatus       SalaryPaymentStatus      @default(PENDING)
+  processedAt         DateTime?
+  reviewedById        String?
+  reviewedAt          DateTime?
+  reviewComments      String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  allowances          Json?
+  deductions          Json?
+  anomalies           Json?
+  paymentMode         String?
+  paymentRef          String?
+  remarks             String?
+  incentive           Float?
+  bonus               Float?
+  user                User                     @relation(fields: [userId], references: [id])
+  reviewedBy          User?                    @relation("SalaryRecordReviewer", fields: [reviewedById], references: [id])
+  cycle               PayrollCycle?            @relation(fields: [cycleId], references: [id])
+  organization        Organization?            @relation(fields: [orgId], references: [id])
+  salaryTransactions  salaryTransactionTable[]
+  auditLogs           PayrollAudit[]
+  cycleAuditEntries   PayrollCycleAudit[]      @relation("SalaryRecordCycleAudit")
+  disputes            SalaryDispute[]
 
   @@unique([userId, month, year])
   @@index([userId, year, month])
+  @@index([cycleId])
+  @@index([orgId])
 }
 
 model NotificationTemplate {
@@ -510,12 +552,18 @@ model UserDailyReport {
 }
 
 model OrganizationSettings {
-  id           String       @id @default(cuid())
-  orgId        String
-  settings     Json
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  organization Organization @relation(fields: [orgId], references: [id])
+  id                 String       @id @default(cuid())
+  orgId              String
+  settings           Json
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  alertConfiguration Json?
+  attendanceRules    Json?
+  breakPolicies      Json?
+  breakRules         Json?
+  geofencingEnabled  Boolean      @default(false)
+  penaltySystem      Json?
+  organization       Organization @relation(fields: [orgId], references: [id])
 }
 
 model SubscriptionPlan {
@@ -604,87 +652,86 @@ model OnboardingCandidate {
   tokenExpiry       DateTime?
   orgId             String
   createdById       String
-  managerId         String? // Add manager assignment
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
   formSubmittedAt   DateTime?
   reviewedById      String?
   reviewedAt        DateTime?
   rejectionReason   String?
-  departmentId      String?
   annualPackage     Float?
-  monthlySalary     Float? // Add monthly salary field
+  departmentId      String?
   hiredDate         DateTime?
-
-  organization Organization @relation(fields: [orgId], references: [id])
-  createdBy    User         @relation("CreatedCandidates", fields: [createdById], references: [id])
-  reviewedBy   User?        @relation("ReviewedCandidates", fields: [reviewedById], references: [id])
-  manager      User?        @relation("CandidateManager", fields: [managerId], references: [id])
-  department   Department?  @relation(fields: [departmentId], references: [id])
+  managerId         String?
+  monthlySalary     Float?
+  createdBy         User             @relation("CreatedCandidates", fields: [createdById], references: [id])
+  department        Department?      @relation(fields: [departmentId], references: [id])
+  manager           User?            @relation("CandidateManager", fields: [managerId], references: [id])
+  organization      Organization     @relation(fields: [orgId], references: [id])
+  reviewedBy        User?            @relation("ReviewedCandidates", fields: [reviewedById], references: [id])
+  shiftTemplateId   String?
+  shiftEffectiveDate DateTime?
+  shiftTemplate     ShiftTemplate?   @relation(fields: [shiftTemplateId], references: [id])
 
   @@index([orgId])
   @@index([verificationToken])
 }
 
 model Task {
-  id              String         @id @default(cuid())
-  title           String
-  description     String?
-  priority        TaskPriority   @default(MEDIUM)
-  status          TaskStatus     @default(PENDING)
-  dueDate         DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  createdById     String
-  orgId           String
-  groupId         String?
-  estimatedHours  Float?
-  tags            String[]
-  attachments     Json?
-  
-  createdBy       User           @relation("TaskCreator", fields: [createdById], references: [id])
-  organization    Organization   @relation(fields: [orgId], references: [id])
-  group           TaskGroup?     @relation(fields: [groupId], references: [id])
-  assignments     TaskAssignment[]
-  updates         TaskUpdate[]
-  
+  id             String           @id @default(cuid())
+  title          String
+  description    String?
+  priority       TaskPriority     @default(MEDIUM)
+  status         TaskStatus       @default(PENDING)
+  dueDate        DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  createdById    String
+  orgId          String
+  groupId        String?
+  estimatedHours Float?
+  tags           String[]
+  attachments    Json?
+  createdBy      User             @relation("TaskCreator", fields: [createdById], references: [id])
+  group          TaskGroup?       @relation(fields: [groupId], references: [id])
+  organization   Organization     @relation(fields: [orgId], references: [id])
+  assignments    TaskAssignment[]
+  updates        TaskUpdate[]
+
   @@index([orgId, status])
   @@index([createdById])
   @@index([dueDate])
 }
 
 model TaskGroup {
-  id              String         @id @default(cuid())
-  name            String
-  description     String?
-  orgId           String
-  createdById     String
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  
-  organization    Organization   @relation(fields: [orgId], references: [id])
-  createdBy       User           @relation("TaskGroupCreator", fields: [createdById], references: [id])
-  tasks           Task[]
-  members         TaskGroupMember[]
-  
+  id           String            @id @default(cuid())
+  name         String
+  description  String?
+  orgId        String
+  createdById  String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  tasks        Task[]
+  createdBy    User              @relation("TaskGroupCreator", fields: [createdById], references: [id])
+  organization Organization      @relation(fields: [orgId], references: [id])
+  members      TaskGroupMember[]
+
   @@unique([orgId, name])
   @@index([orgId])
 }
 
 model TaskGroupMember {
-  id              String         @id @default(cuid())
-  groupId         String
-  userId          String
-  role            GroupRole      @default(MEMBER)
-  addedById       String
-  addedAt         DateTime       @default(now())
-  removedAt       DateTime?
-  isActive        Boolean        @default(true)
-  
-  group           TaskGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user            User           @relation("TaskGroupMemberships", fields: [userId], references: [id])
-  addedBy         User           @relation("TaskGroupMemberAdder", fields: [addedById], references: [id])
-  
+  id        String    @id @default(cuid())
+  groupId   String
+  userId    String
+  role      GroupRole @default(MEMBER)
+  addedById String
+  addedAt   DateTime  @default(now())
+  removedAt DateTime?
+  isActive  Boolean   @default(true)
+  addedBy   User      @relation("TaskGroupMemberAdder", fields: [addedById], references: [id])
+  group     TaskGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User      @relation("TaskGroupMemberships", fields: [userId], references: [id])
+
   @@unique([groupId, userId])
   @@index([userId])
   @@index([groupId])
@@ -692,41 +739,554 @@ model TaskGroupMember {
 }
 
 model TaskAssignment {
-  id              String         @id @default(cuid())
-  taskId          String
-  assignedToId    String
-  assignedById    String
-  assignedAt      DateTime       @default(now())
-  status          AssignmentStatus @default(ASSIGNED)
-  acceptedAt      DateTime?
-  completedAt     DateTime?
-  remarks         String?
-  
-  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  assignedTo      User           @relation("TaskAssignee", fields: [assignedToId], references: [id])
-  assignedBy      User           @relation("TaskAssigner", fields: [assignedById], references: [id])
-  
+  id           String           @id @default(cuid())
+  taskId       String
+  assignedToId String
+  assignedById String
+  assignedAt   DateTime         @default(now())
+  status       AssignmentStatus @default(ASSIGNED)
+  acceptedAt   DateTime?
+  completedAt  DateTime?
+  remarks      String?
+  assignedBy   User             @relation("TaskAssigner", fields: [assignedById], references: [id])
+  assignedTo   User             @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  task         Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
   @@unique([taskId, assignedToId])
   @@index([assignedToId, status])
   @@index([taskId])
 }
 
 model TaskUpdate {
-  id              String         @id @default(cuid())
-  taskId          String
-  updatedById     String
-  updateType      UpdateType
-  message         String
-  attachments     Json?
-  progress        Int?
-  createdAt       DateTime       @default(now())
-  metadata        Json?
-  
-  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  updatedBy       User           @relation("TaskUpdater", fields: [updatedById], references: [id])
-  
+  id          String     @id @default(cuid())
+  taskId      String
+  updatedById String
+  updateType  UpdateType
+  message     String
+  attachments Json?
+  progress    Int?
+  createdAt   DateTime   @default(now())
+  metadata    Json?
+  task        Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  updatedBy   User       @relation("TaskUpdater", fields: [updatedById], references: [id])
+
   @@index([taskId, createdAt])
   @@index([updatedById])
+}
+
+model EmailOtpVerification {
+  id            String     @id @default(cuid())
+  userId        String
+  otpCode       String
+  purpose       OtpPurpose
+  expiresAt     DateTime
+  isUsed        Boolean    @default(false)
+  attemptsCount Int        @default(0)
+  maxAttempts   Int        @default(3)
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime   @default(now())
+  usedAt        DateTime?
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([otpCode, expiresAt, isUsed])
+}
+
+model TempLoginSession {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expiresAt    DateTime
+  isUsed       Boolean  @default(false)
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sessionToken, expiresAt, isUsed])
+}
+
+model OrganizationAttendanceRules {
+  id           String                    @id @default(cuid())
+  orgId        String
+  ruleType     AttendanceRuleType
+  threshold    Json
+  penalty      Json
+  isActive     Boolean                   @default(false)
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  violations   AttendanceRuleViolation[]
+  organization Organization              @relation(fields: [orgId], references: [id])
+  shiftAssignments ShiftAttendanceRule[]
+
+  @@unique([orgId, ruleType])
+  @@index([orgId, ruleType, isActive])
+}
+
+model AttendanceRuleViolation {
+  id            String                      @id @default(cuid())
+  attendanceId  String
+  ruleId        String
+  violationType String
+  severity      ViolationSeverity
+  penaltyAmount Decimal?                    @db.Decimal(10, 2)
+  isApproved    Boolean                     @default(false)
+  approvedBy    String?
+  approvedAt    DateTime?
+  createdAt     DateTime                    @default(now())
+  approver      User?                       @relation("ViolationApprover", fields: [approvedBy], references: [id])
+  attendance    AttendanceRecord            @relation(fields: [attendanceId], references: [id])
+  rule          OrganizationAttendanceRules @relation(fields: [ruleId], references: [id])
+
+  @@index([attendanceId])
+  @@index([ruleId])
+  @@index([violationType, createdAt])
+}
+
+model OrganizationGeofence {
+  id               String                  @id @default(cuid())
+  orgId            String
+  name             String
+  type             GeofenceType
+  coordinates      Json
+  radius           Decimal?                @db.Decimal(10, 2)
+  isActive         Boolean                 @default(false)
+  strictMode       Boolean                 @default(false)
+  allowedDeviation Decimal                 @default(50) @db.Decimal(5, 2)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  violations       GeofenceViolation[]
+  validationLogs   LocationValidationLog[]
+  organization     Organization            @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, isActive])
+}
+
+model LocationValidationLog {
+  id             String                 @id @default(cuid())
+  attendanceId   String
+  latitude       Decimal                @db.Decimal(10, 8)
+  longitude      Decimal                @db.Decimal(11, 8)
+  geofenceId     String?
+  isValid        Boolean
+  deviation      Decimal?               @db.Decimal(10, 2)
+  validationType LocationValidationType
+  timestamp      DateTime               @default(now())
+  attendance     AttendanceRecord       @relation(fields: [attendanceId], references: [id])
+  geofence       OrganizationGeofence?  @relation(fields: [geofenceId], references: [id])
+
+  @@index([attendanceId])
+  @@index([timestamp])
+}
+
+model BreakRecord {
+  id           String            @id @default(cuid())
+  userId       String
+  attendanceId String?
+  breakType    BreakType
+  startTime    DateTime
+  endTime      DateTime?
+  duration     Json?
+  status       BreakStatus       @default(ACTIVE)
+  note         String?
+  isApproved   Boolean           @default(true)
+  approvedBy   String?
+  violation    Json?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  approver     User?             @relation("BreakApprover", fields: [approvedBy], references: [id])
+  attendance   AttendanceRecord? @relation(fields: [attendanceId], references: [id])
+  user         User              @relation(fields: [userId], references: [id])
+
+  @@index([userId, startTime])
+  @@index([attendanceId])
+}
+
+model OrganizationBreakRules {
+  id               String       @id @default(cuid())
+  orgId            String
+  breakType        String
+  maxDuration      Int
+  maxFrequency     Int?
+  timeWindow       Json?
+  mandatory        Boolean      @default(false)
+  requiresApproval Boolean      @default(false)
+  penaltyPerMinute Decimal?     @db.Decimal(5, 2)
+  isActive         Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  organization     Organization @relation(fields: [orgId], references: [id])
+  shiftAssignments ShiftBreakRule[]
+
+  @@unique([orgId, breakType])
+  @@index([orgId, isActive])
+}
+
+model OrganizationOvertimeRule {
+  id                String       @id @default(cuid())
+  orgId             String
+  name              String
+  description       String?
+  rate              Decimal      @db.Decimal(5, 2)
+  applyAfterMinutes Int?         @default(0)
+  maxDailyMinutes   Int?
+  metadata          Json?
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  organization      Organization @relation(fields: [orgId], references: [id])
+  shiftTemplates    ShiftTemplate[]
+
+  @@unique([orgId, name])
+  @@index([orgId, isActive])
+}
+
+model ProgressivePenaltyHistory {
+  id                    String        @id @default(cuid())
+  userId                String
+  violationType         String
+  penaltyAmount         Decimal       @db.Decimal(10, 2)
+  progressiveMultiplier Decimal       @db.Decimal(5, 2)
+  violationCount        Int
+  dateApplied           DateTime      @default(now())
+  payrollMonth          Int
+  payrollYear           Int
+  status                PenaltyStatus @default(PENDING)
+  metadata              Json?
+  user                  User          @relation(fields: [userId], references: [id])
+
+  @@index([userId, payrollMonth, payrollYear])
+  @@index([violationType, dateApplied])
+}
+
+model AttendanceAlert {
+  id           String        @id @default(cuid())
+  userId       String
+  alertType    String
+  priority     AlertPriority
+  message      String
+  data         Json?
+  isRead       Boolean       @default(false)
+  isSent       Boolean       @default(false)
+  sentChannels Json?
+  createdAt    DateTime      @default(now())
+  readAt       DateTime?
+  user         User          @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead, createdAt])
+  @@index([priority, createdAt])
+}
+
+model GeofenceViolation {
+  id                 String               @id @default(cuid())
+  userId             String
+  attendanceId       String?
+  sessionId          String?
+  geofenceId         String?
+  violationType      String
+  severity           ViolationSeverity    @default(MINOR)
+  startLocation      Json
+  currentLocation    Json?
+  resolutionLocation Json?
+  startTime          DateTime             @default(now())
+  lastViolationTime  DateTime?
+  resolvedAt         DateTime?
+  resolutionType     String?
+  resolutionNote     String?
+  resolvedBy         String?
+  violationCount     Int                  @default(1)
+  isBreakRelated     Boolean              @default(false)
+  metadata           Json?
+  latitude           Decimal?             @db.Decimal(10, 8)
+  longitude          Decimal?             @db.Decimal(11, 8)
+  distance           Decimal?             @db.Decimal(10, 2)
+  action             LocationActionType?
+  timestamp          DateTime?
+  attendance         AttendanceRecord?    @relation(fields: [attendanceId], references: [id])
+  geofence           OrganizationGeofence? @relation(fields: [geofenceId], references: [id])
+  session            TrackingSession?     @relation(fields: [sessionId], references: [id])
+  user               User                 @relation(fields: [userId], references: [id])
+
+  @@index([userId, startTime])
+  @@index([sessionId, resolvedAt])
+  @@index([geofenceId, startTime])
+}
+
+model ShiftTemplate {
+  id                 String          @id @default(cuid())
+  orgId              String
+  name               String
+  startTime          String
+  endTime            String
+  totalHours         Decimal         @db.Decimal(4, 2)
+  lateThreshold      Int             @default(15)
+  breakConfiguration Json?
+  overtimeRules      Json?
+  attendanceRules    Json?
+  isActive           Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  employeeShifts     EmployeeShift[]
+  organization       Organization    @relation(fields: [orgId], references: [id])
+  onboardingCandidates OnboardingCandidate[]
+  breakRuleLinks     ShiftBreakRule[]
+  attendanceRuleLinks ShiftAttendanceRule[]
+  overtimeRuleId     String?
+  overtimeRule       OrganizationOvertimeRule? @relation(fields: [overtimeRuleId], references: [id])
+
+  @@unique([orgId, name])
+  @@index([orgId, isActive])
+}
+
+model ShiftBreakRule {
+  shiftTemplateId String
+  breakRuleId     String
+  assignedAt      DateTime     @default(now())
+  orderIndex      Int?         @default(0)
+  metadata        Json?
+  shiftTemplate   ShiftTemplate @relation(fields: [shiftTemplateId], references: [id], onDelete: Cascade)
+  breakRule       OrganizationBreakRules @relation(fields: [breakRuleId], references: [id], onDelete: Cascade)
+
+  @@id([shiftTemplateId, breakRuleId])
+  @@index([breakRuleId])
+}
+
+model ShiftAttendanceRule {
+  shiftTemplateId   String
+  attendanceRuleId  String
+  assignedAt        DateTime                   @default(now())
+  metadata          Json?
+  shiftTemplate     ShiftTemplate              @relation(fields: [shiftTemplateId], references: [id], onDelete: Cascade)
+  attendanceRule    OrganizationAttendanceRules @relation(fields: [attendanceRuleId], references: [id], onDelete: Cascade)
+
+  @@id([shiftTemplateId, attendanceRuleId])
+  @@index([attendanceRuleId])
+}
+
+model EmployeeShift {
+  id                String                  @id @default(cuid())
+  userId            String
+  shiftTemplateId   String
+  effectiveDate     DateTime
+  endDate           DateTime?
+  status            ShiftStatus             @default(ACTIVE)
+  overrides         Json?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  shiftTemplate     ShiftTemplate           @relation(fields: [shiftTemplateId], references: [id])
+  user              User                    @relation(fields: [userId], references: [id])
+  complianceRecords ShiftComplianceRecord[]
+
+  @@index([userId, status])
+  @@index([shiftTemplateId])
+}
+
+model ShiftComplianceRecord {
+  id                String           @id @default(cuid())
+  attendanceId      String
+  shiftId           String
+  expectedStartTime DateTime
+  expectedEndTime   DateTime
+  actualStartTime   DateTime?
+  actualEndTime     DateTime?
+  complianceScore   Decimal?         @db.Decimal(5, 2)
+  violations        Json?
+  penalties         Json?
+  createdAt         DateTime         @default(now())
+  attendance        AttendanceRecord @relation(fields: [attendanceId], references: [id])
+  shift             EmployeeShift    @relation(fields: [shiftId], references: [id])
+
+  @@index([attendanceId])
+  @@index([shiftId])
+}
+
+model PayrollTemplate {
+  id           String       @id @default(cuid())
+  orgId        String
+  name         String
+  description  String?
+  isDefault    Boolean      @default(false)
+  isActive     Boolean      @default(true)
+  rules        Json // Calculation rules, overtime rates, tax brackets
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  createdBy    String
+  organization Organization @relation(fields: [orgId], references: [id])
+  cycles       PayrollCycle[]
+
+  @@unique([orgId, name])
+  @@index([orgId, isActive])
+}
+
+model PayrollCycle {
+  id             String             @id @default(cuid())
+  orgId          String
+  month          Int
+  year           Int
+  status         PayrollCycleStatus @default(DRAFT)
+  payoutStatus   PayrollPayoutStatus @default(NOT_STARTED)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  payoutInitiatedAt DateTime?
+  payoutCompletedAt DateTime?
+  startedBy      String?
+  approvedBy     String?
+  approvedAt     DateTime?
+  templateId     String?
+  totalEmployees Int                @default(0)
+  processedCount Int                @default(0)
+  failedCount    Int                @default(0)
+  totalAmount    Float              @default(0)
+  notes          Json?
+  payoutSummary  Json?
+  payoutInitiatedBy String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  salaryRecords  SalaryRecord[]
+  workflowSteps  WorkflowStep[]
+  template       PayrollTemplate?   @relation(fields: [templateId], references: [id])
+  processor      User?              @relation("PayrollCycleProcessor", fields: [startedBy], references: [id])
+  approver       User?              @relation("PayrollCycleApprover", fields: [approvedBy], references: [id])
+  payoutInitiator User?             @relation("PayrollCyclePayoutInitiator", fields: [payoutInitiatedBy], references: [id])
+  auditLogs      PayrollCycleAudit[]
+  organization   Organization       @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, month, year])
+  @@index([orgId, status])
+  @@index([payoutStatus])
+}
+
+model PayrollCycleAudit {
+  id             String              @id @default(cuid())
+  cycleId        String
+  salaryRecordId String?
+  action         PayrollCycleAction
+  previousData   Json?
+  newData        Json?
+  userId         String?
+  createdAt      DateTime            @default(now())
+  cycle          PayrollCycle        @relation(fields: [cycleId], references: [id])
+  salaryRecord   SalaryRecord?       @relation("SalaryRecordCycleAudit", fields: [salaryRecordId], references: [id])
+  actor          User?               @relation("PayrollCycleAuditActor", fields: [userId], references: [id])
+
+  @@index([cycleId, createdAt])
+}
+
+model PipelineProgress {
+  id             String   @id @default(cuid())
+  organizationId String
+  month          Int
+  year           Int
+  currentStep    Int      @default(0)
+  stepData       Json     @default("{}")
+  lastAccessedAt DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, month, year])
+  @@index([organizationId])
+  @@index([month, year])
+}
+
+model SalaryDispute {
+  id             String        @id @default(cuid())
+  salaryRecordId String
+  userId         String
+  reason         String
+  description    String?
+  status         DisputeStatus @default(PENDING)
+  resolutionNote String?
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  salaryRecord   SalaryRecord  @relation(fields: [salaryRecordId], references: [id])
+
+  @@index([salaryRecordId])
+  @@index([userId])
+}
+
+model PayrollAudit {
+  id             String        @id @default(cuid())
+  salaryRecordId String
+  action         PayrollAction
+  performedBy    String
+  changes        Json?
+  timestamp      DateTime      @default(now())
+  ipAddress      String?
+  userAgent      String?
+  salaryRecord   SalaryRecord  @relation(fields: [salaryRecordId], references: [id])
+
+  @@index([salaryRecordId])
+  @@index([action, timestamp])
+}
+
+model SalaryTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  rules       Json     // Stores salary calculation rules (allowances, deductions, etc.)
+  orgId       String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  organization Organization @relation(fields: [orgId], references: [id])
+  createdBy    User         @relation(fields: [createdById], references: [id])
+  users        User[]       @relation("UserSalaryTemplate")
+
+  @@unique([orgId, name])
+  @@index([orgId, isActive])
+}
+
+model CalculationRule {
+  id        String   @id @default(cuid())
+  name      String
+  formula   String
+  type      RuleType
+  isActive  Boolean  @default(true)
+  orgId     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, name])
+  @@index([orgId, type])
+}
+
+model WorkflowStep {
+  id             String       @id @default(cuid())
+  title          String
+  description    String?
+  phase          WorkflowPhase
+  order          Int
+  status         StepStatus   @default(pending)
+  assignedTo     String?      // User ID or role type (admin, manager, employee, system)
+  estimatedHours Int?
+  dependencies   String[]     // Array of step IDs that must be completed first
+  comments       String?
+  month          Int
+  year           Int
+  orgId          String
+  cycleId        String?
+  createdById    String
+  completedById  String?
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  organization Organization  @relation(fields: [orgId], references: [id])
+  cycle        PayrollCycle? @relation(fields: [cycleId], references: [id])
+  createdBy    User          @relation("WorkflowStepCreatedBy", fields: [createdById], references: [id])
+  completedBy  User?         @relation("WorkflowStepCompletedBy", fields: [completedById], references: [id])
+
+  @@unique([orgId, phase, order, month, year])
+  @@index([orgId, status])
+  @@index([cycleId])
 }
 
 enum GroupRole {
@@ -796,10 +1356,29 @@ enum AttendanceStatus {
 
 enum PayrollStatus {
   PENDING
+  PROCESSING
   PROCESSED
+  REVIEW
+  APPROVED
+  REJECTED
   PAID
   FAILED
-  PROCESSING
+}
+
+enum SalaryPaymentStatus {
+  PENDING
+  INITIATED
+  COMPLETED
+  FAILED
+  NO_PAYOUT_REQUIRED
+}
+
+enum PayrollPayoutStatus {
+  NOT_STARTED
+  INITIATED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
 }
 
 enum NotificationType {
@@ -869,7 +1448,6 @@ enum ActivityEntity {
   USER
   ORGANIZATION
   DEPARTMENT
-  USER_DEPARTMENT
   ROLE
   PERMISSION
   ATTENDANCE
@@ -880,6 +1458,7 @@ enum ActivityEntity {
   DOCUMENT
   SETTINGS
   ONBOARDING_CANDIDATE
+  USER_DEPARTMENT
   TASK
   TASK_GROUP
   TASK_ASSIGNMENT
@@ -896,61 +1475,197 @@ enum OnboardingStatus {
   ABORTED
 }
 
-model EmailOtpVerification {
-  id            String   @id @default(cuid())
-  userId        String
-  otpCode       String
-  purpose       OtpPurpose
-  expiresAt     DateTime
-  isUsed        Boolean  @default(false)
-  attemptsCount Int      @default(0)
-  maxAttempts   Int      @default(3)
-  ipAddress     String?
-  userAgent     String?
-  createdAt     DateTime @default(now())
-  usedAt        DateTime?
-  
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([userId, purpose])
-  @@index([otpCode, expiresAt, isUsed])
-}
-
-model TempLoginSession {
-  id            String   @id @default(cuid())
-  sessionToken  String   @unique
-  userId        String
-  expiresAt     DateTime
-  isUsed        Boolean  @default(false)
-  ipAddress     String?
-  userAgent     String?
-  createdAt     DateTime @default(now())
-  
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([sessionToken, expiresAt, isUsed])
-}
-
 enum OtpPurpose {
   LOGIN
   PASSWORD_RESET
   ACCOUNT_VERIFICATION
 }
 
-model BirthdayEmailLog {
-  id             String       @id @default(cuid())
-  userId         String
-  organizationId String
-  sentDate       DateTime
-  emailSent      Boolean      @default(false)
-  errorMessage   String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  @@index([userId, sentDate])
-  @@index([organizationId, sentDate])
-  @@index([sentDate, emailSent])
+enum AttendanceRuleType {
+  LATE_ARRIVAL
+  EARLY_DEPARTURE
+  MINIMUM_HOURS
+  BREAK_VIOLATION
+  GEOFENCE_VIOLATION
+  ABSENTEEISM
+}
+
+enum ViolationSeverity {
+  WARNING
+  MINOR
+  MAJOR
+  CRITICAL
+}
+
+enum GeofenceType {
+  MAIN_OFFICE
+  BRANCH_OFFICE
+  CLIENT_SITE
+  REMOTE_ZONE
+}
+
+enum LocationValidationType {
+  CHECK_IN
+  CHECK_OUT
+  PERIODIC
+  MANUAL
+  BREAK_START
+  BREAK_END
+}
+
+enum BreakType {
+  LUNCH
+  TEA_BREAK
+  PERSONAL
+  MEDICAL
+  UNAUTHORIZED
+}
+
+enum BreakStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum PenaltyStatus {
+  PENDING
+  APPLIED
+  REVERSED
+  APPROVED
+}
+
+enum AlertPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum LocationActionType {
+  CHECK_IN
+  CHECK_OUT
+  BREAK_START
+  BREAK_END
+}
+
+enum ShiftStatus {
+  ACTIVE
+  INACTIVE
+  TEMPORARY
+}
+
+enum PayrollCycleStatus {
+  DRAFT
+  IN_PROGRESS
+  REVIEW
+  APPROVED
+  COMPLETED
+  CANCELLED
+}
+
+enum PayrollCycleAction {
+  CYCLE_CREATED
+  CYCLE_STARTED
+  SALARY_GENERATED
+  CYCLE_REVIEW_READY
+  CYCLE_APPROVED
+  CYCLE_CANCELLED
+  NOTE_ADDED
+  PAYOUT_INITIATED
+  PAYMENT_RECORDED
+  PAYMENT_MARKED_NO_PAYOUT
+  PAYOUT_SUMMARY_UPDATED
+}
+
+enum DisputeStatus {
+  PENDING
+  UNDER_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+enum PayrollAction {
+  GENERATED
+  APPROVED
+  REJECTED
+  MODIFIED
+  PAID
+  DISPUTED
+  RESOLVED
+}
+
+enum RuleType {
+  allowance
+  deduction
+  tax
+}
+
+enum WorkflowPhase {
+  setup
+  cycle
+  review
+  reporting
+  employee
+}
+
+enum StepStatus {
+  pending
+  in_progress
+  completed
+  blocked
+}
+
+model TrackingSession {
+  id                   String               @id @default(cuid())
+  userId               String
+  orgId                String
+  attendanceId         String
+  workMode             WorkMode             @default(OFFICE)
+  startLocation        Json
+  currentLocation      Json?
+  endLocation          Json?
+  startTime            DateTime             @default(now())
+  endTime              DateTime?
+  lastLocationUpdate   DateTime?
+  isActive             Boolean              @default(true)
+  endReason            String?
+  endedBy              String?
+  updatedBy            String?
+  outstationData       Json?
+  settings             Json?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  attendance           AttendanceRecord     @relation(fields: [attendanceId], references: [id])
+  organization         Organization         @relation(fields: [orgId], references: [id])
+  user                 User                 @relation(fields: [userId], references: [id])
+  violations           GeofenceViolation[]
+  locationUpdates      LocationUpdate[]
+
+  @@index([userId, isActive])
+  @@index([orgId, startTime])
+}
+
+model LocationUpdate {
+  id                String          @id @default(cuid())
+  sessionId         String
+  latitude          Float
+  longitude         Float
+  accuracy          Float?
+  address           String?
+  timestamp         DateTime        @default(now())
+  isCompliant       Boolean         @default(true)
+  validationNotes   String?
+  isBreakActive     Boolean         @default(false)
+  breakId           String?
+  validationSkipped Boolean         @default(false)
+  session           TrackingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, timestamp])
+}
+
+enum WorkMode {
+  OFFICE
+  OUTSTATION
+  REMOTE
+  CLIENT_SITE
 }

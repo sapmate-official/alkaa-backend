@@ -3,16 +3,16 @@ import prisma from "../../../../db/connectDb.js";
 /**
  * Calculate working days for a given month and year
  */
-export async function calculateWorkingDays(month, year, orgId) {
+export async function calculateWorkingDays(month, year, orgId, client = prisma) {
     // Get organization settings for weekends
-    const orgSettings = await prisma.organizationSettings.findFirst({
+    const orgSettings = await client.organizationSettings.findFirst({
         where: { orgId: orgId }
     });
 
     const weekendDays = orgSettings?.settings?.weekoff || [0, 6]; // Default: Sunday and Saturday
 
     // Get holidays for the month
-    const holidays = await prisma.holiday.findMany({
+    const holidays = await client.holiday.findMany({
         where: {
             orgId: orgId,
             date: {
@@ -36,23 +36,44 @@ export async function calculateWorkingDays(month, year, orgId) {
         }
     }
 
-    return { workingDays, weekendDays, holidays };
+    return { workingDays, weekendDays, holidays, daysInMonth };
 }
 
 /**
  * Calculate attendance statistics for a user
  */
-export async function calculateAttendanceStats(userId, month, year, orgId) {
-    const { workingDays, weekendDays, holidays } = await calculateWorkingDays(month, year, orgId);
+export async function calculateAttendanceStats(userId, month, year, orgId, client = prisma) {
+    const { workingDays, weekendDays, holidays, daysInMonth } = await calculateWorkingDays(month, year, orgId, client);
+
+    const monthStart = new Date(parseInt(year), parseInt(month) - 1, 1);
+    const nextMonthStart = new Date(parseInt(year), parseInt(month), 1);
 
     // Get attendance records
-    const attendanceRecords = await prisma.attendanceRecord.findMany({
+    const attendanceRecords = await client.attendanceRecord.findMany({
         where: {
             userId: userId,
             verificationStatus: 'VERIFIED',
             date: {
-                gte: new Date(parseInt(year), parseInt(month) - 1, 1),
-                lt: new Date(parseInt(year), parseInt(month), 1)
+                gte: monthStart,
+                lt: nextMonthStart
+            }
+        },
+        include: {
+            ruleViolations: {
+                include: {
+                    rule: true
+                }
+            },
+            breakRecords: true,
+            geofenceViolations: {
+                include: {
+                    geofence: true
+                }
+            },
+            locationValidations: {
+                include: {
+                    geofence: true
+                }
             }
         }
     });
@@ -68,21 +89,21 @@ export async function calculateAttendanceStats(userId, month, year, orgId) {
     const halfDays = attendanceRecords.filter(record => record.status === "HALF_DAY").length;
 
     // Get approved leave requests
-    const leaveRequests = await prisma.leaveRequest.findMany({
+    const leaveRequests = await client.leaveRequest.findMany({
         where: {
             userId: userId,
             status: "APPROVED",
             OR: [
                 {
                     startDate: {
-                        gte: new Date(parseInt(year), parseInt(month) - 1, 1),
-                        lt: new Date(parseInt(year), parseInt(month), 1)
+                        gte: monthStart,
+                        lt: nextMonthStart
                     }
                 },
                 {
                     endDate: {
-                        gte: new Date(parseInt(year), parseInt(month) - 1, 1),
-                        lt: new Date(parseInt(year), parseInt(month), 1)
+                        gte: monthStart,
+                        lt: nextMonthStart
                     }
                 }
             ]
@@ -177,6 +198,15 @@ export async function calculateAttendanceStats(userId, month, year, orgId) {
             paidLeaveDays,
             unpaidLeaveDays,
             attendancePercentage: parseFloat(attendancePercentage.toFixed(2))
+        },
+        records: attendanceRecords,
+        leaveRequests,
+        metadata: {
+            weekendDays,
+            holidays,
+            daysInMonth,
+            monthStart,
+            nextMonthStart
         }
     };
 }

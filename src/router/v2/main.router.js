@@ -28,7 +28,7 @@ import taskRouter from "./child/task.router.js";
 import taskGroupRouter from "./child/taskGroup.router.js";
 import whatsappRouter from "./child/whatsapp.router.js";
 import relationshipRouter from "./child/relationship.router.js";
-import birthdayEmailsRouter from "./child/birthdayEmails.router.js";
+import shiftRouter from "./child/shift.router.js";
 
 
 const router = express.Router();
@@ -62,6 +62,6 @@ router.use("/task", taskRouter);
 router.use("/task-group", taskGroupRouter);
 router.use("/whatsapp", whatsappRouter);
 router.use("/relationship", relationshipRouter);
-router.use("/birthday-emails", birthdayEmailsRouter);
+router.use("/shift", shiftRouter);
 
 export default router;

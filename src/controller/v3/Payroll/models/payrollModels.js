@@ -13,7 +13,10 @@ export function formatPayslipData(payslips) {
             basicSalary: payslip.basicSalary,
             netSalary: payslip.netSalary,
             status: payslip.status,
+            paymentStatus: payslip.paymentStatus,
             processedAt: payslip.processedAt,
+            reviewedAt: payslip.reviewedAt,
+            reviewComments: payslip.reviewComments,
             createdAt: payslip.createdAt,
             updatedAt: payslip.updatedAt,
             allowances: payslip.allowances,
@@ -23,6 +26,7 @@ export function formatPayslipData(payslips) {
             remarks: payslip.remarks,
             incentive: payslip.incentive,
             bonus: payslip.bonus,
+            anomalies: payslip.anomalies,
             employee: {
                 firstName: payslip.user?.firstName,
                 lastName: payslip.user?.lastName,
@@ -44,7 +48,16 @@ export function formatPayslipData(payslips) {
  */
 export function formatSalaryStatistics(salaryRecord, additionalData) {
     const { month, year } = salaryRecord;
-    const { workingDays, attendanceStats, ytdTotal, previousSalaryRecord } = additionalData;
+    const {
+        workingDays,
+        attendanceStats,
+        ytdTotal,
+        previousSalaryRecord,
+        salaryContext = {},
+        attendanceContext = {},
+        ruleContext = {},
+        penaltyContext = {}
+    } = additionalData;
 
     // Parse allowances and deductions
     const allowances = salaryRecord.allowances || {};
@@ -71,6 +84,15 @@ export function formatSalaryStatistics(salaryRecord, additionalData) {
                 : 0
         } 
         : null;
+
+    const normalizedAttendanceStats = attendanceStats || {};
+    const daysInMonthFromContext = attendanceContext?.metadata?.daysInMonth;
+    const attendanceTotals = attendanceContext?.totals || {
+        hoursWorked: 0,
+        breakMinutes: 0,
+        attendanceEntries: 0,
+        geofenceViolationCount: 0
+    };
 
     return {
         basicInfo: {
@@ -106,10 +128,16 @@ export function formatSalaryStatistics(salaryRecord, additionalData) {
             }
         },
         attendanceAnalysis: {
-            totalDaysInMonth: new Date(year, month, 0).getDate(),
+            totalDaysInMonth: daysInMonthFromContext || new Date(year, month, 0).getDate(),
             workingDays: workingDays,
-            ...attendanceStats
+            ...normalizedAttendanceStats,
+            summaryByStatus: attendanceContext?.summaryByStatus || {},
+            totals: attendanceTotals
         },
+        attendanceDetails: attendanceContext,
+        salaryContext,
+        ruleContext,
+        penaltyContext,
         comparisons: {
             earningsRatio: parseFloat(earningsRatio.toFixed(2)),
             previousMonth: monthlyComparison,
@@ -142,7 +170,16 @@ export function formatMultiplePayslipStatus(statusMap) {
  */
 export function formatPayslipForFrontendPDF(salaryRecord, additionalData) {
     const { month, year } = salaryRecord;
-    const { workingDays, attendanceStats, ytdTotal, previousSalaryRecord } = additionalData;
+    const {
+        workingDays,
+        attendanceStats,
+        salaryContext = {},
+        attendanceContext = {},
+        ruleContext = {},
+        penaltyContext = {}
+    } = additionalData;
+
+    const normalizedAttendanceStats = attendanceStats || {};
 
     // Parse allowances and deductions
     const allowances = salaryRecord.allowances || {};
@@ -180,11 +217,16 @@ export function formatPayslipForFrontendPDF(salaryRecord, additionalData) {
     };
 
     // Earnings breakdown
+    const effectiveWorkingDays = workingDays || 0;
+    const basicRate = effectiveWorkingDays > 0
+        ? salaryRecord.basicSalary / effectiveWorkingDays
+        : salaryRecord.basicSalary;
+
     const earnings = {
         basicSalary: {
             description: 'Basic Salary',
-            hours: workingDays,
-            rate: salaryRecord.basicSalary / workingDays,
+            hours: effectiveWorkingDays,
+            rate: basicRate,
             current: salaryRecord.basicSalary,
             ytd: salaryRecord.basicSalary * month
         },
@@ -237,6 +279,7 @@ export function formatPayslipForFrontendPDF(salaryRecord, additionalData) {
         payDate,
         period,
         status: salaryRecord.status,
+        paymentStatus: salaryRecord.paymentStatus,
         paymentMode: salaryRecord.paymentMode || 'MANUAL',
         paymentRef: salaryRecord.paymentRef,
         
@@ -257,8 +300,12 @@ export function formatPayslipForFrontendPDF(salaryRecord, additionalData) {
         // Attendance Information
         attendance: {
             workingDays,
-            ...attendanceStats
+            ...normalizedAttendanceStats
         },
+        attendanceDetails: attendanceContext,
+        salaryContext,
+        ruleContext,
+        penaltyContext,
         
         // YTD Information
         ytd: {

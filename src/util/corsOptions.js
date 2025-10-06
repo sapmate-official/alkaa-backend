@@ -3,20 +3,22 @@
     'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:5000',
-    'http://192.168.0.193:5173',
+    'http://192.168.0.102:5173',
     'https://myapp.herokuapp.com',
     'http://127.0.0.1:5173',
-    'http://192.168.0.158:5174',
-    'https://192.168.0.193:5173',
+    'http://192.168.0.102:5174',
+    'https://192.168.0.102:5173',
     'http://sapmate-employee-bucket.s3-website.ap-south-1.amazonaws.com',
     "https://main.dy4iqzhph9mgs.amplifyapp.com",
     "https://dev.d1my6reb1ahjn8.amplifyapp.com",
     "https://www.alkaa.sapmate.com",
+    "https://alkaa.online",
     "https://www.alkaa.online",
     "https://api.alkaa.online" ,
     "https://alkaa.vercel.app",
     "https://alkaa-frontend-test.vercel.app",
-    "https://alkaa-admin-test.vercel.app"
+    "https://alkaa-admin-test.vercel.app",
+    "https://alkaa-frontend-test.vercel.app"
 ]
 
 export const corsOptions = {

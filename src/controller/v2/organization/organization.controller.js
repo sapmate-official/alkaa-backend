@@ -143,25 +143,29 @@ const deleteOrganization = [
         const { id } = req.body;
         
         try {
-            // Use a transaction to ensure either all deletes succeed or none do
+            // Use a transaction with increased timeout to ensure either all deletes succeed or none do
             await prisma.$transaction(async (tx) => {
+                console.log('Starting organization deletion transaction...');
+                
                 // 1. Delete organization settings
+                console.log('Deleting organization settings...');
                 await tx.organizationSettings.deleteMany({
                     where: { orgId: id }
                 });
                 
                 // 2. Find all users belonging to this organization
+                console.log('Finding organization users...');
                 const users = await tx.user.findMany({
                     where: { orgId: id },
                     select: { id: true }
                 });
                 
                 const userIds = users.map(user => user.id);
+                console.log(`Found ${userIds.length} users to delete`);
                 
                 if (userIds.length > 0) {
-                    // 3. Delete user related records - fixing the non-existent function
-                    
-                    // Delete UserDailyReports first (they reference AttendanceRecord)
+                    // 3. Delete user-related records in batches for better performance
+                    console.log('Deleting user daily reports...');
                     await tx.userDailyReport.deleteMany({
                         where: {
                             attendance: {
@@ -170,22 +174,22 @@ const deleteOrganization = [
                         }
                     });
                     
-                    // Delete attendance records
+                    console.log('Deleting attendance records...');
                     await tx.attendanceRecord.deleteMany({
                         where: { userId: { in: userIds } }
                     });
                     
-                    // 4. Delete push subscriptions
+                    console.log('Deleting push subscriptions...');
                     await tx.pushSubscription.deleteMany({
                         where: { userId: { in: userIds } }
                     });
                     
-                    // 5. Delete notifications
+                    console.log('Deleting notifications...');
                     await tx.notification.deleteMany({ 
                         where: { userId: { in: userIds } }
                     });
                     
-                    // 6. Delete leave balances and requests
+                    console.log('Deleting leave balances and requests...');
                     await tx.leaveBalance.deleteMany({
                         where: { userId: { in: userIds } }
                     });
@@ -194,7 +198,7 @@ const deleteOrganization = [
                         where: { userId: { in: userIds } }
                     });
                     
-                    // 7. Delete salary records and transactions
+                    console.log('Deleting salary transactions...');
                     await tx.salaryTransactionTable.deleteMany({
                         where: { 
                             salaryRecord: { 
@@ -203,21 +207,22 @@ const deleteOrganization = [
                         }
                     });
                     
+                    console.log('Deleting salary records...');
                     await tx.salaryRecord.deleteMany({
                         where: { userId: { in: userIds } }
                     });
                     
-                    // 8. Delete salary parameters
+                    console.log('Deleting salary parameters...');
                     await tx.salaryParameter.deleteMany({
                         where: { userId: { in: userIds } }
                     });
                     
-                    // 9. Delete bank details
+                    console.log('Deleting bank details...');
                     await tx.bankDetails.deleteMany({
                         where: { userId: { in: userIds } }
                     });
                     
-                    // 10. Delete all transactions
+                    console.log('Deleting transaction records...');
                     await tx.transactionTable.deleteMany({
                         where: { 
                             OR: [
@@ -227,18 +232,87 @@ const deleteOrganization = [
                         }
                     });
                     
-                    // 11. Delete user roles
+                    console.log('Deleting user roles...');
                     await tx.userRole.deleteMany({
                         where: { userId: { in: userIds } }
                     });
                     
-                    // 12. Delete organization admins
+                    console.log('Deleting organization admins...');
                     await tx.organization_admin.deleteMany({
                         where: { orgId: id }
                     });
+                    
+                    // Delete additional user-related records from the schema
+                    console.log('Deleting additional user records...');
+                    
+                    // Delete attendance-related records
+                    await tx.attendanceAlert.deleteMany({
+                        where: { userId: { in: userIds } }
+                    });
+                    
+                    await tx.breakRecord.deleteMany({
+                        where: { userId: { in: userIds } }
+                    });
+                    
+                    await tx.geofenceViolation.deleteMany({
+                        where: { userId: { in: userIds } }
+                    });
+                    
+                    await tx.progressivePenaltyHistory.deleteMany({
+                        where: { userId: { in: userIds } }
+                    });
+                    
+                    // Delete shift and employee records
+                    await tx.employeeShift.deleteMany({
+                        where: { userId: { in: userIds } }
+                    });
+                    
+                    // Delete task-related records
+                    await tx.taskUpdate.deleteMany({
+                        where: { updatedById: { in: userIds } }
+                    });
+                    
+                    await tx.taskAssignment.deleteMany({
+                        where: { 
+                            OR: [
+                                { assignedToId: { in: userIds } },
+                                { assignedById: { in: userIds } }
+                            ]
+                        }
+                    });
+                    
+                    await tx.taskGroupMember.deleteMany({
+                        where: { 
+                            OR: [
+                                { userId: { in: userIds } },
+                                { addedById: { in: userIds } }
+                            ]
+                        }
+                    });
+                    
+                    // Delete other user-related records
+                    await tx.emailOtpVerification.deleteMany({
+                        where: { userId: { in: userIds } }
+                    });
+                    
+                    await tx.tempLoginSession.deleteMany({
+                        where: { userId: { in: userIds } }
+                    });
+                    
+                    await tx.salaryDispute.deleteMany({
+                        where: { userId: { in: userIds } }
+                    });
+                    
+                    // Delete user departments
+                    await tx.userDepartment.deleteMany({
+                        where: { userId: { in: userIds } }
+                    });
                 }
                 
-                // 13. Delete role permissions and roles
+                // 4. Delete organization-specific records
+                console.log('Deleting organization-specific records...');
+                
+                // Delete role permissions and roles
                 const roles = await tx.role.findMany({
                     where: { orgId: id },
                     select: { id: true }
@@ -256,17 +330,17 @@ const deleteOrganization = [
                     where: { orgId: id }
                 });
                 
-                // 14. Delete leave types
+                // Delete leave types
                 await tx.leaveType.deleteMany({
                     where: { orgId: id }
                 });
                 
-                // 15. Delete notification templates
+                // Delete notification templates
                 await tx.notificationTemplate.deleteMany({
                     where: { orgId: id }
                 });
                 
-                // 16. Delete holidays and holiday types
+                // Delete holidays and holiday types
                 await tx.holiday.deleteMany({
                     where: { orgId: id }
                 });
@@ -275,35 +349,96 @@ const deleteOrganization = [
                     where: { orgId: id }
                 });
                 
-                // 17. Delete departments
+                // Delete attendance and geofence records
+                await tx.organizationAttendanceRules.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                await tx.organizationGeofence.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                await tx.organizationBreakRules.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                // Delete shift templates
+                await tx.shiftTemplate.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                // Delete payroll-related records
+                await tx.payrollTemplate.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                await tx.payrollCycle.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                await tx.salaryTemplate.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                await tx.calculationRule.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                await tx.workflowStep.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                // Delete tasks and task groups
+                await tx.task.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                await tx.taskGroup.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                // Delete onboarding candidates
+                await tx.onboardingCandidate.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                // Delete departments
                 await tx.department.deleteMany({
                     where: { orgId: id }
                 });
                 
-                // 18. Delete users
-                await tx.user.deleteMany({
-                    where: { orgId: id }
-                });
-                
-                // Delete permission presets before deleting the organization
-                await tx.permissionPreset.deleteMany({
-                    where: { orgId: id }
-                });
-                
-                // 19. Delete billing records
-                await tx.billingRecord.deleteMany({
-                    where: { organizationId: id }
-                });
-                
-                // 20. Delete activity logs
+                // Delete activity logs before deleting users (due to foreign key constraints)
+                console.log('Deleting activity logs...');
                 await tx.activityLog.deleteMany({
                     where: { orgId: id }
                 });
                 
-                // 21. Finally delete the organization itself
+                // Delete users (this should be done after all related records)
+                console.log('Deleting users...');
+                await tx.user.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                // Delete permission presets
+                await tx.permissionPreset.deleteMany({
+                    where: { orgId: id }
+                });
+                
+                // Delete billing records
+                await tx.billingRecord.deleteMany({
+                    where: { organizationId: id }
+                });
+                
+                // Finally delete the organization itself
+                console.log('Deleting organization...');
                 await tx.organization.delete({
                     where: { id }
                 });
+                
+                console.log('Organization deletion transaction completed successfully');
+            }, {
+                maxWait: 15000, // 15 seconds maximum wait
+                timeout: 30000, // 30 seconds timeout
             });
             
             res.status(200).json({ message: 'Organization and all related data deleted successfully' });
@@ -475,16 +610,17 @@ const createCompleteOrganization = [
                 });
                 console.log('Organization settings created');
 
-                // Step 3: Check if admin email already exists
-                console.log('Checking for existing admin email...');
+                // Step 3: Check if admin email already exists in this organization
+                console.log('Checking for existing admin email in organization...');
                 const existingUser = await tx.user.findFirst({
                     where: {
+                        orgId: newOrganization.id,
                         email: admin.email
                     }
                 });
 
                 if (existingUser) {
-                    throw new Error(`User with email ${admin.email} already exists`);
+                    throw new Error(`User with email ${admin.email} already exists in this organization`);
                 }
 
                 // Step 4: Create Admin Role with permissions
@@ -575,8 +711,8 @@ const createCompleteOrganization = [
                     verificationToken: verificationToken
                 };
             }, {
-                maxWait: 10000, // 10 seconds
-                timeout: 20000, // 20 seconds
+                maxWait: 20000, // 20 seconds
+                timeout: 60000, // 60 seconds
             });
 
             // Step 7: Initialize permission presets (outside transaction)

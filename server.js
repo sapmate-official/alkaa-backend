@@ -8,6 +8,9 @@ import { configDotenv } from 'dotenv'
 // import fs from 'fs'
 import ServerlessHttp from 'serverless-http'
 import { startScheduledJobs } from './src/jobs/scheduler.js'
+import { bootstrapPayrollCycleQueue } from './src/jobs/payrollCycleQueue.js'
+import { PayrollCycleService } from './src/controller/v3/Payroll/services/payrollCycleService.js'
+import { buildAccessCookieOptions } from './src/util/authCookies.js'
 // import morgan from 'morgan'
 // import winston from 'winston'
 // import 'winston-daily-rotate-file'
@@ -36,12 +39,13 @@ app.options('*', cors(corsOptions))
 // Add in your middleware or authentication-related code
 app.use((req, res, next) => {
   if (req.cookies.accessToken) {
-    res.clearCookie('accessToken');
-    res.cookie('accessToken', req.cookies.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'none'  // Change this from 'strict' to 'none' for cross-domain
-    });
+    const cookieOptions = buildAccessCookieOptions();
+    const clearOptions = { ...cookieOptions };
+    delete clearOptions.maxAge;
+    delete clearOptions.expires;
+
+    res.clearCookie('accessToken', clearOptions);
+    res.cookie('accessToken', req.cookies.accessToken, cookieOptions);
   }
   next();
 });
@@ -86,6 +90,7 @@ import validateTokenMiddlewear from './src/middleware/validateToken.js'
 
 // Conditional middleware that skips validation for specific public routes
 app.use("/api/v2/", (req, res, next) => {
+  console.log(`V2 Request Method: ${req.method}, Request URL: ${req.url}`);
   // Public routes that don't require authentication
   const publicRoutes = [
     '/onboarding/verify/',
@@ -132,6 +137,10 @@ app.post("/api/public/demo-request", sendDemoRequestEmail);
 app.get('/', (req, res) => {
     res.sendFile(path.join(dirname, 'public', 'interface.html'))
 })
+
+bootstrapPayrollCycleQueue((job) => PayrollCycleService.processPayrollCycleJob(job))
+  .then(() => console.log('Payroll cycle queue ready'))
+  .catch((error) => console.error('Failed to bootstrap payroll cycle queue:', error));
 
 // Start server
 if (process.env.NODE_ENV !== 'production') {
