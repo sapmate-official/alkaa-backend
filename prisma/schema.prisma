@@ -21,6 +21,7 @@ model Organization {
   id                    String                        @id @default(cuid())
   name                  String
   industry              String?
+  timezone              String?
   logo                  String?
   address               String?
   subscriptionStart     DateTime                      @default(now())
