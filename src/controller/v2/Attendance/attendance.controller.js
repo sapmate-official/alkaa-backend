@@ -899,13 +899,13 @@ export const createPastAttendance = async (req, res) => {
             return res.status(400).json({ message: "Cannot create attendance for same-day dates" });
         }
         
-        // Check if the attendance date is more than 5 days in the past
-        const fiveDaysAgo = new Date();
-        fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-        if (attendanceDate < fiveDaysAgo) {
+        // Check if the attendance date is more than 45 days in the past
+        const fortyFiveDaysAgo = new Date();
+        fortyFiveDaysAgo.setDate(fortyFiveDaysAgo.getDate() - 45);
+        if (attendanceDate < fortyFiveDaysAgo) {
             return res.status(400).json({ 
-                message: "Cannot create attendance for dates more than 5 days in the past. Please contact your administrator for older records.",
-                maxAllowedDate: fiveDaysAgo.toISOString().split('T')[0],
+                message: "Cannot create attendance for dates more than 45 days in the past. Please contact your administrator for older records.",
+                maxAllowedDate: fortyFiveDaysAgo.toISOString().split('T')[0],
                 attemptedDate: attendanceDate.toISOString().split('T')[0]
             });
         }
