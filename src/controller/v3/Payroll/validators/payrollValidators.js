@@ -735,4 +735,74 @@ export class PayrollValidators {
 
         return file;
     }
+
+    // Pipeline-specific permissions
+    static async canViewPayrollRecords(currentUserId, orgId) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: { in: ["view_all_payroll", "manage_payroll", "generate_salary_of_all"] }
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!hasPermission) {
+            return await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canApprovePayrollRecords(currentUserId, orgId) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: { in: ["approve_payroll_cycle", "manage_payroll", "generate_salary_of_all"] }
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!hasPermission) {
+            return await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
+
+    static async canEditPayrollRecords(currentUserId, orgId) {
+        const hasPermission = await prisma.rolePermission.findFirst({
+            where: {
+                permission: {
+                    key: { in: ["manage_payroll", "generate_salary_of_all", "edit_payroll"] }
+                },
+                role: {
+                    users: {
+                        some: {
+                            userId: currentUserId
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!hasPermission) {
+            return await this.hasAdminPermission(currentUserId);
+        }
+
+        return !!hasPermission;
+    }
 }

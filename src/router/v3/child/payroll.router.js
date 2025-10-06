@@ -84,6 +84,13 @@ import {
     getCyclePayoutSummary
 } from "../../../controller/v3/Payroll/payrollPayoutController.js";
 
+// Import pipeline progress controllers
+import {
+    getPipelineProgress,
+    savePipelineProgress,
+    clearPipelineProgress
+} from "../../../controller/v3/Payroll/pipelineProgressController.js";
+
 // Import validation middleware
 import {
     createTemplateValidation,
@@ -186,5 +193,10 @@ router.get("/workflow/steps", validateToken, monthYearQueryValidation, workflowQ
 router.put("/workflow/steps/:stepId", validateToken, updateWorkflowStepValidation, updateWorkflowStep);
 router.get("/workflow/progress", validateToken, monthYearQueryValidation, getWorkflowProgress);
 router.post("/workflow/initialize", validateToken, initializeWorkflowValidation, initializeWorkflow);
+
+// Pipeline progress management routes (UI state only)
+router.get("/pipeline/progress/:month/:year", validateToken, getPipelineProgress);
+router.post("/pipeline/progress", validateToken, savePipelineProgress);
+router.delete("/pipeline/progress/:month/:year", validateToken, clearPipelineProgress);
 
 export default router;
