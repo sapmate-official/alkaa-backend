@@ -203,8 +203,8 @@ class ContinuousTrackingService {
 
                 if (breakRecord && !breakRecord.endTime) {
                     // Check break policies to see if geofence compliance is required during breaks
-                    const breakPolicies = breakRecord.user.organization.OrganizationSettings?.[0]?.breakPolicies;
-                    const requireGeofenceComplianceDuringBreaks = breakPolicies?.requireGeofenceComplianceDuringBreaks || false;
+                    const breakPolicies = breakRecord?.user?.organization?.OrganizationSettings?.[0]?.breakPolicies || {};
+                    const requireGeofenceComplianceDuringBreaks = Boolean(breakPolicies?.requireGeofenceComplianceDuringBreaks);
                     
                     if (!requireGeofenceComplianceDuringBreaks) {
                         return true;

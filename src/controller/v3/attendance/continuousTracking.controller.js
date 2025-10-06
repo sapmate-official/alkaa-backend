@@ -3,6 +3,32 @@ import ContinuousTrackingService from "../../../services/attendance/ContinuousTr
 
 const trackingService = new ContinuousTrackingService();
 
+const normalizeLocationPayload = (rawLocation) => {
+    if (!rawLocation || typeof rawLocation !== 'object') {
+        return null;
+    }
+
+    const latitude = Number(rawLocation.latitude ?? rawLocation.lat);
+    const longitude = Number(rawLocation.longitude ?? rawLocation.lng);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return null;
+    }
+
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        return null;
+    }
+
+    const accuracy = rawLocation.accuracy !== undefined ? Number(rawLocation.accuracy) : undefined;
+
+    return {
+        ...rawLocation,
+        latitude,
+        longitude,
+        ...(accuracy !== undefined && Number.isFinite(accuracy) ? { accuracy } : {})
+    };
+};
+
 /**
  * Start continuous location tracking session
  * Called when employee checks in
@@ -11,23 +37,55 @@ export const startTrackingSession = async (req, res) => {
     try {
         const { userId, attendanceId, location, workMode = 'OFFICE' } = req.body;
 
+        const normalizedLocation = normalizeLocationPayload(location);
+        if (!normalizedLocation) {
+            return res.status(400).json({
+                error: "Invalid location data",
+                message: "Valid latitude and longitude are required"
+            });
+        }
+
+        // Validate required fields
+        if (!userId || !attendanceId) {
+            return res.status(400).json({
+                error: "Missing required fields",
+                message: "userId and attendanceId are required"
+            });
+        }
+
+        const attendanceRecord = await prisma.attendanceRecord.findUnique({
+            where: { id: attendanceId },
+            include: {
+                user: {
+                    select: { id: true, orgId: true }
+                }
+            }
+        });
+
+        if (!attendanceRecord) {
+            return res.status(404).json({
+                error: "Attendance record not found",
+                message: "Unable to find attendance reference for tracking session"
+            });
+        }
+
+        if (attendanceRecord.userId !== userId) {
+            return res.status(403).json({
+                error: "Attendance mismatch",
+                message: "Attendance record does not belong to provided user"
+            });
+        }
+
+        const orgId = attendanceRecord.user.orgId;
+
         // Verify permissions
-        if (req.user.id !== userId && req.user.orgId !== (await getUserOrg(userId))) {
+        if (req.user.orgId !== orgId || (req.user.id !== userId && req.user.orgId !== orgId)) {
             return res.status(403).json({
                 error: "Access denied"
             });
         }
 
-        // Validate required fields
-        if (!userId || !attendanceId || !location) {
-            return res.status(400).json({
-                error: "Missing required fields",
-                message: "userId, attendanceId, and location are required"
-            });
-        }
-
         // Get organization geofences
-        const orgId = req.user.orgId;
         const geofences = await prisma.organizationGeofence.findMany({
             where: {
                 orgId,
@@ -40,7 +98,7 @@ export const startTrackingSession = async (req, res) => {
             userId,
             orgId,
             attendanceId,
-            location,
+            location: normalizedLocation,
             workMode, // OFFICE, OUTSTATION, REMOTE, CLIENT_SITE
             geofences
         });
@@ -68,7 +126,8 @@ export const processLocationUpdate = async (req, res) => {
         const { sessionId } = req.params;
         const { location, isBreakActive = false, breakId = null } = req.body;
 
-        if (!location || !location.latitude || !location.longitude) {
+        const normalizedLocation = normalizeLocationPayload(location);
+        if (!normalizedLocation) {
             return res.status(400).json({
                 error: "Invalid location data",
                 message: "Valid latitude and longitude are required"
@@ -94,10 +153,16 @@ export const processLocationUpdate = async (req, res) => {
             });
         }
 
+        if (req.user.id !== session.userId && req.user.orgId !== session.user.orgId) {
+            return res.status(403).json({
+                error: "Access denied"
+            });
+        }
+
         // Process the location update
         const result = await trackingService.processLocationUpdate({
             session,
-            location,
+            location: normalizedLocation,
             isBreakActive,
             breakId,
             timestamp: new Date()
