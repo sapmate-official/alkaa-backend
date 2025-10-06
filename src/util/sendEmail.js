@@ -4,9 +4,50 @@ configDotenv()
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
+/**
+ * Get ordinal suffix for numbers (1st, 2nd, 3rd, 4th, etc.)
+ * @param {number} num - The number to get suffix for
+ * @returns {string} - The ordinal suffix
+ */
+const getOrdinalSuffix = (num) => {
+    const lastDigit = num % 10;
+    const lastTwoDigits = num % 100;
+    
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
+        return 'th';
+    }
+    
+    switch (lastDigit) {
+        case 1: return 'st';
+        case 2: return 'nd';
+        case 3: return 'rd';
+        default: return 'th';
+    }
+};
+
 const sendBrevoEmail = async (emailData) => {
     try {
-        console.log("Sending email via Brevo API with data:", emailData);
+        console.log("Sending email via Brevo API with data:", {
+            ...emailData,
+            htmlContent: emailData.htmlContent ? '[HTML Content]' : undefined,
+            textContent: emailData.textContent ? '[Text Content]' : undefined
+        });
+        
+        // Ensure sender email is properly configured
+        if (!emailData.sender?.email || !process.env.SENDER_EMAIL) {
+            throw new Error('SENDER_EMAIL environment variable not configured');
+        }
+        
+        // Add additional headers for better deliverability
+        const enhancedEmailData = {
+            ...emailData,
+            headers: {
+                'X-Entity-Ref-ID': `alkaa-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                'X-Brevo-Category': 'transactional',
+                'Message-ID': `<${Date.now()}.${Math.random().toString(36).substr(2, 9)}@${process.env.SENDER_EMAIL?.split('@')[1] || 'alkaa.com'}>`,
+                ...emailData.headers
+            }
+        };
         
         const response = await fetch(BREVO_API_URL, {
             method: 'POST',
@@ -14,8 +55,9 @@ const sendBrevoEmail = async (emailData) => {
                 'Accept': 'application/json',
                 'Api-Key': BREVO_API_KEY,
                 'Content-Type': 'application/json',
+                'User-Agent': 'Alkaa-HRMS/1.0'
             },
-            body: JSON.stringify(emailData)
+            body: JSON.stringify(enhancedEmailData)
         });
 
         if (!response.ok) {
@@ -23,10 +65,13 @@ const sendBrevoEmail = async (emailData) => {
             console.error("Brevo API error response:", errorData);
             throw new Error(`Brevo API error: ${response.status} - ${JSON.stringify(errorData)}`);
         }
-        console.log("Email sent successfully via Brevo",response.status);
+        
+        const result = await response.json();
+        console.log("Email sent successfully via Brevo", response.status, "Message ID:", result.messageId);
 
-        return await response.json();
+        return result;
     } catch (error) {
+        console.error("Error in sendBrevoEmail:", error);
         throw error;
     }
 };
@@ -768,6 +813,84 @@ export const sendNewEmployeeWelcomeEmail = async (employeeEmail, employeeName, m
 //         return error;
 //     }
 // };
+
+export const sendHolidayReminderEmail = async (emails, holidayData, companyName, daysUntilHoliday = 1) => {
+    try {
+        const recipients = emails.map(email => ({ email, name: "Employee" }));
+
+        const dayLabel = daysUntilHoliday <= 0
+            ? "today"
+            : daysUntilHoliday === 1
+                ? "tomorrow"
+                : `in ${daysUntilHoliday} days`;
+
+        const formattedDate = new Date(holidayData.date).toLocaleDateString('default', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+
+        const emailData = {
+            sender: {
+                name: companyName,
+                email: process.env.SENDER_EMAIL
+            },
+            to: recipients,
+            subject: `Reminder: ${holidayData.name} is ${dayLabel}`,
+            htmlContent: `
+                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fafafa;">
+                    <div style="background: linear-gradient(135deg, #4CAF50 0%, #FF9800 100%); padding: 24px 20px; border-radius: 12px 12px 0 0; text-align: center; color: white;">
+                        <h1 style="margin: 0; font-size: 24px; font-weight: 600;">Holiday Reminder</h1>
+                        <p style="margin: 8px 0 0; font-size: 16px;">${holidayData.name} is ${dayLabel}</p>
+                    </div>
+                    <div style="background-color: #ffffff; padding: 28px 24px; border-radius: 0 0 12px 12px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);">
+                        <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+                            Hi there,
+                        </p>
+                        <p style="color: #4B5563; font-size: 16px; line-height: 1.7; margin-bottom: 20px;">
+                            A quick heads-up that <strong>${holidayData.name}</strong> falls on <strong>${formattedDate}</strong>.
+                            ${daysUntilHoliday === 1 ? 'Enjoy the day off tomorrow!' : 'Plan your schedule accordingly so you can enjoy the break.'}
+                        </p>
+                        <div style="background-color: #F3F4F6; padding: 20px; border-radius: 10px; border-left: 4px solid #4CAF50; margin-bottom: 20px;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="padding: 6px 0; color: #6B7280; font-weight: 500;">Holiday</td>
+                                    <td style="padding: 6px 0; color: #111827; text-align: right; font-weight: 600;">${holidayData.name}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 6px 0; color: #6B7280; font-weight: 500;">Date</td>
+                                    <td style="padding: 6px 0; color: #111827; text-align: right; font-weight: 600;">${formattedDate}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 6px 0; color: #6B7280; font-weight: 500;">Type</td>
+                                    <td style="padding: 6px 0; color: #111827; text-align: right; font-weight: 600;">${holidayData.isOptional ? 'Optional' : 'Company-wide'}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        ${holidayData.description ? `
+                        <p style="color: #4B5563; font-size: 15px; line-height: 1.6; margin-bottom: 20px;">
+                            ${holidayData.description}
+                        </p>
+                        ` : ''}
+                        <p style="color: #6B7280; font-size: 14px; line-height: 1.6;">
+                            If you have any urgent tasks, please make sure to wrap them up before the holiday.
+                            ${holidayData.isOptional ? ' Optional holidays can be availed through the leave system if needed.' : ' Our offices and support channels will be closed during this time.'}
+                        </p>
+                    </div>
+                    <div style="text-align: center; margin-top: 20px; color: #9CA3AF; font-size: 12px;">
+                        <p style="margin: 0;">Stay rested and enjoy your time off!</p>
+                        <p style="margin: 4px 0 0;">— ${companyName} Team</p>
+                    </div>
+                </div>
+            `
+        };
+
+        return await sendBrevoEmail(emailData);
+    } catch (error) {
+        return error;
+    }
+};
 
 export const sendHolidayAnnouncementEmail = async (emails, holidayData, companyName) => {
     try {
@@ -1905,3 +2028,223 @@ export const sendWelcomeEmailToAdmin = async (organizationObject, adminObject, r
                 console.warn('Failed to send welcome email:', emailError.message);
             }
 }
+
+/**
+ * Send birthday email to an employee
+ * @param {string} employeeEmail - Employee's email address
+ * @param {string} employeeName - Employee's full name
+ * @param {string} firstName - Employee's first name
+ * @param {string} companyName - Organization name
+ * @param {Array} ccEmails - Array of CC email objects [{email, name}]
+ * @param {number} age - Employee's age (optional)
+ * @param {string} timezone - Organization timezone (optional)
+ * @returns {Promise} - Email sending result
+ */
+export const sendBirthdayEmail = async (employeeEmail, employeeName, firstName, companyName, ccEmails = [], age = null, timezone = 'UTC') => {
+    try {
+        // Validate required parameters
+        if (!employeeEmail || typeof employeeEmail !== 'string') {
+            throw new Error('Employee email is required and must be a valid string');
+        }
+        if (!firstName || typeof firstName !== 'string') {
+            throw new Error('Employee first name is required and must be a valid string');
+        }
+        if (!companyName || typeof companyName !== 'string') {
+            throw new Error('Company name is required and must be a valid string');
+        }
+
+        // Sanitize inputs
+        const sanitizedEmail = employeeEmail.trim().toLowerCase();
+        const sanitizedFirstName = firstName.trim();
+        const sanitizedCompanyName = companyName.trim();
+        const sanitizedFullName = employeeName ? employeeName.trim() : sanitizedFirstName;
+        
+        // Validate and format CC emails
+        const validCcEmails = Array.isArray(ccEmails) 
+            ? ccEmails.filter(cc => cc && cc.email && typeof cc.email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cc.email.trim()))
+                     .map(cc => ({
+                         email: cc.email.trim().toLowerCase(),
+                         name: cc.name || 'Team Member'
+                     }))
+            : [];
+
+        // Create age-appropriate birthday message
+        const ageMessage = age && age > 0 ? ` your ${age}${getOrdinalSuffix(age)} birthday` : ' your special day';
+        
+        console.log(`📧 Preparing birthday email for: ${sanitizedFullName} (${sanitizedEmail})`);
+        console.log(`🎂 Age: ${age || 'Not specified'}, Timezone: ${timezone}`);
+        console.log(`📮 CC Recipients: ${validCcEmails.length > 0 ? validCcEmails.map(cc => cc.email).join(', ') : 'None'}`);
+
+        const emailData = {
+            sender: {
+                name: `${sanitizedCompanyName} Team` || "Alkaa Team",
+                email: process.env.SENDER_EMAIL
+            },
+            replyTo: {
+                name: `${companyName} HR Team` || "Alkaa HR Team",
+                email: process.env.HR_EMAIL || process.env.SENDER_EMAIL
+            },
+            to: [{
+                email: sanitizedEmail,
+                name: sanitizedFullName
+            }],
+            ...(validCcEmails && validCcEmails.length > 0 && { cc: validCcEmails }),
+            subject: `🎉 Happy Birthday, ${sanitizedFirstName}! 🎂`,
+            // Add custom headers for better deliverability
+            headers: {
+                'X-Category': 'employee-birthday',
+                'X-Priority': '3',
+                'X-Mailer': 'Alkaa HRMS v1.0',
+                'List-Unsubscribe': `<${process.env.CLIENT_URL}/unsubscribe/birthday>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+            },
+            // Plain text version for better deliverability
+            textContent: `
+Happy Birthday, ${sanitizedFirstName}!
+
+Dear ${sanitizedFirstName},
+
+Today is${ageMessage}, and we couldn't be more excited to celebrate with you!
+
+On behalf of everyone at ${sanitizedCompanyName}, we want to wish you a very Happy Birthday! May this new year of your life bring you happiness, success, and all the wonderful things you deserve.
+
+Thank you for being such an amazing part of our team. Your contributions make our workplace brighter every day!
+
+We hope you have a wonderful day celebrating with family and friends. Enjoy your special day to the fullest!
+
+With warmest birthday wishes,
+The ${sanitizedCompanyName} Team
+
+---
+${sanitizedCompanyName} - Making every day special
+© ${new Date().getFullYear()} ${sanitizedCompanyName}. All rights reserved.
+
+If you no longer wish to receive birthday emails, you can unsubscribe at: ${process.env.CLIENT_URL}/unsubscribe/birthday
+            `,
+            htmlContent: `
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta name="format-detection" content="telephone=no">
+                <meta name="x-apple-disable-message-reformatting">
+                <title>Happy Birthday, ${sanitizedFirstName}!</title>
+                <!--[if mso]>
+                <noscript>
+                    <xml>
+                        <o:OfficeDocumentSettings>
+                            <o:AllowPNG/>
+                            <o:PixelsPerInch>96</o:PixelsPerInch>
+                        </o:OfficeDocumentSettings>
+                    </xml>
+                </noscript>
+                <![endif]-->
+            </head>
+            <body style="margin: 0; padding: 0; background-color: #f8f9fa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fa;">
+                <!-- Header with company branding -->
+                <div style="background: linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 50%, #45B7D1 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0; position: relative; overflow: hidden;">
+                <div style="position: absolute; top: -50px; left: -50px; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%;"></div>
+                <div style="position: absolute; top: 20px; right: -30px; width: 60px; height: 60px; background: rgba(255,255,255,0.1); border-radius: 50%;"></div>
+                
+                <div style="font-size: 60px; margin-bottom: 20px;" role="img" aria-label="Birthday celebration emojis">🎉🎂🎈</div>
+                <img src="${process.env.CLIENT_URL}/logo.svg" alt="${sanitizedCompanyName} Logo" style="height: 50px; margin-bottom: 20px; display: block; margin-left: auto; margin-right: auto;" onerror="this.style.display='none';">
+                <h1 style="color: white; margin: 0; font-size: 32px; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                    Happy Birthday!
+                </h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0; font-size: 18px; font-weight: 300;">
+                    Wishing you a fantastic day ahead
+                </p>
+                </div>
+                
+                <!-- Main content -->
+                <div style="background-color: white; padding: 40px 30px; border-radius: 0 0 12px 12px; box-shadow: 0 8px 25px rgba(0,0,0,0.1);">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h2 style="color: #2c3e50; font-size: 28px; margin-bottom: 15px; font-weight: 600;">
+                    Dear ${sanitizedFirstName},
+                    </h2>
+                    <div style="width: 80px; height: 4px; background: linear-gradient(90deg, #FF6B6B, #4ECDC4); margin: 0 auto; border-radius: 2px;"></div>
+                </div>
+                
+                <div style="text-align: center; margin-bottom: 35px;">
+                    <p style="color: #34495e; font-size: 18px; line-height: 1.6; margin-bottom: 20px;">
+                    🌟 Today is${ageMessage}, and we couldn't be more excited to celebrate with you! 🌟
+                    </p>
+                    <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+                    On behalf of everyone at <strong style="color: #2c3e50;">${sanitizedCompanyName}</strong>, we want to wish you a very Happy Birthday! 
+                    May this new year of your life bring you happiness, success, and all the wonderful things you deserve.
+                    </p>
+                    <p style="color: #34495e; font-size: 16px; line-height: 1.6;">
+                    Thank you for being such an amazing part of our team. Your contributions make our workplace brighter every day! ✨
+                    </p>
+                </div>
+                
+                <!-- Birthday message card -->
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 12px; text-align: center; margin: 30px 0;">
+                    <div style="font-size: 40px; margin-bottom: 15px;" role="img" aria-label="Gift emoji">🎁</div>
+                    <h3 style="color: white; margin: 0 0 10px; font-size: 20px; font-weight: 600;">
+                    Birthday Wishes from Your Team
+                    </h3>
+                    <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 16px; font-style: italic;">
+                    "May your birthday be filled with joy, laughter, and cherished moments!"
+                    </p>
+                </div>
+                
+                <!-- Closing message -->
+                <div style="border-top: 2px solid #ecf0f1; padding-top: 30px; text-align: center;">
+                    <p style="color: #7f8c8d; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">
+                    We hope you have a wonderful day celebrating with family and friends. 
+                    Enjoy your special day to the fullest!
+                    </p>
+                    
+                    <div style="margin: 25px 0;">
+                    <span style="display: inline-block; background: linear-gradient(135deg, #FF6B6B, #4ECDC4); color: white; padding: 15px 30px; border-radius: 25px; font-weight: 600; font-size: 16px; text-decoration: none; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                        🎉 Celebrate & Enjoy! 🎉
+                    </span>
+                    </div>
+                    
+                    <p style="color: #2c3e50; font-size: 16px; font-weight: 600; margin: 25px 0 15px;">
+                    With warmest birthday wishes,<br>
+                    The ${sanitizedCompanyName} Team 💝
+                    </p>
+                </div>
+                </div>
+                
+                <!-- Email footer with compliance -->
+                <div style="background-color: #f8f9fa; padding: 20px; margin-top: 20px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                    <p style="margin: 0 0 10px; color: #6c757d; font-size: 12px; line-height: 1.4;">
+                        <strong>${sanitizedCompanyName}</strong><br>
+                        This is an automated birthday greeting from your HR system.<br>
+                        You received this email because you are an employee of ${sanitizedCompanyName}.
+                    </p>
+                    <p style="margin: 10px 0; color: #6c757d; font-size: 12px;">
+                        <a href="${process.env.CLIENT_URL}/unsubscribe/birthday?email=${encodeURIComponent(sanitizedEmail)}" 
+                           style="color: #007bff; text-decoration: underline;">
+                           Unsubscribe from birthday emails
+                        </a> | 
+                        <a href="${process.env.CLIENT_URL}/contact" 
+                           style="color: #007bff; text-decoration: underline;">
+                           Contact HR
+                        </a>
+                    </p>
+                    <p style="margin: 10px 0 0; color: #95a5a6; font-size: 11px;">
+                        © ${new Date().getFullYear()} ${sanitizedCompanyName}. All rights reserved.<br>
+                        🎈 Making every day special 🎈
+                    </p>
+                </div>
+            </div>
+            </body>
+            </html>
+            `
+        };
+
+        console.log('Sending birthday email to:', sanitizedEmail);
+        const result = await sendBrevoEmail(emailData);
+        console.log('Birthday email sent successfully to:', sanitizedFullName);
+        return result;
+    } catch (error) {
+        console.error('Error sending birthday email:', error);
+        throw error;
+    }
+};

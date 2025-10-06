@@ -1,0 +1,114 @@
+[
+    {
+        "id": "cm8aa77w7000lp8v4qe1upt95",
+        "categoryId": "cm8aa631y000jp8v49w87ozgn",
+        "name": "Manager",
+        "description": "This will hold access control of employee to set organization.",
+        "createdAt": "2025-03-15 14:07:43.478",
+        "updatedAt": "2025-03-15 14:07:43.478"
+    },
+    {
+        "id": "cm8q8guh3000cp8hnl32uw62t",
+        "categoryId": "cm8q8gll4000ap8hn8ltfwcp3",
+        "name": "Manager",
+        "description": null,
+        "createdAt": "2025-03-26 18:03:32.295",
+        "updatedAt": "2025-03-26 18:03:32.295"
+    },
+    {
+        "id": "cm8q8h3q5000ep8hn3w4wzj9o",
+        "categoryId": "cm8q8gll4000ap8hn8ltfwcp3",
+        "name": "User",
+        "description": null,
+        "createdAt": "2025-03-26 18:03:44.22",
+        "updatedAt": "2025-03-26 18:03:44.22"
+    },
+    {
+        "id": "cm900kbpz000op8wyhadh5wot",
+        "categoryId": "cm900h381000mp8wy7932vq22",
+        "name": "Manager",
+        "description": "This group will contained all manager level salary operation. ",
+        "createdAt": "2025-04-02 14:19:59.381",
+        "updatedAt": "2025-04-02 14:19:59.381"
+    },
+    {
+        "id": "cm901ildq000dtlu0d2wzdurc",
+        "categoryId": "cm900h381000mp8wy7932vq22",
+        "name": "Personal",
+        "description": "This sub-category will contained all salary related permission in personal level.",
+        "createdAt": "2025-04-02 14:46:38.201",
+        "updatedAt": "2025-04-02 14:46:38.201"
+    },
+    {
+        "id": "cm94c1g6o0002tl8sktjdann6",
+        "categoryId": "cm94c0fxv0000tl8swcu7c4df",
+        "name": "Manager",
+        "description": "This will hold access control of Manager to manipulate Department.",
+        "createdAt": "2025-04-05 14:52:18.789",
+        "updatedAt": "2025-04-05 14:52:18.789"
+    },
+    {
+        "id": "cm9bl06q9000ctl1wp0mxw6tk",
+        "categoryId": "cm9bkzd69000atl1wmpdgo2vr",
+        "name": "Manager",
+        "description": "This will hold access control of Manager to restrict view of user info.",
+        "createdAt": "2025-04-10 16:37:39.659",
+        "updatedAt": "2025-04-10 16:37:39.659"
+    },
+    {
+        "id": "cm9dozplf0002tl5oncrfrn7g",
+        "categoryId": "cm9doz4uz0000tl5oi7b2u268",
+        "name": "Manager",
+        "description": "This will hold access control of Manager to restrict employee management.",
+        "createdAt": "2025-04-12 04:04:48.252",
+        "updatedAt": "2025-04-12 04:04:48.252"
+    },
+    {
+        "id": "cm9du13630002tlfkmjn5a2j4",
+        "categoryId": "cm9du0q7t0000tlfkq57fgiaj",
+        "name": "Manager",
+        "description": "This will hold access control of Manager to restrict role management.",
+        "createdAt": "2025-04-12 06:25:50.599",
+        "updatedAt": "2025-04-12 06:25:50.599"
+    },
+    {
+        "id": "cm9dvwr0t0002tl9swglzrg9g",
+        "categoryId": "cm9dvwblc0000tl9s6tug9lhs",
+        "name": "Manager",
+        "description": "This will hold access control of Manager to restrict holiday management.",
+        "createdAt": "2025-04-12 07:18:27.466",
+        "updatedAt": "2025-04-12 07:18:27.466"
+    },
+    {
+        "id": "cm9e4xqoo0002tl5kf0gqmc3c",
+        "categoryId": "cm9e4xcg50000tl5k9zw6xxmc",
+        "name": "Manager",
+        "description": "This will hold access control of Manager to restrict leave management.",
+        "createdAt": "2025-04-12 11:31:10.23",
+        "updatedAt": "2025-04-12 11:31:10.23"
+    },
+    {
+        "id": "cm9e57bc10004tl5ky2h31nq0",
+        "categoryId": "cm9e4xcg50000tl5k9zw6xxmc",
+        "name": "User",
+        "description": "This will hold access control of User.",
+        "createdAt": "2025-04-12 11:38:36.892",
+        "updatedAt": "2025-04-12 11:38:36.892"
+    },
+    {
+        "id": "cm9ec2nz90005tlgsgn51xhis",
+        "categoryId": "cm9bkzd69000atl1wmpdgo2vr",
+        "name": "User",
+        "description": "This will hold access control of user to edit info.",
+        "createdAt": "2025-04-12 14:50:56.301",
+        "updatedAt": "2025-04-12 14:50:56.301"
+    },
+    {
+        "id": "cm9ee4kh8001jtlgsd4wc3cz1",
+        "categoryId": "cm8aa631y000jp8v49w87ozgn",
+        "name": "View",
+        "description": "This will hold access control of organization settings.",
+        "createdAt": "2025-04-12 15:48:25.32",
+        "updatedAt": "2025-04-12 15:48:25.32"
+    }
+]

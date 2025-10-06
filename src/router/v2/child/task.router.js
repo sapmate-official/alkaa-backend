@@ -17,5 +17,11 @@ router.delete("/:id", taskController.deleteTask);
 router.get("/user/:userId", taskController.getTasksByUser);
 router.get("/manager/:managerId", taskController.getTasksByManager);
 router.post("/:taskId/updates", taskController.addTaskUpdate);
+router.get("/:taskId/updates", taskController.getTaskUpdates);
+
+// Task assignment routes
+router.post("/:taskId/assign", taskController.assignTask);
+router.delete("/:taskId/unassign", taskController.unassignTask);
+router.get("/:taskId/assignments", taskController.getTaskAssignments);
 
 export default router;

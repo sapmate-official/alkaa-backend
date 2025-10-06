@@ -1,0 +1,62 @@
+name: Deploy to Production (main)
+
+on:
+  push:
+    branches: [ main ]
+
+concurrency:
+  group: deploy-main-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Lightsail Production
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Deploy to Lightsail via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USER }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            set -e
+            APP_PATH="/home/ec2-user/Alkaa/alkaa-backend"
+            
+            echo "Starting deployment process..."
+            echo "Timestamp: $(date)"
+            
+            echo "Pulling latest changes..."
+            cd "$APP_PATH"
+            git fetch --all
+            git checkout main
+            git pull --ff-only origin main
+            
+            echo "Current commit: $(git rev-parse HEAD)"
+            echo "Installing dependencies and generating Prisma client..."
+            
+            # Clear npm cache to free up space
+            npm cache clean --force
+            
+            echo "Installing dependencies..."
+            NODE_OPTIONS="--max-old-space-size=4096" npm install
+            
+            echo "Generating Prisma client..."
+            npx prisma generate
+            
+            echo "Restarting application with PM2..."
+            if pm2 describe alkaa-backend >/dev/null 2>&1; then
+              echo "Application found, restarting..."
+              pm2 restart alkaa-backend
+            else
+              echo "Application not found, starting new instance..."
+              pm2 start server.js --name alkaa-backend
+            fi
+            pm2 save
+            
+            echo "Deployment completed successfully!"
+            echo "Application status:"
+            pm2 list alkaa-backend
