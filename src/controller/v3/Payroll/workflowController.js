@@ -116,14 +116,6 @@ export const getWorkflowSteps = async (req, res) => {
         const steps = await prisma.workflowStep.findMany({
             where: whereClause,
             include: {
-                assignedTo: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        employeeId: true
-                    }
-                },
                 completedBy: {
                     select: {
                         id: true,
@@ -196,14 +188,6 @@ export const updateWorkflowStep = async (req, res) => {
             where: { id: stepId },
             data: updateData,
             include: {
-                assignedTo: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        employeeId: true
-                    }
-                },
                 completedBy: {
                     select: {
                         id: true,

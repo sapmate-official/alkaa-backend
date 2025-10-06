@@ -8,8 +8,8 @@
  * All payroll data is managed by the existing V3 Payroll APIs.
  */
 
-import prisma from "../../../lib/prisma.js";
-import { checkPermission } from "../../../middleware/permission.js";
+import prisma from "../../../db/connectDb.js";
+import { PayrollPermissions } from "./validators/payrollValidators.js";
 
 /**
  * Get pipeline progress for a specific month/year
@@ -18,7 +18,7 @@ import { checkPermission } from "../../../middleware/permission.js";
 export const getPipelineProgress = async (req, res) => {
   try {
     const { month, year } = req.params;
-    const organizationId = req.user.organizationId;
+    const organizationId = req.user?.orgId || req.user?.organizationId;
 
     if (!organizationId) {
       return res.status(400).json({
@@ -46,7 +46,7 @@ export const getPipelineProgress = async (req, res) => {
     }
 
     // Check if user has permission to view payroll
-    const canView = await checkPermission(req.user.id, "canViewPayroll");
+    const canView = await PayrollPermissions.canViewPayrollRecords(req.user.id, organizationId);
     if (!canView) {
       return res.status(403).json({
         success: false,
@@ -107,7 +107,7 @@ export const getPipelineProgress = async (req, res) => {
 export const savePipelineProgress = async (req, res) => {
   try {
     const { month, year, currentStep, stepData } = req.body;
-    const organizationId = req.user.organizationId;
+    const organizationId = req.user?.orgId || req.user?.organizationId;
 
     if (!organizationId) {
       return res.status(400).json({
@@ -139,7 +139,7 @@ export const savePipelineProgress = async (req, res) => {
     }
 
     // Check if user has permission to manage payroll
-    const canManage = await checkPermission(req.user.id, "canManagePayroll");
+    const canManage = await PayrollPermissions.canEditPayrollRecords(req.user.id, organizationId);
     if (!canManage) {
       return res.status(403).json({
         success: false,
@@ -199,7 +199,7 @@ export const savePipelineProgress = async (req, res) => {
 export const clearPipelineProgress = async (req, res) => {
   try {
     const { month, year } = req.params;
-    const organizationId = req.user.organizationId;
+    const organizationId = req.user?.orgId || req.user?.organizationId;
 
     if (!organizationId) {
       return res.status(400).json({
@@ -227,7 +227,7 @@ export const clearPipelineProgress = async (req, res) => {
     }
 
     // Check if user has permission to manage payroll
-    const canManage = await checkPermission(req.user.id, "canManagePayroll");
+    const canManage = await PayrollPermissions.canEditPayrollRecords(req.user.id, organizationId);
     if (!canManage) {
       return res.status(403).json({
         success: false,
