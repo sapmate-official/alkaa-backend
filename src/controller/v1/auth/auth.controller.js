@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import prisma from '../../../db/connectDb.js';
 import { sendLoginOTPEmail, sendLoginNotificationEmail } from '../../../util/sendEmail.js';
 import { generateTokens, generateTokensWithOrg } from '../../../util/generate.js';
+import { setAuthCookies, clearAuthCookies } from '../../../util/authCookies.js';
 
 
 
@@ -827,26 +828,7 @@ export const verifyLoginOTP = [
                 data: { refreshToken }
             });
 
-            // Set cookies with proper domain settings
-            res.cookie("refreshToken", refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",
-                maxAge: 7 * 24 * 60 * 60 * 1000,
-                expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                path: "/",
-                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
-            });
-
-            res.cookie("accessToken", accessToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",
-                maxAge: 2 * 24 * 60 * 60 * 1000,
-                expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-                path: "/",
-                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
-            });
+            setAuthCookies(res, accessToken, refreshToken);
 
             // Log successful login with 2FA
             await logLoginActivity(session.userId, {
@@ -1196,25 +1178,7 @@ export const refreshToken = async (req, res) => {
         // Update user's refresh token
         await updateUser(user.id, { refreshToken: tokens.refreshToken });
         
-        res.cookie("refreshToken", tokens.refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
-        });
-
-        res.cookie("accessToken", tokens.accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 2 * 24 * 60 * 60 * 1000,
-            expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
-        });
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
         return res.status(200).json({
             message: "Tokens refreshed successfully",
@@ -1270,9 +1234,7 @@ export const logout = async (req, res) => {
             // Clear refresh token in database
             await updateUser(user.id, { refreshToken: null });
 
-            // Clear cookies
-            res.clearCookie("refreshToken");
-            res.clearCookie("accessToken");
+            clearAuthCookies(res);
 
             return res.status(200).json({
                 message: "Logged out successfully",

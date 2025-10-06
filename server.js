@@ -10,6 +10,7 @@ import ServerlessHttp from 'serverless-http'
 import { startScheduledJobs } from './src/jobs/scheduler.js'
 import { bootstrapPayrollCycleQueue } from './src/jobs/payrollCycleQueue.js'
 import { PayrollCycleService } from './src/controller/v3/Payroll/services/payrollCycleService.js'
+import { buildAccessCookieOptions } from './src/util/authCookies.js'
 // import morgan from 'morgan'
 // import winston from 'winston'
 // import 'winston-daily-rotate-file'
@@ -38,12 +39,13 @@ app.options('*', cors(corsOptions))
 // Add in your middleware or authentication-related code
 app.use((req, res, next) => {
   if (req.cookies.accessToken) {
-    res.clearCookie('accessToken');
-    res.cookie('accessToken', req.cookies.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'none'  // Change this from 'strict' to 'none' for cross-domain
-    });
+    const cookieOptions = buildAccessCookieOptions();
+    const clearOptions = { ...cookieOptions };
+    delete clearOptions.maxAge;
+    delete clearOptions.expires;
+
+    res.clearCookie('accessToken', clearOptions);
+    res.cookie('accessToken', req.cookies.accessToken, cookieOptions);
   }
   next();
 });

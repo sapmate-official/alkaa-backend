@@ -1,5 +1,6 @@
 import prisma from '../../../db/connectDb.js';
 import { validationResult } from 'express-validator';
+import { includeShiftTemplateRelations, formatShiftTemplate } from '../Shift/shift.controller.js';
 import { sendPasswordResetEmail, sendNewEmployeeWelcomeEmail, sendDepartmentChangeEmail } from '../../../util/sendEmail.js';
 import { logProfileChange, logUserCreation, logUserStatusChange, logAuthActivity, logRoleChange, logUserDeletion, logDepartmentChange } from '../../../util/activityLogger.js';
 import bcrypt from 'bcrypt';
@@ -75,6 +76,17 @@ export const getUserById = async (req, res) => {
                             }
                         }
                     }
+                },
+                employeeShifts: {
+                    include: {
+                        shiftTemplate: {
+                            include: includeShiftTemplateRelations
+                        }
+                    },
+                    orderBy: {
+                        effectiveDate: 'desc'
+                    },
+                    take: 1
                 }
             }
         });
@@ -87,7 +99,17 @@ export const getUserById = async (req, res) => {
             }
             return res.status(404).json({ error: 'User not found' });
         }
-        res.status(200).json({user});
+        const formattedUser = {
+            ...user,
+            employeeShifts: Array.isArray(user.employeeShifts)
+                ? user.employeeShifts.map((shift) => ({
+                      ...shift,
+                      shiftTemplate: formatShiftTemplate(shift.shiftTemplate)
+                  }))
+                : []
+        };
+
+        res.status(200).json({ user: formattedUser });
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });
     }
@@ -113,7 +135,9 @@ export const createUser = async (req, res) => {
         emergencyContact,
         adharNumber,
         panNumber,
-        employeeId
+        employeeId,
+        shiftTemplateId,
+        shiftEffectiveDate
     } = req.body;
 
     // Check for required fields
@@ -133,6 +157,32 @@ export const createUser = async (req, res) => {
 
         if (!organization) {
             return res.status(404).json({ error: 'Organization not found' });
+        }
+
+        let shiftTemplate = null;
+        let shiftEffectiveDateValue = null;
+
+        if (shiftTemplateId) {
+            shiftTemplate = await prisma.shiftTemplate.findFirst({
+                where: {
+                    id: shiftTemplateId,
+                    orgId
+                }
+            });
+
+            if (!shiftTemplate) {
+                return res.status(400).json({ error: 'Invalid shiftTemplateId for this organization' });
+            }
+
+            if (shiftEffectiveDate) {
+                const parsedDate = new Date(shiftEffectiveDate);
+                if (Number.isNaN(parsedDate.getTime())) {
+                    return res.status(400).json({ error: 'shiftEffectiveDate must be a valid date string' });
+                }
+                shiftEffectiveDateValue = parsedDate;
+            } else {
+                shiftEffectiveDateValue = new Date();
+            }
         }
 
         // Prepare user data
@@ -164,6 +214,16 @@ export const createUser = async (req, res) => {
         if (panNumber)
             userData.panNumber = panNumber;
 
+        if (shiftTemplate && shiftEffectiveDateValue) {
+            userData.employeeShifts = {
+                create: [{
+                    shiftTemplateId: shiftTemplate.id,
+                    effectiveDate: shiftEffectiveDateValue,
+                    status: 'ACTIVE'
+                }]
+            };
+        }
+
         // Create user
         const newUser = await prisma.user.create({
             data: userData,
@@ -185,6 +245,16 @@ export const createUser = async (req, res) => {
                         lastName:true,
                         email:true
                     }
+                },
+                employeeShifts: {
+                    include: {
+                        shiftTemplate: {
+                            include: includeShiftTemplateRelations
+                        }
+                    },
+                    orderBy: {
+                        effectiveDate: 'desc'
+                    }
                 }
             }
         });
@@ -203,6 +273,17 @@ export const createUser = async (req, res) => {
                 hashedPassword
             },
         });
+
+        // Format shift template in employeeShifts
+        const formattedNewUser = {
+            ...newUser,
+            employeeShifts: Array.isArray(newUser.employeeShifts)
+                ? newUser.employeeShifts.map((shift) => ({
+                      ...shift,
+                      shiftTemplate: formatShiftTemplate(shift.shiftTemplate)
+                  }))
+                : []
+        };
 
         // Fetch team members from the same department (if department is provided)
         let formattedTeamMembers = [];
