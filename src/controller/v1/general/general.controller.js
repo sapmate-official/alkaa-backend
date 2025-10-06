@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import prisma from "../../../db/connectDb.js";
 import jwt from "jsonwebtoken";
 import { generateTokens, generateTokensWithOrg } from "../../../util/generate.js";
+import { setAuthCookies, clearAuthCookies } from "../../../util/authCookies.js";
 import crypto from "crypto";
 import { sendLoginOTPEmail } from "../../../util/sendEmail.js";
 // Step 1: Check Email and Organizations
@@ -351,26 +352,7 @@ const verifyOtpAndLogin = async (req, res) => {
             data: { refreshToken: refreshToken }
         });
 
-        // Set cookies
-        res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
-        });
-
-        res.cookie("accessToken", accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 2 * 24 * 60 * 60 * 1000,
-            expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
-        });
+        setAuthCookies(res, accessToken, refreshToken);
 
         return res.status(200).json({
             message: "Login successful",
@@ -566,25 +548,7 @@ const loginUser = async (req, res) => {
             })
         }
 
-        res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",  // Changed from strict to lax
-            maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days in milliseconds
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
-        });
-
-        res.cookie("accessToken", accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",  // Changed from strict to lax
-            maxAge: 2 * 24 * 60 * 60 * 1000,  // 2 days in milliseconds
-            expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
-        });
+        setAuthCookies(res, accessToken, refreshToken);
 
         return res.status(200).send({
             message: "User logged in successfully",
@@ -717,25 +681,7 @@ const refreshToken = async (req, res) => {
         // Update user's refresh token
         await updateUser(user.id, { refreshToken: tokens.refreshToken });
         
-        res.cookie("refreshToken", tokens.refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
-        });
-
-        res.cookie("accessToken", tokens.accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 2 * 24 * 60 * 60 * 1000,
-            expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-            path: "/",
-            domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
-        });
+        setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
         // Return new tokens
         return res.status(200).json({
@@ -786,8 +732,7 @@ const logout = async (req, res) => {
             await updateUser(user.id, { refreshToken: null });
 
             // Clear cookies
-            res.clearCookie("refreshToken");
-            res.clearCookie("accessToken");
+            clearAuthCookies(res);
 
             return res.status(200).json({
                 message: "Logged out successfully",

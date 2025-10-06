@@ -41,6 +41,7 @@ model Organization {
   subscriptionPlan      SubscriptionPlan?             @relation(fields: [subscriptionPlanId], references: [id])
   attendanceRules       OrganizationAttendanceRules[]
   breakRules            OrganizationBreakRules[]
+  overtimeRules         OrganizationOvertimeRule[]
   geofences             OrganizationGeofence[]
   OrganizationSettings  OrganizationSettings[]
   Organization_admin    Organization_admin[]
@@ -667,6 +668,9 @@ model OnboardingCandidate {
   manager           User?            @relation("CandidateManager", fields: [managerId], references: [id])
   organization      Organization     @relation(fields: [orgId], references: [id])
   reviewedBy        User?            @relation("ReviewedCandidates", fields: [reviewedById], references: [id])
+  shiftTemplateId   String?
+  shiftEffectiveDate DateTime?
+  shiftTemplate     ShiftTemplate?   @relation(fields: [shiftTemplateId], references: [id])
 
   @@index([orgId])
   @@index([verificationToken])
@@ -814,6 +818,7 @@ model OrganizationAttendanceRules {
   updatedAt    DateTime                  @updatedAt
   violations   AttendanceRuleViolation[]
   organization Organization              @relation(fields: [orgId], references: [id])
+  shiftAssignments ShiftAttendanceRule[]
 
   @@unique([orgId, ruleType])
   @@index([orgId, ruleType, isActive])
@@ -912,8 +917,28 @@ model OrganizationBreakRules {
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   organization     Organization @relation(fields: [orgId], references: [id])
+  shiftAssignments ShiftBreakRule[]
 
   @@unique([orgId, breakType])
+  @@index([orgId, isActive])
+}
+
+model OrganizationOvertimeRule {
+  id                String       @id @default(cuid())
+  orgId             String
+  name              String
+  description       String?
+  rate              Decimal      @db.Decimal(5, 2)
+  applyAfterMinutes Int?         @default(0)
+  maxDailyMinutes   Int?
+  metadata          Json?
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  organization      Organization @relation(fields: [orgId], references: [id])
+  shiftTemplates    ShiftTemplate[]
+
+  @@unique([orgId, name])
   @@index([orgId, isActive])
 }
 
@@ -1004,9 +1029,39 @@ model ShiftTemplate {
   updatedAt          DateTime        @updatedAt
   employeeShifts     EmployeeShift[]
   organization       Organization    @relation(fields: [orgId], references: [id])
+  onboardingCandidates OnboardingCandidate[]
+  breakRuleLinks     ShiftBreakRule[]
+  attendanceRuleLinks ShiftAttendanceRule[]
+  overtimeRuleId     String?
+  overtimeRule       OrganizationOvertimeRule? @relation(fields: [overtimeRuleId], references: [id])
 
   @@unique([orgId, name])
   @@index([orgId, isActive])
+}
+
+model ShiftBreakRule {
+  shiftTemplateId String
+  breakRuleId     String
+  assignedAt      DateTime     @default(now())
+  orderIndex      Int?         @default(0)
+  metadata        Json?
+  shiftTemplate   ShiftTemplate @relation(fields: [shiftTemplateId], references: [id], onDelete: Cascade)
+  breakRule       OrganizationBreakRules @relation(fields: [breakRuleId], references: [id], onDelete: Cascade)
+
+  @@id([shiftTemplateId, breakRuleId])
+  @@index([breakRuleId])
+}
+
+model ShiftAttendanceRule {
+  shiftTemplateId   String
+  attendanceRuleId  String
+  assignedAt        DateTime                   @default(now())
+  metadata          Json?
+  shiftTemplate     ShiftTemplate              @relation(fields: [shiftTemplateId], references: [id], onDelete: Cascade)
+  attendanceRule    OrganizationAttendanceRules @relation(fields: [attendanceRuleId], references: [id], onDelete: Cascade)
+
+  @@id([shiftTemplateId, attendanceRuleId])
+  @@index([attendanceRuleId])
 }
 
 model EmployeeShift {

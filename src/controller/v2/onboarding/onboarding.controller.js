@@ -24,6 +24,8 @@ export const createCandidate = [
     body('monthlySalary').optional().isNumeric(),
     body('managerId').optional(), // Add manager assignment
     body('hiredDate').optional().isISO8601(),
+    body('shiftTemplateId').optional(),
+    body('shiftEffectiveDate').optional().isISO8601(),
 
     async (req, res) => {
         try {
@@ -44,7 +46,9 @@ export const createCandidate = [
                 annualPackage, 
                 monthlySalary,
                 managerId,
-                hiredDate 
+                hiredDate,
+                shiftTemplateId,
+                shiftEffectiveDate 
             } = req.body;
 
             const normalizeRelationId = (value) => {
@@ -58,6 +62,16 @@ export const createCandidate = [
 
             const sanitizedDepartmentId = normalizeRelationId(departmentId);
             const sanitizedManagerId = normalizeRelationId(managerId);
+            const sanitizedShiftTemplateId = normalizeRelationId(shiftTemplateId);
+            let parsedShiftEffectiveDate = null;
+
+            if (shiftEffectiveDate) {
+                const parsedDate = new Date(shiftEffectiveDate);
+                if (Number.isNaN(parsedDate.getTime())) {
+                    return res.status(400).json({ error: 'Shift effective date must be a valid ISO string' });
+                }
+                parsedShiftEffectiveDate = parsedDate;
+            }
 
             // Calculate annual/monthly salary if one is provided
             let calculatedAnnualPackage = annualPackage;
@@ -111,6 +125,20 @@ export const createCandidate = [
                     return res.status(400).json({ error: 'Selected department not found in organization' });
                 }
             }
+
+            if (sanitizedShiftTemplateId) {
+                const shiftTemplate = await prisma.shiftTemplate.findFirst({
+                    where: {
+                        id: sanitizedShiftTemplateId,
+                        orgId: req.user.orgId,
+                        isActive: true
+                    }
+                });
+
+                if (!shiftTemplate) {
+                    return res.status(400).json({ error: 'Selected shift template not found in organization' });
+                }
+            }
             
             const verificationToken = crypto.randomBytes(32).toString('hex');
             const tokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
@@ -132,13 +160,17 @@ export const createCandidate = [
                         annualPackage: calculatedAnnualPackage,
                         monthlySalary: calculatedMonthlySalary,
                         hiredDate: hiredDate ? new Date(hiredDate) : null,
+                        shiftTemplateId: sanitizedShiftTemplateId,
+                        shiftEffectiveDate: parsedShiftEffectiveDate,
                         formData: {
                             initialData: {
                                 departmentId: sanitizedDepartmentId,
                                 managerId: sanitizedManagerId,
                                 annualPackage: calculatedAnnualPackage,
                                 monthlySalary: calculatedMonthlySalary,
-                                hiredDate
+                                hiredDate,
+                                shiftTemplateId: sanitizedShiftTemplateId,
+                                shiftEffectiveDate: parsedShiftEffectiveDate
                             }
                         }
                     }
@@ -162,13 +194,17 @@ export const createCandidate = [
                     annualPackage: calculatedAnnualPackage,
                     monthlySalary: calculatedMonthlySalary,
                     hiredDate: hiredDate ? new Date(hiredDate) : null,
+                    shiftTemplateId: sanitizedShiftTemplateId,
+                    shiftEffectiveDate: parsedShiftEffectiveDate,
                     formData: {
                         initialData: {
                             departmentId: sanitizedDepartmentId,
                             managerId: sanitizedManagerId,
                             annualPackage: calculatedAnnualPackage,
                             monthlySalary: calculatedMonthlySalary,
-                            hiredDate
+                            hiredDate,
+                            shiftTemplateId: sanitizedShiftTemplateId,
+                            shiftEffectiveDate: parsedShiftEffectiveDate
                         }
                     }
                 }
@@ -911,6 +947,8 @@ export const approveCandidate = [
     body('roleId').optional(),
     body('annualPackage').optional().isNumeric(),
     body('monthlySalary').optional().isNumeric(),
+    body('shiftTemplateId').optional(),
+    body('shiftEffectiveDate').optional().isISO8601(),
     
     async (req, res) => {
         try {
@@ -923,7 +961,7 @@ export const approveCandidate = [
             }
 
             const { id } = req.params;
-            const { departmentId, managerId, roleId, annualPackage, monthlySalary } = req.body;
+            const { departmentId, managerId, roleId, annualPackage, monthlySalary, shiftTemplateId, shiftEffectiveDate } = req.body;
 
             const candidate = await prisma.onboardingCandidate.findUnique({
                 where: { id },
@@ -944,6 +982,31 @@ export const approveCandidate = [
                 return res.status(400).json({ error: 'Candidate is not in reviewable state' });
             }
 
+            const normalizeRelationId = (value) => {
+                if (value === undefined) return undefined;
+                if (value === null) return null;
+                if (typeof value === 'string') {
+                    const trimmed = value.trim();
+                    return trimmed.length ? trimmed : null;
+                }
+                return value || null;
+            };
+
+            const sanitizedShiftTemplateId = normalizeRelationId(shiftTemplateId);
+            let parsedShiftEffectiveDate = undefined;
+
+            if (shiftEffectiveDate !== undefined) {
+                if (shiftEffectiveDate === null || shiftEffectiveDate === '') {
+                    parsedShiftEffectiveDate = null;
+                } else {
+                    const parsedDate = new Date(shiftEffectiveDate);
+                    if (Number.isNaN(parsedDate.getTime())) {
+                        return res.status(400).json({ error: 'Shift effective date is invalid' });
+                    }
+                    parsedShiftEffectiveDate = parsedDate;
+                }
+            }
+
             // Validate department if provided
             if (departmentId) {
                 const department = await prisma.department.findFirst({
@@ -961,6 +1024,19 @@ export const approveCandidate = [
                 });
                 if (!manager) {
                     return res.status(400).json({ error: 'Invalid manager specified' });
+                }
+            }
+
+            if (sanitizedShiftTemplateId) {
+                const shiftTemplate = await prisma.shiftTemplate.findFirst({
+                    where: {
+                        id: sanitizedShiftTemplateId,
+                        orgId: candidate.orgId
+                    }
+                });
+
+                if (!shiftTemplate) {
+                    return res.status(400).json({ error: 'Invalid shift template specified' });
                 }
             }
 
@@ -1009,19 +1085,51 @@ export const approveCandidate = [
                 updateData.monthlySalary = calculatedMonthlySalary;
             }
 
-            // Store role in formData for later use during completion
+            if (sanitizedShiftTemplateId !== undefined) {
+                updateData.shiftTemplateId = sanitizedShiftTemplateId;
+            }
+
+            if (parsedShiftEffectiveDate !== undefined) {
+                updateData.shiftEffectiveDate = parsedShiftEffectiveDate;
+            }
+
+            const existingFormData = candidate.formData || {};
+            const approvalDataUpdate = {
+                ...existingFormData.approvalData
+            };
+
             if (roleId) {
-                const existingFormData = candidate.formData || {};
+                approvalDataUpdate.roleId = roleId;
+            }
+
+            if (departmentId !== undefined || existingFormData.approvalData?.departmentId !== undefined) {
+                approvalDataUpdate.departmentId = departmentId || candidate.departmentId;
+            }
+
+            if (managerId !== undefined || existingFormData.approvalData?.managerId !== undefined) {
+                approvalDataUpdate.managerId = managerId || candidate.managerId;
+            }
+
+            if (calculatedAnnualPackage !== undefined) {
+                approvalDataUpdate.annualPackage = calculatedAnnualPackage;
+            }
+
+            if (calculatedMonthlySalary !== undefined) {
+                approvalDataUpdate.monthlySalary = calculatedMonthlySalary;
+            }
+
+            if (sanitizedShiftTemplateId !== undefined) {
+                approvalDataUpdate.shiftTemplateId = sanitizedShiftTemplateId;
+            }
+
+            if (parsedShiftEffectiveDate !== undefined) {
+                approvalDataUpdate.shiftEffectiveDate = parsedShiftEffectiveDate;
+            }
+
+            if (Object.keys(approvalDataUpdate).length > 0) {
                 updateData.formData = {
                     ...existingFormData,
-                    approvalData: {
-                        ...existingFormData.approvalData,
-                        roleId: roleId,
-                        departmentId: departmentId || candidate.departmentId,
-                        managerId: managerId || candidate.managerId,
-                        annualPackage: calculatedAnnualPackage,
-                        monthlySalary: calculatedMonthlySalary
-                    }
+                    approvalData: approvalDataUpdate
                 };
             }
 
@@ -1264,6 +1372,8 @@ export const completeOnboarding = [
     body('monthlySalary').optional().isNumeric().withMessage('Monthly salary must be a number'),
     body('annualPackage').optional().isNumeric().withMessage('Annual package must be a number'),
     body('salaryTemplateId').optional().isString().withMessage('Salary template must be a string'),
+    body('shiftTemplateId').optional().isString().withMessage('Shift template must be a string'),
+    body('shiftEffectiveDate').optional().isISO8601().withMessage('Shift effective date must be a valid date'),
 
     async (req, res) => {
         try {
@@ -1282,7 +1392,9 @@ export const completeOnboarding = [
                 managerId, 
                 monthlySalary, 
                 annualPackage,
-                salaryTemplateId
+                salaryTemplateId,
+                shiftTemplateId,
+                shiftEffectiveDate
             } = req.body;
 
             const candidate = await prisma.onboardingCandidate.findUnique({
@@ -1307,6 +1419,44 @@ export const completeOnboarding = [
             // Extract required fields from candidate and formData
             const formData = candidate.formData || {};
             const approvalData = formData.approvalData || {};
+
+            let selectedShiftTemplateId = shiftTemplateId
+                || approvalData.shiftTemplateId
+                || candidate.shiftTemplateId
+                || formData.shiftTemplateId;
+
+            let selectedShiftEffectiveDate = shiftEffectiveDate
+                || approvalData.shiftEffectiveDate
+                || candidate.shiftEffectiveDate
+                || formData.shiftEffectiveDate;
+
+            let shiftTemplate = null;
+            let shiftEffectiveDateValue = null;
+
+            if (selectedShiftTemplateId) {
+                shiftTemplate = await prisma.shiftTemplate.findFirst({
+                    where: {
+                        id: selectedShiftTemplateId,
+                        orgId: candidate.orgId
+                    }
+                });
+
+                if (!shiftTemplate) {
+                    return res.status(400).json({ error: 'Invalid shift template specified' });
+                }
+            }
+
+            if (selectedShiftTemplateId) {
+                if (selectedShiftEffectiveDate) {
+                    const parsedShiftDate = new Date(selectedShiftEffectiveDate);
+                    if (Number.isNaN(parsedShiftDate.getTime())) {
+                        return res.status(400).json({ error: 'Shift effective date is invalid' });
+                    }
+                    shiftEffectiveDateValue = parsedShiftDate;
+                } else {
+                    shiftEffectiveDateValue = new Date();
+                }
+            }
             
             // Use department from request, approval data, candidate, or initial form data
             if (!departmentId) {
@@ -1429,57 +1579,69 @@ export const completeOnboarding = [
             }
 
             // Create user from candidate (matching the createEmployee logic exactly)
+            const userCreateData = {
+                orgId: candidate.orgId,
+                departmentId: departmentId || null,
+                managerId: managerId || null,
+                email: candidate.email,
+                firstName: formData.firstName || candidate.firstName,
+                lastName: formData.lastName || candidate.lastName,
+                employeeId,
+                mobileNumber: formData.mobileNumber || candidate.mobileNumber,
+                hiredDate: candidate.hiredDate || new Date(),
+                dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : null,
+                address: formData.address,
+                adharNumber: formData.adharNumber,
+                emergencyContact: formData.emergencyContact,
+                panNumber: formData.panNumber,
+                status: 'inactive', // Same as createEmployee
+                annualPackage: annualPackage || 0,
+                monthlySalary: monthlySalary || 0,
+                salaryTemplateId: salaryTemplateId || null,
+                roles: {
+                    create: [{
+                        role: { connect: { id: roleId } }
+                    }]
+                }
+            };
+
+            if (formData?.bankDetails?.accountNumber && formData?.bankDetails?.ifscCode && 
+                formData?.bankDetails?.bankName && formData?.bankDetails?.accountHolderName) {
+                userCreateData.bankDetails = {
+                    create: {
+                        accountHolder: formData.bankDetails.accountHolderName,
+                        accountNumber: formData.bankDetails.accountNumber,
+                        ifscCode: formData.bankDetails.ifscCode,
+                        bankName: formData.bankDetails.bankName
+                    }
+                };
+            }
+
+            if (!salaryTemplateId && (annualPackage || monthlySalary)) {
+                userCreateData.salaryParameter = {
+                    create: {
+                        hraPercentage: 40,
+                        daPercentage: 10,
+                        taPercentage: 10,
+                        pfPercentage: 12,
+                        taxPercentage: 10,
+                        insuranceFixed: 1000
+                    }
+                };
+            }
+
+            if (selectedShiftTemplateId && shiftEffectiveDateValue) {
+                userCreateData.employeeShifts = {
+                    create: [{
+                        shiftTemplateId: selectedShiftTemplateId,
+                        effectiveDate: shiftEffectiveDateValue,
+                        status: 'ACTIVE'
+                    }]
+                };
+            }
+
             const user = await prisma.user.create({
-                data: {
-                    orgId: candidate.orgId,
-                    departmentId: departmentId || null,
-                    managerId: managerId || null,
-                    email: candidate.email,
-                    firstName: formData.firstName || candidate.firstName,
-                    lastName: formData.lastName || candidate.lastName,
-                    employeeId,
-                    mobileNumber: formData.mobileNumber || candidate.mobileNumber,
-                    hiredDate: candidate.hiredDate || new Date(),
-                    dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : null,
-                    address: formData.address,
-                    adharNumber: formData.adharNumber,
-                    emergencyContact: formData.emergencyContact,
-                    panNumber: formData.panNumber,
-                    status: 'inactive', // Same as createEmployee
-                    annualPackage: annualPackage || 0,
-                    monthlySalary: monthlySalary || 0,
-                    salaryTemplateId: salaryTemplateId || null,
-                    roles: {
-                        create: [{
-                            role: { connect: { id: roleId } }
-                        }]
-                    },
-                    // Create bank details if provided (same structure as createEmployee)
-                    ...(formData?.bankDetails?.accountNumber && formData?.bankDetails?.ifscCode && 
-                        formData?.bankDetails?.bankName && formData?.bankDetails?.accountHolderName ? {
-                        bankDetails: {
-                            create: {
-                                accountHolder: formData.bankDetails.accountHolderName,
-                                accountNumber: formData.bankDetails.accountNumber,
-                                ifscCode: formData.bankDetails.ifscCode,
-                                bankName: formData.bankDetails.bankName
-                            }
-                        }
-                    } : {}),
-                    // Create salary parameters if salary is provided (same as createEmployee)
-                    ...(!salaryTemplateId && (annualPackage || monthlySalary) ? {
-                        salaryParameter: {
-                            create: {
-                                hraPercentage: 40,
-                                daPercentage: 10,
-                                taPercentage: 10,
-                                pfPercentage: 12,
-                                taxPercentage: 10,
-                                insuranceFixed: 1000
-                            }
-                        }
-                    } : {})
-                },
+                data: userCreateData,
                 include: {
                     department: {
                         include: {
@@ -1505,6 +1667,15 @@ export const completeOnboarding = [
                             lastName: true,
                             email: true
                         }
+                    },
+                    employeeShifts: {
+                        include: {
+                            shiftTemplate: true
+                        },
+                        orderBy: {
+                            effectiveDate: 'desc'
+                        },
+                        take: 1
                     }
                 }
             });
@@ -1533,7 +1704,9 @@ export const completeOnboarding = [
             await prisma.onboardingCandidate.update({
                 where: { id },
                 data: {
-                    status: 'ONBOARDED'
+                    status: 'ONBOARDED',
+                    shiftTemplateId: selectedShiftTemplateId || null,
+                    shiftEffectiveDate: shiftEffectiveDateValue || null
                 }
             });
 
