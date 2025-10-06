@@ -1173,6 +1173,22 @@ model PayrollCycleAudit {
   @@index([cycleId, createdAt])
 }
 
+model PipelineProgress {
+  id             String   @id @default(cuid())
+  organizationId String
+  month          Int
+  year           Int
+  currentStep    Int      @default(0)
+  stepData       Json     @default("{}")
+  lastAccessedAt DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, month, year])
+  @@index([organizationId])
+  @@index([month, year])
+}
+
 model SalaryDispute {
   id             String        @id @default(cuid())
   salaryRecordId String
