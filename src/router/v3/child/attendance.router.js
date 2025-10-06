@@ -5,6 +5,8 @@ import { authenticateToken } from '../../../middleware/auth.middleware.js';
 import * as attendanceRulesController from '../../../controller/v3/attendance/attendanceRules.controller.js';
 import * as breakManagementController from '../../../controller/v3/attendance/breakManagement.controller.js';
 import * as geofencingController from '../../../controller/v3/attendance/geofencing.controller.js';
+import * as continuousTrackingController from '../../../controller/v3/attendance/continuousTracking.controller.js';
+import * as activityController from '../../../controller/v3/attendance/activity.controller.js';
 import * as alertsController from '../../../controller/v3/attendance/alerts.controller.js';
 import * as analyticsController from '../../../controller/v3/attendance/analytics.controller.js';
 import simulationController from '../../../controller/v3/attendance/simulation.controller.js';
@@ -72,6 +74,38 @@ router.get('/organizations/:orgId/breaks/policies', breakManagementController.ge
 
 // Force end break (manager action)
 router.patch('/breaks/:breakId/force-end', breakManagementController.forceEndBreak);
+
+// =====================================================
+// CONTINUOUS TRACKING ROUTES
+// =====================================================
+
+// Start new tracking session (typically on check-in)
+router.post('/tracking/sessions', continuousTrackingController.startTrackingSession);
+
+// Process periodic location updates from clients
+router.post('/tracking/sessions/:sessionId/location', continuousTrackingController.processLocationUpdate);
+
+// Resolve an active geofence violation
+router.patch('/tracking/violations/:violationId/resolve', continuousTrackingController.resolveViolation);
+
+// End an active tracking session (typically on checkout)
+router.patch('/tracking/sessions/:sessionId/end', continuousTrackingController.endTrackingSession);
+
+// Update work mode (office, outstation, remote, client site)
+router.patch('/tracking/sessions/:sessionId/work-mode', continuousTrackingController.updateWorkMode);
+
+// Get detailed session view
+router.get('/tracking/sessions/:sessionId', continuousTrackingController.getTrackingSession);
+
+// Tracking analytics for organization
+router.get('/organizations/:orgId/tracking/analytics', continuousTrackingController.getTrackingAnalytics);
+
+// =====================================================
+// ATTENDANCE ACTIVITY ROUTES
+// =====================================================
+
+// Recent attendance activity feed with role-based scope
+router.get('/organizations/:orgId/activity', activityController.getAttendanceActivity);
 
 // =====================================================
 // GEOFENCING ROUTES
