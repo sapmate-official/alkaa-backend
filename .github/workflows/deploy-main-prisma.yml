@@ -1,4 +1,4 @@
-name: Deploy to Production (main)
+name: Deploy to Vercel Production
 
 on:
   push:
@@ -10,53 +10,32 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy to Lightsail Production
+    name: Deploy to Vercel Production
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
     steps:
-      - name: Deploy to Lightsail via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.LIGHTSAIL_HOST }}
-          username: ${{ secrets.LIGHTSAIL_USER }}
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
-          script: |
-            set -e
-            APP_PATH="/home/ec2-user/Alkaa/alkaa-backend"
-            
-            echo "Starting deployment process..."
-            echo "Timestamp: $(date)"
-            
-            echo "Pulling latest changes..."
-            cd "$APP_PATH"
-            git fetch --all
-            git checkout main
-            git pull --ff-only origin main
-            
-            echo "Current commit: $(git rev-parse HEAD)"
-            echo "Installing dependencies and generating Prisma client..."
-            
-            # Clear npm cache to free up space
-            npm cache clean --force
-            
-            echo "Installing dependencies..."
-            NODE_OPTIONS="--max-old-space-size=4096" npm install
-            
-            echo "Generating Prisma client..."
-            npx prisma generate
-            
-            echo "Restarting application with PM2..."
-            if pm2 describe alkaa-backend >/dev/null 2>&1; then
-              echo "Application found, restarting..."
-              pm2 restart alkaa-backend
-            else
-              echo "Application not found, starting new instance..."
-              pm2 start server.js --name alkaa-backend
-            fi
-            pm2 save
-            
-            echo "Deployment completed successfully!"
-            echo "Application status:"
-            pm2 list alkaa-backend
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: .
