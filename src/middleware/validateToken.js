@@ -13,8 +13,9 @@ export default async function validateToken(req, res, next) {
             return next();
         }
         // Get token from multiple sources (header or cookie)
-        const authHeader = req.header("Authorization");
-        const cookieToken = req.cookies?.accessToken;
+    const authHeader = req.header("Authorization");
+    const cookieToken = req.cookies?.accessToken;
+    const queryToken = req.query?.token;
         
         let token;
         
@@ -22,6 +23,8 @@ export default async function validateToken(req, res, next) {
             token = authHeader.split(" ")[1];
         } else if (cookieToken) {
             token = cookieToken;
+        } else if (typeof queryToken === "string" && queryToken.trim()) {
+            token = queryToken.trim();
         }
         
         if (!token) {

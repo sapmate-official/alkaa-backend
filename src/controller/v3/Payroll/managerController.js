@@ -4,7 +4,8 @@ import { validationResult } from 'express-validator';
 // Get team payroll records for manager review
 export const getTeamPayrollRecords = async (req, res) => {
     try {
-        const { id: managerId, orgId } = req.user;
+    const { id: managerId, orgId } = req.user;
+    const isOrgAdmin = req.isOrgAdmin ?? false;
         const { status, month, year } = req.query;
 
         // Get manager's subordinates
@@ -211,6 +212,7 @@ export const approvePayrollRecord = async (req, res) => {
     try {
         const { recordId } = req.params;
         const { id: managerId, orgId } = req.user;
+        const isOrgAdmin = req.isOrgAdmin ?? false;
         const { comments } = req.body;
 
         // Verify the record exists and belongs to manager's team
@@ -237,7 +239,7 @@ export const approvePayrollRecord = async (req, res) => {
             });
         }
 
-        if (record.user.managerId !== managerId) {
+        if (!isOrgAdmin && record.user.managerId !== managerId) {
             return res.status(403).json({
                 success: false,
                 message: 'You can only approve records for your direct reports'
@@ -296,6 +298,7 @@ export const rejectPayrollRecord = async (req, res) => {
     try {
         const { recordId } = req.params;
         const { id: managerId, orgId } = req.user;
+        const isOrgAdmin = req.isOrgAdmin ?? false;
         const { comments } = req.body;
 
         if (!comments || comments.trim().length === 0) {
@@ -329,7 +332,7 @@ export const rejectPayrollRecord = async (req, res) => {
             });
         }
 
-        if (record.user.managerId !== managerId) {
+        if (!isOrgAdmin && record.user.managerId !== managerId) {
             return res.status(403).json({
                 success: false,
                 message: 'You can only reject records for your direct reports'
@@ -387,6 +390,7 @@ export const rejectPayrollRecord = async (req, res) => {
 export const bulkApproveRecords = async (req, res) => {
     try {
         const { id: managerId, orgId } = req.user;
+        const isOrgAdmin = req.isOrgAdmin ?? false;
         const { recordIds, comments } = req.body;
 
         if (!recordIds || recordIds.length === 0) {
@@ -414,8 +418,9 @@ export const bulkApproveRecords = async (req, res) => {
             }
         });
 
-        // Filter records that belong to this manager
-        const validRecords = records.filter(record => record.user.managerId === managerId);
+        const validRecords = isOrgAdmin
+            ? records
+            : records.filter(record => record.user.managerId === managerId);
 
         if (validRecords.length === 0) {
             return res.status(400).json({

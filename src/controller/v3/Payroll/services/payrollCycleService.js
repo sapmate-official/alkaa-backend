@@ -1,5 +1,6 @@
 import prisma from "../../../../db/connectDb.js";
 import { payrollCycleQueue, PAYROLL_PROCESSING_JOB_TYPE } from "../../../../jobs/payrollCycleQueue.js";
+import { emitProgressUpdate } from "../../../../events/payrollProgressEmitter.js";
 import { PayrollService } from "./payrollService.js";
 
 export class PayrollCycleService {
@@ -150,6 +151,7 @@ export class PayrollCycleService {
         const cycleId = payload.cycleId;
         const initiatedBy = payload.initiatedBy ?? null;
 
+
         if (!cycleId) {
             throw new Error("Payroll processing job payload missing cycleId");
         }
@@ -222,7 +224,7 @@ export class PayrollCycleService {
             let totalAmount = 0;
             const errors = [];
             const totalEmployees = employees.length;
-
+            
             const computeProgressSnapshot = (extras = {}) => {
                 const completed = processedCount + failedCount;
                 const percentComplete = totalEmployees > 0
@@ -270,7 +272,7 @@ export class PayrollCycleService {
                 }
 
                 try {
-                    await prisma.payrollCycle.update({
+                    const updateResult = await prisma.payrollCycle.update({
                         where: { id: cycleId },
                         data: {
                             totalEmployees,
@@ -283,13 +285,35 @@ export class PayrollCycleService {
                         }
                     });
                     notesState = nextNotes;
+
+                    emitProgressUpdate({
+                        cycleId,
+                        cycle: {
+                            id: cycleId,
+                            status: updateResult.status,
+                            processedCount: updateResult.processedCount,
+                            failedCount: updateResult.failedCount,
+                            totalEmployees,
+                            totalAmount: updateResult.totalAmount,
+                            updatedAt: updateResult.updatedAt
+                        },
+                        percentComplete: snapshot.percentComplete,
+                        job: job ? {
+                            id: job.id,
+                            status: job.status,
+                            attempts: job.attempts,
+                            maxAttempts: job.maxAttempts
+                        } : null,
+                        timestamp: new Date().toISOString()
+                    });
                 } catch (progressError) {
                     console.error(`[PAYROLL_CYCLE] Failed to persist progress for cycle ${cycleId}:`, progressError);
                 }
             };
 
-            const progressInterval = Math.max(1, Math.floor(Math.max(totalEmployees, 1) / 20));
+            const progressInterval = Math.max(1, Math.min(10, Math.floor(totalEmployees / 50)));
             let progressCounter = 0;
+            let lastPersistAt = Date.now();
 
             for (const employee of employees) {
                 try {
@@ -308,7 +332,8 @@ export class PayrollCycleService {
                     totalAmount += salaryRecord.netSalary;
 
                     progressCounter++;
-                    if (progressCounter >= progressInterval) {
+                    const shouldPersist = progressCounter >= progressInterval || (Date.now() - lastPersistAt) >= 5000;
+                    if (shouldPersist) {
                         await persistProgress({
                             extras: {
                                 lastEmployeeId: employee.id,
@@ -316,6 +341,7 @@ export class PayrollCycleService {
                             }
                         });
                         progressCounter = 0;
+                        lastPersistAt = Date.now();
                     }
 
                     await this.createAuditLog(
@@ -340,7 +366,8 @@ export class PayrollCycleService {
                     console.error(`[PAYROLL_CYCLE] Failed to generate salary for ${employee.id}:`, error);
 
                     progressCounter++;
-                    if (progressCounter >= progressInterval) {
+                    const shouldPersistError = progressCounter >= progressInterval || (Date.now() - lastPersistAt) >= 5000;
+                    if (shouldPersistError) {
                         await persistProgress({
                             message: progressMessages.inProgress,
                             extras: {
@@ -348,6 +375,7 @@ export class PayrollCycleService {
                             }
                         });
                         progressCounter = 0;
+                        lastPersistAt = Date.now();
                     }
                 }
             }
@@ -1005,8 +1033,11 @@ export class PayrollCycleService {
             : null;
 
         const responseProgress = progress ?? (activeJob?.payload?.progress ?? null);
+        const percentComplete = cycle.totalEmployees > 0 
+            ? Math.round((cycle.processedCount / cycle.totalEmployees) * 100) 
+            : 0;
 
-        return {
+        const statusResponse = {
             cycle: {
                 id: cycle.id,
                 status: cycle.status,
@@ -1021,8 +1052,11 @@ export class PayrollCycleService {
                 errors: errorList.slice(0, 50)
             },
             progress: responseProgress,
+            percentComplete,
             job: jobData
         };
+
+        return statusResponse;
     }
 
     /**

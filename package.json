@@ -14,7 +14,8 @@
     "build": "prisma generate",
     "seed:org": "node src/seed/runSeeder.js",
     "seed:organization": "node src/seed/OrganizationSeeder.js",
-    "seed:payroll-permissions": "node src/seed/runPayrollSeeder.js"
+    "seed:payroll-permissions": "node src/seed/runPayrollSeeder.js",
+    "seed:payroll-permissions:db": "node src/seed/PayrollPermissionKeySeeder.js"
   },
   "author": "",
   "license": "ISC",

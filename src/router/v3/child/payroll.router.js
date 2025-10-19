@@ -1,5 +1,6 @@
 import e from "express";
 import validateToken from "../../../middleware/validateToken.js";
+import { checkUserRoles } from "../../../middleware/roleCheck.js";
 import {
     getPaySlipBasedOnParams,
     generateSalaryBasedOnParams,
@@ -22,6 +23,7 @@ import {
     getPayrollCycles,
     getPayrollCycleDetails,
     getPayrollCycleProcessingStatus,
+    streamPayrollCycleProcessingStatus,
     getCyclesNeedingReview,
     getPayrollStatistics,
     bulkGenerateSalaries,
@@ -151,6 +153,7 @@ router.delete("/cycle/:cycleId", validateToken, deletePayrollCycle);
 router.get("/cycles", validateToken, getPayrollCycles);
 router.get("/cycle/:cycleId", validateToken, getPayrollCycleDetails);
 router.get("/cycle/:cycleId/status", validateToken, getPayrollCycleProcessingStatus);
+router.get("/cycle/:cycleId/stream", validateToken, streamPayrollCycleProcessingStatus);
 router.post("/cycle/:cycleId/payout/initiate", validateToken, initiatePayoutValidation, initiateCyclePayout);
 router.get("/cycle/:cycleId/payout/summary", validateToken, payoutSummaryValidation, getCyclePayoutSummary);
 router.get("/cycles/review", validateToken, getCyclesNeedingReview);
@@ -188,9 +191,9 @@ router.get("/templates/assignment-targets", validateToken, getAssignmentTargets)
 // Manager review routes
 router.get("/manager/team-payroll", validateToken, monthYearQueryValidation, statusQueryValidation, getTeamPayrollRecords);
 router.get("/manager/team-statistics", validateToken, monthYearQueryValidation, getTeamStatistics);
-router.post("/manager/approve/:recordId", validateToken, approveRejectRecordValidation, approvePayrollRecord);
-router.post("/manager/reject/:recordId", validateToken, rejectRecordValidation, rejectPayrollRecord);
-router.post("/manager/bulk-approve", validateToken, bulkApproveValidation, bulkApproveRecords);
+router.post("/manager/approve/:recordId", validateToken, checkUserRoles, approveRejectRecordValidation, approvePayrollRecord);
+router.post("/manager/reject/:recordId", validateToken, checkUserRoles, rejectRecordValidation, rejectPayrollRecord);
+router.post("/manager/bulk-approve", validateToken, checkUserRoles, bulkApproveValidation, bulkApproveRecords);
 router.get("/manager/pending-review", validateToken, getPendingReviewRecords);
 
 // Workflow management routes

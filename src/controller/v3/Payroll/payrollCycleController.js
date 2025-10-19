@@ -1,5 +1,6 @@
 import { PayrollCycleService } from "./services/payrollCycleService.js";
 import { PayrollPermissions, PayrollValidators } from "./validators/payrollValidators.js";
+import { registerProgressListener } from "../../../events/payrollProgressEmitter.js";
 
 /**
  * PayrollCycleController - Handles bulk payroll operations and cycle management
@@ -164,7 +165,27 @@ export const deletePayrollCycle = async (req, res) => {
             });
         }
 
+        // First, get cycle details to extract month and year
+        const cycle = await PayrollCycleService.getPayrollCycleDetails(cycleId);
+        
+        // Delete the payroll cycle
         const result = await PayrollCycleService.deletePayrollCycle(cycleId, currentUserId, { orgId });
+
+        // Delete associated pipeline progress if it exists
+        if (cycle && cycle.month && cycle.year) {
+            try {
+                await prisma.pipelineProgress.deleteMany({
+                    where: {
+                        organizationId: orgId,
+                        month: cycle.month,
+                        year: cycle.year
+                    }
+                });
+            } catch (progressError) {
+                console.warn("Failed to delete pipeline progress:", progressError);
+                // Don't fail the entire operation if pipeline progress deletion fails
+            }
+        }
 
         return res.status(200).json({
             success: true,
@@ -333,8 +354,11 @@ export const getPayrollCycleProcessingStatus = async (req, res) => {
         const { cycleId } = req.params;
         const currentUserId = req.user.id;
 
+        console.log(`[STATUS_API] Fetching status for cycle: ${cycleId}, user: ${currentUserId}`);
+
         const canView = await PayrollPermissions.canViewPayrollCycleDetails(currentUserId, cycleId);
         if (!canView) {
+            console.log(`[STATUS_API] Permission denied for user: ${currentUserId}`);
             return res.status(403).json({
                 success: false,
                 message: "You don't have permission to view this payroll cycle"
@@ -342,6 +366,14 @@ export const getPayrollCycleProcessingStatus = async (req, res) => {
         }
 
         const status = await PayrollCycleService.getPayrollCycleProcessingStatus(cycleId);
+        console.log(`[STATUS_API] Status retrieved:`, {
+            cycleId,
+            status: status.cycle.status,
+            processedCount: status.cycle.processedCount,
+            failedCount: status.cycle.failedCount,
+            totalEmployees: status.cycle.totalEmployees,
+            percentComplete: status.progress ? Math.round((status.cycle.processedCount / status.cycle.totalEmployees) * 100) : 0
+        });
 
         return res.status(200).json({
             success: true,
@@ -361,6 +393,60 @@ export const getPayrollCycleProcessingStatus = async (req, res) => {
             message: 'Failed to fetch payroll cycle processing status',
             error: error.message
         });
+    }
+};
+
+export const streamPayrollCycleProcessingStatus = async (req, res) => {
+    const { cycleId } = req.params;
+    const currentUserId = req.user.id;
+
+    try {
+        const canView = await PayrollPermissions.canViewPayrollCycleDetails(currentUserId, cycleId);
+        if (!canView) {
+            return res.status(403).json({
+                success: false,
+                message: "You don't have permission to view this payroll cycle"
+            });
+        }
+
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders?.();
+
+        const heartbeat = setInterval(() => {
+            res.write('event: ping\n');
+            res.write('data: {}\n\n');
+        }, 15000);
+
+        const initialStatus = await PayrollCycleService.getPayrollCycleProcessingStatus(cycleId);
+        res.write(`data: ${JSON.stringify({
+            cycleId,
+            cycle: initialStatus.cycle,
+            percentComplete: initialStatus.percentComplete,
+            job: initialStatus.job
+        })}\n\n`);
+
+        const removeListener = registerProgressListener(cycleId, res);
+
+        const cleanup = () => {
+            clearInterval(heartbeat);
+            removeListener();
+            res.end();
+        };
+
+        req.on('close', cleanup);
+        req.on('error', cleanup);
+    } catch (error) {
+        console.error('Error streaming payroll cycle processing status:', error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                message: 'Failed to stream payroll cycle processing status'
+            });
+        } else {
+            res.end();
+        }
     }
 };
 
