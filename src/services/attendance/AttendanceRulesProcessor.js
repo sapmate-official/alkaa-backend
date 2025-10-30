@@ -53,9 +53,10 @@ class AttendanceRulesProcessor {
     /**
      * Get organization-specific attendance rules
      * @param {string} orgId - Organization ID
-     * @returns {Object} Organization attendance rules
+     * @param {string} userId - Optional User ID to apply employment type overrides
+     * @returns {Object} Organization attendance rules with employment type overrides
      */
-    async getOrganizationRules(orgId) {
+    async getOrganizationRules(orgId, userId = null) {
         try {
             const rules = await prisma.organizationAttendanceRules.findMany({
                 where: { orgId },
@@ -87,14 +88,92 @@ class AttendanceRulesProcessor {
             if (rules.length === 0) {
                 await this.createDefaultRules(orgId);
                 // Re-fetch after creating defaults
-                return await this.getOrganizationRules(orgId);
+                return await this.getOrganizationRules(orgId, userId);
             }
 
             // Merge with defaults for missing rules
-            return { ...this.defaultRules, ...organizedRules };
+            let finalRules = { ...this.defaultRules, ...organizedRules };
+
+            // Apply employment type overrides if userId is provided
+            if (userId) {
+                finalRules = await this.applyEmploymentTypeOverrides(finalRules, orgId, userId);
+            }
+
+            return finalRules;
         } catch (error) {
             console.error('Error fetching organization rules:', error);
             return this.defaultRules;
+        }
+    }
+
+    /**
+     * Apply employment type policy overrides to attendance rules
+     * @param {Object} baseRules - Base organization rules
+     * @param {string} orgId - Organization ID
+     * @param {string} userId - User ID
+     * @returns {Object} Rules with employment type overrides applied
+     */
+    async applyEmploymentTypeOverrides(baseRules, orgId, userId) {
+        try {
+            // Get user's employment type
+            const user = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { employmentType: true }
+            });
+
+            if (!user || !user.employmentType) {
+                return baseRules;
+            }
+
+            // Get employment type policy
+            const policy = await prisma.employmentTypePolicy.findUnique({
+                where: {
+                    orgId_employmentType: {
+                        orgId,
+                        employmentType: user.employmentType
+                    }
+                }
+            });
+
+            if (!policy) {
+                return baseRules;
+            }
+
+            // Apply overrides based on policy flags
+            const overriddenRules = { ...baseRules };
+
+            if (policy.overrideAttendanceHours && policy.attendanceConfig) {
+                // Override minimum hours rule
+                if (overriddenRules.minimumHours && policy.attendanceConfig.dailyMinimum !== undefined) {
+                    overriddenRules.minimumHours = {
+                        ...overriddenRules.minimumHours,
+                        dailyMinimum: policy.attendanceConfig.dailyMinimum,
+                        isOverridden: true
+                    };
+                }
+                
+                // Override late arrival if specified
+                if (overriddenRules.lateArrival && policy.attendanceConfig.lateArrivalThreshold !== undefined) {
+                    overriddenRules.lateArrival = {
+                        ...overriddenRules.lateArrival,
+                        thresholds: policy.attendanceConfig.lateArrivalThreshold,
+                        isOverridden: true
+                    };
+                }
+            }
+
+            if (policy.overrideBreakRules && policy.breakConfig) {
+                overriddenRules.breakViolation = {
+                    ...overriddenRules.breakViolation,
+                    ...policy.breakConfig,
+                    isOverridden: true
+                };
+            }
+
+            return overriddenRules;
+        } catch (error) {
+            console.error('Error applying employment type overrides:', error);
+            return baseRules;
         }
     }
 

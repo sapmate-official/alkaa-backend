@@ -3,6 +3,7 @@ import { scheduleJob } from 'node-schedule';
 import { checkMissingCheckouts } from './attendanceProcessor.js';
 import { sendUpcomingHolidayReminders } from './holidayReminderProcessor.js';
 import { processBirthdayEmails } from './birthdayService.js';
+import contractExpiryChecker from './contractExpiryChecker.js';
 
 /**
  * Scheduler for recurring jobs
@@ -39,6 +40,17 @@ export const startScheduledJobs = () => {
       console.log('🎉 Birthday email check completed:', result);
     } catch (error) {
       console.error('❌ Error in birthday email check:', error);
+    }
+  });
+  
+  // Check for contract expiries daily at 8:00 AM server time
+  scheduleJob('0 8 * * *', async () => {
+    console.log('📋 Running scheduled contract expiry check...');
+    try {
+      await contractExpiryChecker.execute();
+      console.log('✅ Contract expiry check completed successfully');
+    } catch (error) {
+      console.error('❌ Error in contract expiry check:', error);
     }
   });
   

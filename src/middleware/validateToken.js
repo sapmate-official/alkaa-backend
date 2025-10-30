@@ -48,7 +48,10 @@ export default async function validateToken(req, res, next) {
                 email: true,
                 orgId: true,
                 firstName: true,
-                lastName: true
+                lastName: true,
+                isActive: true,
+                employmentType: true,
+                contractEndDate: true
             }
         });
 
@@ -74,13 +77,24 @@ export default async function validateToken(req, res, next) {
                 });
             }
         } else {
+            // Check if user account is active
+            if (!userdata.isActive) {
+                return res.status(403).json({
+                    message: "Account has been deactivated. Please contact your administrator.",
+                    deactivated: true,
+                    reason: userdata.contractEndDate ? "Contract expired" : "Account deactivated"
+                });
+            }
+
             // Standardize the user object with orgId
             req.user = {
                 id: userdata.id,
                 email: userdata.email,
                 orgId: userdata.orgId,
                 firstName: userdata.firstName,
-                lastName: userdata.lastName
+                lastName: userdata.lastName,
+                employmentType: userdata.employmentType,
+                contractEndDate: userdata.contractEndDate
             };
         }
         
