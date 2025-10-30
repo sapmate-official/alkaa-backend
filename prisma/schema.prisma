@@ -688,6 +688,8 @@ model OnboardingCandidate {
   hiredDate         DateTime?
   managerId         String?
   monthlySalary     Float?
+  employmentType    EmploymentType   @default(FULL_TIME)
+  contractEndDate   DateTime?
   createdBy         User             @relation("CreatedCandidates", fields: [createdById], references: [id])
   department        Department?      @relation(fields: [departmentId], references: [id])
   manager           User?            @relation("CandidateManager", fields: [managerId], references: [id])

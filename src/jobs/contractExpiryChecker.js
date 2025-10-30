@@ -1,6 +1,5 @@
 import prisma from "../db/connectDb.js";
-import { sendEmail } from "../util/sendEmail.js";
-
+import {sendEmailWithCustomContent} from "../util/sendEmail.js"
 /**
  * Contract Expiry Checker Job
  * Runs daily to check for expiring contracts and deactivate expired ones
@@ -177,7 +176,7 @@ class ContractExpiryChecker {
                 `
             };
 
-            await sendEmail(employeeEmailContent);
+            await sendEmailWithCustomContentWithCustomContent(employeeEmailContent);
 
             // Get organization admins
             const admins = await prisma.organization_admin.findMany({
@@ -223,7 +222,7 @@ class ContractExpiryChecker {
                     `
                 };
 
-                await sendEmail(adminEmailContent);
+                await sendEmailWithCustomContentWithCustomContent(adminEmailContent);
             }
 
             console.log(`[CONTRACT_EXPIRY_CHECKER] Sent expiry warning for user ${user.id} (${daysRemaining} days)`);
@@ -260,7 +259,7 @@ class ContractExpiryChecker {
                 `
             };
 
-            await sendEmail(employeeEmailContent);
+            await sendEmailWithCustomContent(employeeEmailContent);
 
             // Get organization admins
             const admins = await prisma.organization_admin.findMany({
@@ -300,7 +299,7 @@ class ContractExpiryChecker {
                     `
                 };
 
-                await sendEmail(adminEmailContent);
+                await sendEmailWithCustomContent(adminEmailContent);
             }
 
             console.log(`[CONTRACT_EXPIRY_CHECKER] Sent deactivation notification for user ${user.id}`);
