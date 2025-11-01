@@ -267,6 +267,10 @@ model User {
   trackingSessions             TrackingSession[]
   receivedTransactions         TransactionTable[]          @relation("ReceiverTransaction")
   sentTransactions             TransactionTable[]          @relation("SenderTransaction")
+  statusHistory                UserStatusHistory[]         @relation("UserStatusChanges")
+  statusChangesPerformed       UserStatusHistory[]         @relation("StatusChangedBy")
+  employmentTypeHistory        EmploymentTypeHistory[]     @relation("UserEmploymentTypeChanges")
+  employmentTypeChangesPerformed EmploymentTypeHistory[]   @relation("EmploymentTypeChangedBy")
   department                   Department?                 @relation("UserDepartment", fields: [departmentId], references: [id])
   manager                      User?                       @relation("UserManager", fields: [managerId], references: [id])
   subordinates                 User[]                      @relation("UserManager")
@@ -1703,5 +1707,44 @@ enum EmploymentType {
   INTERN
   CONTRACT
   CONSULTANT
+}
+
+model UserStatusHistory {
+  id                String     @id @default(cuid())
+  userId            String
+  previousStatus    UserStatus
+  newStatus         UserStatus
+  changedBy         String
+  changedAt         DateTime   @default(now())
+  reason            String?
+  effectiveDate     DateTime?
+  terminationDate   DateTime?
+  notes             String?
+  user              User       @relation("UserStatusChanges", fields: [userId], references: [id], onDelete: Cascade)
+  changedByUser     User       @relation("StatusChangedBy", fields: [changedBy], references: [id])
+
+  @@index([userId, changedAt])
+  @@index([changedBy])
+  @@index([effectiveDate])
+}
+
+model EmploymentTypeHistory {
+  id                    String         @id @default(cuid())
+  userId                String
+  previousType          EmploymentType
+  newType               EmploymentType
+  previousContractEnd   DateTime?
+  newContractEnd        DateTime?
+  changedBy             String
+  changedAt             DateTime       @default(now())
+  effectiveDate         DateTime
+  reason                String?
+  notes                 String?
+  user                  User           @relation("UserEmploymentTypeChanges", fields: [userId], references: [id], onDelete: Cascade)
+  changedByUser         User           @relation("EmploymentTypeChangedBy", fields: [changedBy], references: [id])
+
+  @@index([userId, changedAt])
+  @@index([changedBy])
+  @@index([effectiveDate])
 }
 

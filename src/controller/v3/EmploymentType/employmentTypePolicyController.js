@@ -218,7 +218,8 @@ export const getEmployeesByType = async (req, res) => {
 export const updateUserEmploymentType = async (req, res) => {
     try {
         const { userId } = req.params;
-        const { employmentType, contractEndDate } = req.body;
+        const { employmentType, contractEndDate, effectiveDate, reason, notes } = req.body;
+        const changedBy = req.user.id;
 
         // Validate employment type
         const validTypes = ['FULL_TIME', 'PART_TIME', 'INTERN', 'CONTRACT', 'CONSULTANT'];
@@ -226,6 +227,26 @@ export const updateUserEmploymentType = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: `Invalid employment type. Must be one of: ${validTypes.join(', ')}`
+            });
+        }
+
+        // Get current user data
+        const currentUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                employmentType: true,
+                contractEndDate: true,
+                firstName: true,
+                lastName: true,
+                email: true
+            }
+        });
+
+        if (!currentUser) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
             });
         }
 
@@ -261,6 +282,38 @@ export const updateUserEmploymentType = async (req, res) => {
             }
         });
 
+        // Create employment type history entry
+        await prisma.employmentTypeHistory.create({
+            data: {
+                userId,
+                previousType: currentUser.employmentType,
+                newType: employmentType || currentUser.employmentType,
+                previousContractEnd: currentUser.contractEndDate,
+                newContractEnd: contractEndDate ? new Date(contractEndDate) : null,
+                changedBy,
+                effectiveDate: effectiveDate ? new Date(effectiveDate) : new Date(),
+                reason: reason || null,
+                notes: notes || null
+            }
+        });
+
+        // Create activity log
+        await prisma.activityLog.create({
+            data: {
+                action: 'EMPLOYMENT_TYPE_CHANGED',
+                actorId: changedBy,
+                targetId: userId,
+                orgId: req.user.orgId,
+                details: {
+                    previousType: currentUser.employmentType,
+                    newType: employmentType || currentUser.employmentType,
+                    previousContractEnd: currentUser.contractEndDate,
+                    newContractEnd: contractEndDate,
+                    reason
+                }
+            }
+        });
+
         return res.status(200).json({
             success: true,
             message: 'User employment type updated successfully',
@@ -271,6 +324,56 @@ export const updateUserEmploymentType = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Failed to update user employment type',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Get employment type history for a user
+ */
+export const getEmploymentTypeHistory = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { limit = 50, offset = 0 } = req.query;
+
+        const history = await prisma.employmentTypeHistory.findMany({
+            where: { userId },
+            include: {
+                changedByUser: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        employeeId: true
+                    }
+                }
+            },
+            orderBy: { changedAt: 'desc' },
+            take: parseInt(limit),
+            skip: parseInt(offset)
+        });
+
+        const total = await prisma.employmentTypeHistory.count({
+            where: { userId }
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: history,
+            pagination: {
+                total,
+                limit: parseInt(limit),
+                offset: parseInt(offset),
+                hasMore: parseInt(offset) + history.length < total
+            }
+        });
+    } catch (error) {
+        console.error('[EMPLOYMENT_TYPE_POLICY] Error fetching employment type history:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch employment type history',
             error: error.message
         });
     }

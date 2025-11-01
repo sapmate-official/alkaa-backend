@@ -29,6 +29,9 @@ router.get('/organizations/:orgId/employees/:employmentType', employmentTypePoli
 // Update user employment type
 router.patch('/users/:userId/employment-type', employmentTypePolicyController.updateUserEmploymentType);
 
+// Get employment type history for a user
+router.get('/users/:userId/employment-type/history', employmentTypePolicyController.getEmploymentTypeHistory);
+
 // Get expiring contracts for organization
 router.get('/organizations/:orgId/expiring-contracts', employmentTypePolicyController.getExpiringContracts);
 
