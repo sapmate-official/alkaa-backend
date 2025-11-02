@@ -300,11 +300,13 @@ export const updateUserEmploymentType = async (req, res) => {
         // Create activity log
         await prisma.activityLog.create({
             data: {
-                action: 'EMPLOYMENT_TYPE_CHANGED',
+                action: 'UPDATE',
+                entity: 'USER',
+                entityId: userId,
+                description: `Employment type changed from ${currentUser.employmentType} to ${employmentType || currentUser.employmentType}${reason ? ` - Reason: ${reason}` : ''}`,
                 actorId: changedBy,
-                targetId: userId,
                 orgId: req.user.orgId,
-                details: {
+                metadata: {
                     previousType: currentUser.employmentType,
                     newType: employmentType || currentUser.employmentType,
                     previousContractEnd: currentUser.contractEndDate,

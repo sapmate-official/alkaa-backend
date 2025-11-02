@@ -1,6 +1,7 @@
 import express from "express";
 import { createUser, deleteUser, fetchAllSubordinates, fetchAllUsersFromOrg, fetchManagers, getUser, getUserById, hardDeleteUser, hardDeleteUserFromOrg, updateUser,updateUserDepartment,updateUserRole } from "../../../controller/v2/user/User.controller.js";
 import validateToken from "../../../middleware/validateToken.js";
+import { createUserValidation, updateUserValidation } from "../../../middleware/userValidation.js";
 
 const router = express.Router();
 
@@ -11,9 +12,9 @@ router.get("/org/:orgId",validateToken,getUser);
 router.get("/all",validateToken,fetchAllUsersFromOrg);
 router.get("/user-list",validateToken,fetchAllUsersFromOrg)
 router.get("/:id",getUserById);
-router.post("/",createUser);
-router.put("/:id",updateUser);
-router.patch("/:id",updateUser);
+router.post("/", createUserValidation, createUser);
+router.put("/:id", updateUserValidation, updateUser);
+router.patch("/:id", updateUserValidation, updateUser);
 router.delete("/",hardDeleteUser);
 
 // Organization-specific hard delete route

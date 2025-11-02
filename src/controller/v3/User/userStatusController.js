@@ -126,11 +126,13 @@ export const updateUserStatus = async (req, res) => {
         // Create activity log
         await prisma.activityLog.create({
             data: {
-                action: `USER_STATUS_CHANGED_${status.toUpperCase()}`,
+                action: 'UPDATE',
+                entity: 'USER',
+                entityId: userId,
+                description: `User status changed from ${currentUser.status} to ${status}${reason ? ` - Reason: ${reason}` : ''}`,
                 actorId: changedBy,
-                targetId: userId,
                 orgId: req.user.orgId,
-                details: {
+                metadata: {
                     previousStatus: currentUser.status,
                     newStatus: status,
                     reason,
@@ -279,11 +281,15 @@ export const reactivateUser = async (req, res) => {
         // Create activity log
         await prisma.activityLog.create({
             data: {
-                action: 'USER_REACTIVATED',
+                action: 'UPDATE',
+                entity: 'USER',
+                entityId: userId,
+                description: `User reactivated from terminated to active${reason ? ` - Reason: ${reason}` : ''}`,
                 actorId: changedBy,
-                targetId: userId,
                 orgId: req.user.orgId,
-                details: {
+                metadata: {
+                    previousStatus: 'terminated',
+                    newStatus: 'active',
                     reason,
                     notes
                 }
