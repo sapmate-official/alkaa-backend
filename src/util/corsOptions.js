@@ -18,7 +18,8 @@
     "https://alkaa.vercel.app",
     "https://alkaa-frontend-test.vercel.app",
     "https://alkaa-admin-test.vercel.app",
-    "https://alkaa-frontend-test.vercel.app"
+    "https://alkaa-frontend-test.vercel.app",
+    "https://alkaa-stag.vercel.app"
 ]
 
 export const corsOptions = {
