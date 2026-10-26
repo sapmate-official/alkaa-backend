@@ -12,6 +12,7 @@
     "https://main.dy4iqzhph9mgs.amplifyapp.com",
     "https://dev.d1my6reb1ahjn8.amplifyapp.com",
     "https://www.alkaa.sapmate.com",
+    "https://alkaa.online",
     "https://www.alkaa.online",
     "https://api.alkaa.online" ,
     "https://alkaa.vercel.app",

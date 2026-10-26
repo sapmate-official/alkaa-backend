@@ -8,13 +8,18 @@ const vapidDetails = {
   subject: 'mailto:contact@yourdomain.com'
 };
 
-webpush.setVapidDetails(
-  vapidDetails.subject,
-  vapidDetails.publicKey,
-  vapidDetails.privateKey
-);
+if (vapidDetails.publicKey && vapidDetails.privateKey) {
+  webpush.setVapidDetails(
+    vapidDetails.subject,
+    vapidDetails.publicKey,
+    vapidDetails.privateKey
+  );
+}
 
 export const sendTestPushNotification = async (req, res) => {
+  if (!vapidDetails.publicKey || !vapidDetails.privateKey) {
+    return res.status(503).json({ error: 'Push notifications not configured (missing VAPID keys)' });
+  }
   try {
     const { userId } = req.params;
     
