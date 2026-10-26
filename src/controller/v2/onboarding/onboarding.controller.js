@@ -468,7 +468,11 @@ export const getCandidateReviewData = async (req, res) => {
 export const updateCandidateData = [
     body('firstName').optional().isLength({ min: 2 }).withMessage('First name must be at least 2 characters'),
     body('lastName').optional().isLength({ min: 2 }).withMessage('Last name must be at least 2 characters'),
-    body('mobileNumber').optional().isMobilePhone().withMessage('Invalid mobile number'),
+    body('mobileNumber')
+        .optional()
+        .customSanitizer(val => typeof val === 'string' ? val.replace(/[\s\-\(\)]/g, '') : val)
+        .isMobilePhone('any')
+        .withMessage('Invalid mobile number'),
     body('annualPackage').optional().isNumeric().withMessage('Annual package must be a number'),
     body('monthlySalary').optional().isNumeric().withMessage('Monthly salary must be a number'),
     body('departmentId').optional().isString(),
@@ -783,16 +787,28 @@ export const verifyOnboardingToken = async (req, res) => {
 
 // Submit Candidate Form (Public endpoint)
 export const submitCandidateForm = [
-    body('firstName').notEmpty().withMessage('First name is required'),
-    body('lastName').notEmpty().withMessage('Last name is required'),  
-    body('mobileNumber').isMobilePhone().withMessage('Valid mobile number required'),
-    body('emergencyContact').isMobilePhone().withMessage('Valid emergency contact required'),
+    body('firstName').trim().notEmpty().withMessage('First name is required'),
+    body('lastName').trim().notEmpty().withMessage('Last name is required'),  
+    body('mobileNumber')
+        .customSanitizer(val => typeof val === 'string' ? val.replace(/[\s\-\(\)]/g, '') : val)
+        .isMobilePhone('any')
+        .withMessage('Valid mobile number required'),
+    body('emergencyContact')
+        .customSanitizer(val => typeof val === 'string' ? val.replace(/[\s\-\(\)]/g, '') : val)
+        .isMobilePhone('any')
+        .withMessage('Valid emergency contact required'),
     body('dateOfBirth').isISO8601().withMessage('Valid date of birth required'),
-    body('address').isLength({ min: 10 }).withMessage('Complete address required'),
-    body('bankDetails.accountNumber').isLength({ min: 8 }).withMessage('Valid account number required'),
-    body('bankDetails.ifscCode').isLength({ min: 11, max: 11 }).withMessage('Valid IFSC code required'),
-    body('bankDetails.bankName').notEmpty().withMessage('Bank name is required'),
-    body('bankDetails.accountHolderName').notEmpty().withMessage('Account holder name required'),
+    body('address').trim().isLength({ min: 10 }).withMessage('Complete address required (min 10 characters)'),
+    body('bankDetails.accountNumber')
+        .customSanitizer(val => typeof val === 'string' ? val.replace(/\s+/g, '') : val)
+        .isLength({ min: 8 })
+        .withMessage('Valid account number required'),
+    body('bankDetails.ifscCode')
+        .customSanitizer(val => typeof val === 'string' ? val.replace(/\s+/g, '').toUpperCase() : val)
+        .isLength({ min: 11, max: 11 })
+        .withMessage('Valid IFSC code required (11 characters)'),
+    body('bankDetails.bankName').trim().notEmpty().withMessage('Bank name is required'),
+    body('bankDetails.accountHolderName').trim().notEmpty().withMessage('Account holder name required'),
 
     async (req, res) => {
         try {
