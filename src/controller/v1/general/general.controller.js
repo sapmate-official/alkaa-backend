@@ -238,6 +238,60 @@ const verifyPasswordAndSendOtp = async (req, res) => {
             });
         }
 
+        // If Two-Factor Authentication is disabled (default), complete login directly without OTP delay/failure
+        if (!user.twoFactorEnabled) {
+            const { accessToken, refreshToken } = generateTokensWithOrg(
+                user.email,
+                user.id,
+                user.orgId,
+                "2d",
+                "7d"
+            );
+
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { refreshToken: refreshToken }
+            });
+
+            res.cookie("refreshToken", refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax",
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+                expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                path: "/",
+                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
+            });
+
+            res.cookie("accessToken", accessToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax",
+                maxAge: 2 * 24 * 60 * 60 * 1000,
+                expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+                path: "/",
+                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
+            });
+
+            return res.status(200).json({
+                message: "Login successful",
+                accessToken,
+                refreshToken,
+                organization: {
+                    id: user.organization.id,
+                    name: user.organization.name
+                },
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    orgId: user.orgId,
+                    roles: user.roles ? user.roles.map(ur => ur.role.name) : []
+                }
+            });
+        }
+
         // Generate and store OTP
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
         const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
