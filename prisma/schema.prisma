@@ -192,6 +192,8 @@ model User {
   updatedAt                    DateTime              @updatedAt
   employeeId                   String                @unique @default(cuid())
   terminationDate              DateTime?
+  jobTitle                     String?
+  businessEmail                String?
   firstName                    String?               @default("unknown")
   lastName                     String?               @default("unknown")
   emergencyContact             String?
