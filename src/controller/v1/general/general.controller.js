@@ -21,8 +21,15 @@ const checkEmailForLogin = async (req, res) => {
         });
         
         if (superAdmin) {
-            return res.status(401).json({
-                message: "Super Admins cannot login through this endpoint",
+            return res.status(200).json({
+                message: "Super Admin identified",
+                singleOrganization: true,
+                organization: {
+                    orgId: "platform-superadmin",
+                    orgName: "Platform Administration",
+                    userId: superAdmin.id,
+                    userStatus: "active"
+                }
             });
         }
 
@@ -99,6 +106,68 @@ const verifyPasswordAndSendOtp = async (req, res) => {
         if (!email || !password) {
             return res.status(400).json({
                 message: "Email and password are required",
+            });
+        }
+
+        // Check for super admin
+        const superAdmin = await prisma.superAdmin.findUnique({
+            where: { email },
+        });
+
+        if (superAdmin) {
+            const isPasswordValid = await bcrypt.compare(password, superAdmin.hashedPassword);
+            if (!isPasswordValid) {
+                return res.status(401).json({
+                    message: "Invalid credentials",
+                });
+            }
+
+            const { accessToken, refreshToken } = generateTokens(
+                superAdmin.email,
+                superAdmin.id,
+                "2d",
+                "7d"
+            );
+
+            await prisma.superAdmin.update({
+                where: { email },
+                data: { refreshToken },
+            });
+
+            res.cookie("refreshToken", refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax",
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+                expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                path: "/",
+                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
+            });
+
+            res.cookie("accessToken", accessToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax",
+                maxAge: 2 * 24 * 60 * 60 * 1000,
+                expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+                path: "/",
+                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
+            });
+
+            return res.status(200).json({
+                message: "Super Admin authenticated successfully",
+                accessToken,
+                refreshToken,
+                organization: {
+                    id: "platform-superadmin",
+                    name: "Platform Administration"
+                },
+                user: {
+                    id: superAdmin.id,
+                    email: superAdmin.email,
+                    name: superAdmin.name,
+                    superAdmin: true
+                }
             });
         }
 
@@ -436,59 +505,55 @@ const loginUser = async (req, res) => {
         });
         console.log(superAdmin);
         if (superAdmin) {
-            return res.status(401).send({
-                message: "Super Admins cannot login through this endpoint",
-            });
-            // const isPasswordValid = await bcrypt.compare(password, superAdmin.hashedPassword);
-            // console.log(isPasswordValid);   
-            // if (!isPasswordValid) {
-            //     return res.status(401).send({
-            //         message: "Invalid credentials",
-            //     }); 
-            // }
+            const isPasswordValid = await bcrypt.compare(password, superAdmin.hashedPassword);
+            if (!isPasswordValid) {
+                return res.status(401).send({
+                    message: "Invalid credentials",
+                }); 
+            }
             
-            // const { accessToken, refreshToken } = generateTokens(
-            //     superAdmin.email,
-            //     superAdmin.id,
-            //     "2d",
-            //     "7d"
-            // );
-            // const puttoken = await prisma.superAdmin.update({
-            //     where: {
-            //         email: email
-            //     },
-            //     data: {
-            //         refreshToken: refreshToken,
-            //     }
-            // })
-            // res.cookie("refreshToken", refreshToken, {
-            //     httpOnly: true,
-            //     secure: process.env.NODE_ENV === "production",
-            //     sameSite: "lax",  // Changed from strict to lax for better cross-site compatibility
-            //     maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days in milliseconds
-            //     expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-            //     path: "/",
-            //     domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
-            // });
-            // res.cookie("accessToken", accessToken, {
-            //     httpOnly: true,
-            //     secure: process.env.NODE_ENV === "production",
-            //     sameSite: "lax",  // Changed from strict to lax
-            //     maxAge: 2 * 24 * 60 * 60 * 1000,  // 2 days in milliseconds
-            //     expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-            //     path: "/",
-            //     domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined // Root domain for production
-            // });
-            // return res.status(200).send({
-            //     message: "Super Admin logged in successfully",
-            //     userData: {
-            //         id: superAdmin.id,
-            //         email: superAdmin.email,
-            //         name: superAdmin.name,
-            //     },
-            //     refreshToken,
-            //     accessToken,
-            // });
+            const { accessToken, refreshToken } = generateTokens(
+                superAdmin.email,
+                superAdmin.id,
+                "2d",
+                "7d"
+            );
+            await prisma.superAdmin.update({
+                where: {
+                    email: email
+                },
+                data: {
+                    refreshToken: refreshToken,
+                }
+            });
+            res.cookie("refreshToken", refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax",
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+                expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                path: "/",
+                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
+            });
+            res.cookie("accessToken", accessToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax",
+                maxAge: 2 * 24 * 60 * 60 * 1000,
+                expires: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+                path: "/",
+                domain: process.env.NODE_ENV === "production" ? ".alkaa.online" : undefined
+            });
+            return res.status(200).send({
+                message: "Super Admin logged in successfully",
+                userData: {
+                    id: superAdmin.id,
+                    email: superAdmin.email,
+                    name: superAdmin.name,
+                },
+                refreshToken,
+                accessToken,
+            });
         }
 
         const user = await prisma.user.findFirst({
