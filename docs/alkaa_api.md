@@ -785,3 +785,42 @@ curl -X PUT "https://api.alkaa.online/api/v2/user/cmvr4vimf0001m29c98zzll1q" \
   }
 }
 ```
+
+
+---
+
+### 7. Onboarding Candidate APIs (Personal Email Support)
+
+The onboarding candidate APIs now explicitly accept and return `personalEmail`:
+
+#### A. Create Candidate (`POST /api/v2/onboarding/candidate`)
+* **Request Body (Accepts either `personalEmail` or `email`):**
+```json
+{
+  "personalEmail": "newcandidate.personal@gmail.com",
+  "firstName": "Arun",
+  "lastName": "Kumar",
+  "mobileNumber": "9876543210",
+  "departmentId": "dept_123",
+  "annualPackage": 600000
+}
+```
+
+#### B. Fetch Candidates (`GET /api/v2/onboarding/candidates`)
+* **Response (Includes `personalEmail`):**
+```json
+[
+  {
+    "id": "cand_12345",
+    "firstName": "Arun",
+    "lastName": "Kumar",
+    "email": "newcandidate.personal@gmail.com",
+    "personalEmail": "newcandidate.personal@gmail.com",
+    "status": "INVITED",
+    "annualPackage": 600000
+  }
+]
+```
+
+#### C. Update Candidate Data (`PUT /api/v2/onboarding/candidate/:id`)
+* **Request Body:** Accepts `{ "personalEmail": "updated.email@gmail.com", ... }`.
