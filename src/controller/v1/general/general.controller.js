@@ -36,7 +36,7 @@ const checkEmailForLogin = async (req, res) => {
         // Find all organizations this user belongs to
         const userOrganizations = await prisma.user.findMany({
             where: { 
-                email,
+                OR: [{ email }, { businessEmail: email }, { personalEmail: email }],
                 status: { in: ['active', 'inactive'] } // Exclude suspended users
             },
             include: {
@@ -176,7 +176,7 @@ const verifyPasswordAndSendOtp = async (req, res) => {
         if (orgId) {
             user = await prisma.user.findFirst({
                 where: { 
-                    email,
+                    OR: [{ email }, { businessEmail: email }, { personalEmail: email }],
                     orgId 
                 },
                 include: {
@@ -192,7 +192,7 @@ const verifyPasswordAndSendOtp = async (req, res) => {
         } else {
             // Single organization case
             user = await prisma.user.findFirst({
-                where: { email },
+                where: { OR: [{ email }, { businessEmail: email }, { personalEmail: email }] },
                 include: {
                     organization: {
                         select: {

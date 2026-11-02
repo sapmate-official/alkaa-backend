@@ -363,6 +363,7 @@ export const updateUser = async (req, res) => {
     if (req.body.employeeId !== undefined) updateData.employeeId = req.body.employeeId || null;
     if (req.body.jobTitle !== undefined) updateData.jobTitle = req.body.jobTitle || null;
     if (req.body.businessEmail !== undefined) updateData.businessEmail = req.body.businessEmail || null;
+    if (req.body.personalEmail !== undefined) updateData.personalEmail = req.body.personalEmail || null;
 
     // Handle relationship fields - only include if valid values are provided
     if (req.body.departmentId) {

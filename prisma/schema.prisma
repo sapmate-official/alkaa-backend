@@ -194,6 +194,7 @@ model User {
   terminationDate              DateTime?
   jobTitle                     String?
   businessEmail                String?
+  personalEmail                String?
   firstName                    String?               @default("unknown")
   lastName                     String?               @default("unknown")
   emergencyContact             String?
@@ -597,6 +598,7 @@ model ActivityLog {
 model OnboardingCandidate {
   id                String           @id @default(cuid())
   email             String           @unique
+  businessEmail     String?
   firstName         String
   lastName          String?
   mobileNumber      String?
