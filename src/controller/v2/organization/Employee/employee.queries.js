@@ -14,6 +14,16 @@ const listOfEmployees = async (req, res) => {
             where: { orgId },
             include: {
                 department: true,
+                manager: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        employeeId: true,
+                        jobTitle: true
+                    }
+                },
                 roles: {
                     include: {
                         role: true
@@ -38,6 +48,16 @@ const getEmployeeById = async (req, res) => {
             where: { id },
             include: {
                 department: true,
+                manager: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        employeeId: true,
+                        jobTitle: true
+                    }
+                },
                 roles: {
                     include: {
                         role: true

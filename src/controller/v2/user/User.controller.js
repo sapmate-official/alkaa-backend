@@ -37,6 +37,16 @@ export const getUser = async (req, res) => {
         include:{
             organization:true,
             department:true,
+            manager: {
+                select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                    employeeId: true,
+                    jobTitle: true
+                }
+            },
             roles:{
                 include:{
                     role:{
@@ -63,6 +73,17 @@ export const getUserById = async (req, res) => {
         const user = await findUserByIdOrEmployeeId(id, {
             include: {
                 organization: true,
+                department: true,
+                manager: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        employeeId: true,
+                        jobTitle: true
+                    }
+                },
                 roles: {
                     include: {
                         role: {
@@ -1207,6 +1228,16 @@ export const fetchAllSubordinates = async (req, res) => {
             },
             include: {
                 department: true,
+                manager: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        employeeId: true,
+                        jobTitle: true
+                    }
+                },
                 roles: {
                     include: {
                         role: true
@@ -1271,6 +1302,16 @@ export const fetchAllUsersFromOrg = async (req, res) => {
             },
             include: {
                 department: true,
+                manager: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        employeeId: true,
+                        jobTitle: true
+                    }
+                },
                 roles: {
                     include: {
                         role: true

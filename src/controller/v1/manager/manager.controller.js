@@ -35,7 +35,22 @@ const listOfLeave  = async (req, res) => {
                 status: "PENDING",
             },
             include:{
-                User:true
+                user: {
+                    include: {
+                        department: true,
+                        manager: {
+                            select: {
+                                id: true,
+                                firstName: true,
+                                lastName: true,
+                                email: true,
+                                employeeId: true,
+                                jobTitle: true
+                            }
+                        }
+                    }
+                },
+                leaveType: true
             }
         });
         res.status(200).json(leaves);
@@ -139,10 +154,29 @@ const leaveTypeCreate = async (req, res) => {
 }
 const employeeList = async (req, res) => {
     try {
+        const managerId = req.user?.id;
         const employees = await prisma.user.findMany({
             where: {
-                role: "EMPLOYEE",
+                ...(managerId ? { managerId } : {})
             },
+            include: {
+                department: true,
+                manager: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        employeeId: true,
+                        jobTitle: true
+                    }
+                },
+                roles: {
+                    include: {
+                        role: true
+                    }
+                }
+            }
         });
         res.status(200).json(employees);
     } catch (error) {
