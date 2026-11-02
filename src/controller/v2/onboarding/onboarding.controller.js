@@ -143,6 +143,7 @@ export const createCandidate = [
             const candidate = await prisma.onboardingCandidate.create({
                 data: {
                     email,
+                    personalEmail: req.body.personalEmail || email,
                     firstName,
                     lastName,
                     mobileNumber,
@@ -185,6 +186,7 @@ export const createCandidate = [
                 candidate: {
                     id: candidate.id,
                     email: candidate.email,
+                    personalEmail: candidate.personalEmail || candidate.email,
                     firstName: candidate.firstName,
                     lastName: candidate.lastName,
                     status: candidate.status,
@@ -313,7 +315,10 @@ export const getCandidateById = async (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        res.status(200).json(candidate);
+        res.status(200).json({
+            ...candidate,
+            personalEmail: candidate.personalEmail || candidate.email
+        });
     } catch (error) {
         console.error('Error fetching candidate:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -643,7 +648,10 @@ export const updateCandidateData = [
             res.status(200).json({
                 success: true,
                 message: 'Candidate data updated successfully',
-                data: updatedCandidate
+                data: {
+                    ...updatedCandidate,
+                    personalEmail: updatedCandidate.personalEmail || updatedCandidate.email
+                }
             });
         } catch (error) {
             console.error('Error updating candidate data:', error);

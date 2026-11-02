@@ -824,3 +824,81 @@ The onboarding candidate APIs now explicitly accept and return `personalEmail`:
 
 #### C. Update Candidate Data (`PUT /api/v2/onboarding/candidate/:id`)
 * **Request Body:** Accepts `{ "personalEmail": "updated.email@gmail.com", ... }`.
+
+
+---
+
+### 7. Onboarding Candidate APIs (For Automations)
+
+Use these endpoints when an external automation tool (such as n8n, Power Automate, or a custom script) grabs onboarding candidates, extracts their **`personalEmail`**, creates their Microsoft Teams / Google Workspace corporate email, and assigns it.
+
+#### A. Fetch All Candidates (List)
+* **Method & Path:** `GET /api/v2/onboarding/candidate`
+* **Authentication:** User Token (`Authorization: Bearer <token>`)
+
+##### Sample Response (200 OK)
+```json
+[
+  {
+    "id": "cand_987654",
+    "personalEmail": "candidate.personal@gmail.com",
+    "email": "candidate.personal@gmail.com",
+    "businessEmail": null,
+    "firstName": "Rohit",
+    "lastName": "Sharma",
+    "status": "SUBMITTED",
+    "department": {
+      "id": "dept_123",
+      "name": "Engineering"
+    }
+  }
+]
+```
+
+#### B. Fetch Candidate by ID
+* **Method & Path:** `GET /api/v2/onboarding/candidate/:id`
+* **Authentication:** User Token (`Authorization: Bearer <token>`)
+
+##### Sample Response (200 OK)
+```json
+{
+  "id": "cand_987654",
+  "personalEmail": "candidate.personal@gmail.com",
+  "email": "candidate.personal@gmail.com",
+  "businessEmail": null,
+  "firstName": "Rohit",
+  "lastName": "Sharma",
+  "mobileNumber": "+919876543210",
+  "status": "APPROVED"
+}
+```
+
+#### C. Create New Candidate (Invite to Onboarding)
+* **Method & Path:** `POST /api/v2/onboarding/candidate`
+* **Authentication:** User Token (`Authorization: Bearer <token>`)
+* **Request Payload (Accepts `personalEmail` directly):**
+```json
+{
+  "personalEmail": "candidate.personal@gmail.com",
+  "firstName": "Rohit",
+  "lastName": "Sharma",
+  "mobileNumber": "+919876543210",
+  "departmentId": "dept_123",
+  "annualPackage": 600000
+}
+```
+
+##### Sample Response (201 Created)
+```json
+{
+  "message": "Candidate created successfully",
+  "candidate": {
+    "id": "cand_987654",
+    "personalEmail": "candidate.personal@gmail.com",
+    "email": "candidate.personal@gmail.com",
+    "firstName": "Rohit",
+    "lastName": "Sharma",
+    "status": "INVITED"
+  }
+}
+```

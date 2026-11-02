@@ -14,7 +14,7 @@ import { configDotenv } from 'dotenv'
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
-configDotenv()
+configDotenv({ path: path.join(dirname, '..', '.env') })
 const app = express()
 
 // Middleware - consolidated to avoid duplicates
