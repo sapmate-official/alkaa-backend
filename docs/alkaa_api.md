@@ -618,6 +618,14 @@ This section documents the specific APIs updated to support the separation of **
     "department": {
       "id": "dept_123",
       "name": "Engineering"
+    },
+    "manager": {
+      "id": "cmvr4vimf0001m29c98zzll1q",
+      "firstName": "Souma",
+      "lastName": "Ghosh",
+      "email": "soumabrataghosh2005@gmail.com",
+      "employeeId": "ADM-001",
+      "jobTitle": "Manager"
     }
   },
   {
@@ -628,18 +636,19 @@ This section documents the specific APIs updated to support the separation of **
     "email": "parambrataghosh26@gmail.com",
     "businessEmail": null,
     "personalEmail": "parambrataghosh26@gmail.com",
-    "status": "inactive"
+    "status": "inactive",
+    "manager": null
   }
 ]
 ```
-*(Note: If `businessEmail` is `null`, the Directory UI indicates `Pending automation`)*.
+*(Note: If `businessEmail` is `null`, the Directory UI indicates `Pending automation`. If no manager is assigned, `manager` is `null`)*.
 
 ---
 
 ### 2. Get User Profile Details
 * **Method & Path:** `GET /api/v2/user/:id` (or `GET /api/v1/employee/:id`)
 * **Authentication:** User Token
-* **Purpose:** Retrieves individual employee profile with both emails.
+* **Purpose:** Retrieves individual employee profile with both emails, department, and populated manager details.
 
 #### Sample Response (200 OK)
 ```json
@@ -651,7 +660,20 @@ This section documents the specific APIs updated to support the separation of **
   "email": "soumabrata.ghosh@shapenxt.com",
   "businessEmail": "soumabrata.ghosh@shapenxt.com",
   "personalEmail": "soumabrataghosh2005@gmail.com",
-  "status": "active"
+  "status": "active",
+  "jobTitle": "Lead Engineer",
+  "department": {
+    "id": "dept_123",
+    "name": "Engineering"
+  },
+  "manager": {
+    "id": "cmvr4vimf0001m29c98zzll1q",
+    "firstName": "Souma",
+    "lastName": "Ghosh",
+    "email": "soumabrataghosh2005@gmail.com",
+    "employeeId": "ADM-001",
+    "jobTitle": "Manager"
+  }
 }
 ```
 
@@ -901,4 +923,186 @@ Use these endpoints when an external automation tool (such as n8n, Power Automat
     "status": "INVITED"
   }
 }
+```
+
+---
+
+### 8. Manager Relation & Manager Endpoints
+
+To avoid multiple separate queries to display manager information, the backend returns the populated **`manager` relation** on user and employee records instead of only the raw `managerId` string.
+
+#### Manager Object Structure
+When a manager is assigned, the nested `manager` field returns:
+```json
+"manager": {
+  "id": "cmvr4vimf0001m29c98zzll1q",
+  "firstName": "Souma",
+  "lastName": "Ghosh",
+  "email": "soumabrataghosh2005@gmail.com",
+  "employeeId": "ADM-001",
+  "jobTitle": "Engineering Manager"
+}
+```
+If no manager is assigned to the employee, the field is `null`:
+```json
+"manager": null
+```
+
+#### Endpoints Populating the `manager` Relation
+The `manager` object (`firstName`, `lastName`, `email`, `employeeId`, `jobTitle`) is automatically included in:
+1. `GET /api/v2/user/org/:orgId` — Organization employee list (`getUser`)
+2. `GET /api/v2/user/:id` — Single user profile details (`getUserById`)
+3. `GET /api/v2/user/subordinates/:managerId` — Subordinates assigned to a manager
+4. `GET /api/v2/user/all/:orgId` — All users in organization
+5. `GET /api/v2/organization/employee-list/:orgId` — Organization employee directory (`listOfEmployees`)
+6. `GET /api/v2/organization/employees/:id` — Employee details by ID (`getEmployeeById`)
+7. `GET /api/v1/manager/employee-list` — List of subordinates for the authenticated manager
+8. `GET /api/v1/manager/list-of-leave` — Pending leave requests with applicant `user.manager` details
+
+---
+
+#### A. Manager: Subordinate Employee List
+* **Method & Path:** `GET /api/v1/manager/employee-list`
+* **Authentication:** User Token + Manager Role (`Authorization: Bearer <token>`)
+* **Purpose:** Returns all employees reporting directly to the logged-in manager, complete with department and manager details.
+
+##### Sample Response (200 OK)
+```json
+[
+  {
+    "id": "cmsut04yh0001l604d3564ems",
+    "employeeId": "ST2026715195752",
+    "firstName": "Soumabrata",
+    "lastName": "Ghosh",
+    "email": "soumabrata.ghosh@shapenxt.com",
+    "businessEmail": "soumabrata.ghosh@shapenxt.com",
+    "personalEmail": "soumabrataghosh2005@gmail.com",
+    "status": "active",
+    "jobTitle": "Software Engineer",
+    "department": {
+      "id": "dept_123",
+      "name": "Engineering"
+    },
+    "manager": {
+      "id": "cmvr4vimf0001m29c98zzll1q",
+      "firstName": "Souma",
+      "lastName": "Ghosh",
+      "email": "soumabrataghosh2005@gmail.com",
+      "employeeId": "ADM-001",
+      "jobTitle": "Engineering Manager"
+    },
+    "roles": [
+      {
+        "role": {
+          "id": "role_emp_123",
+          "name": "EMPLOYEE"
+        }
+      }
+    ]
+  }
+]
+```
+
+---
+
+#### B. Manager: List of Pending Leaves
+* **Method & Path:** `GET /api/v1/manager/list-of-leave`
+* **Authentication:** User Token + Manager Role (`Authorization: Bearer <token>`)
+* **Purpose:** Returns pending leave applications under the manager. Populates the applicant's `user` information, their department, and their manager details.
+
+##### Sample Response (200 OK)
+```json
+[
+  {
+    "id": "leave_req_101",
+    "status": "PENDING",
+    "startDate": "2026-11-10T00:00:00.000Z",
+    "endDate": "2026-11-12T00:00:00.000Z",
+    "reason": "Family vacation",
+    "leaveType": {
+      "id": "lt_annual_01",
+      "name": "Casual Leave"
+    },
+    "user": {
+      "id": "cmsut04yh0001l604d3564ems",
+      "employeeId": "ST2026715195752",
+      "firstName": "Soumabrata",
+      "lastName": "Ghosh",
+      "email": "soumabrata.ghosh@shapenxt.com",
+      "businessEmail": "soumabrata.ghosh@shapenxt.com",
+      "personalEmail": "soumabrataghosh2005@gmail.com",
+      "department": {
+        "id": "dept_123",
+        "name": "Engineering"
+      },
+      "manager": {
+        "id": "cmvr4vimf0001m29c98zzll1q",
+        "firstName": "Souma",
+        "lastName": "Ghosh",
+        "email": "soumabrataghosh2005@gmail.com",
+        "employeeId": "ADM-001",
+        "jobTitle": "Engineering Manager"
+      }
+    }
+  }
+]
+```
+
+---
+
+#### C. Fetch Subordinates by Manager ID
+* **Method & Path:** `GET /api/v2/user/subordinates/:managerId`
+* **Authentication:** User Token (`Authorization: Bearer <token>`)
+* **Purpose:** Retrieves all subordinate user profiles assigned to a specific manager ID.
+
+##### Sample Response (200 OK)
+```json
+[
+  {
+    "id": "cmsut04yh0001l604d3564ems",
+    "employeeId": "ST2026715195752",
+    "firstName": "Soumabrata",
+    "lastName": "Ghosh",
+    "email": "soumabrata.ghosh@shapenxt.com",
+    "businessEmail": "soumabrata.ghosh@shapenxt.com",
+    "personalEmail": "soumabrataghosh2005@gmail.com",
+    "department": {
+      "id": "dept_123",
+      "name": "Engineering"
+    },
+    "manager": {
+      "id": "cmvr4vimf0001m29c98zzll1q",
+      "firstName": "Souma",
+      "lastName": "Ghosh",
+      "email": "soumabrataghosh2005@gmail.com",
+      "employeeId": "ADM-001",
+      "jobTitle": "Engineering Manager"
+    }
+  }
+]
+```
+
+---
+
+#### D. Fetch All Managers in Organization
+* **Method & Path:** `GET /api/v2/user/fetch-managers/org/:orgId`
+* **Authentication:** User Token (`Authorization: Bearer <token>`)
+* **Purpose:** Retrieves a dropdown-ready list of all users designated as Managers within the specified organization.
+
+##### Sample Response (200 OK)
+```json
+[
+  {
+    "id": "cmvr4vimf0001m29c98zzll1q",
+    "employeeId": "ADM-001",
+    "firstName": "Souma",
+    "lastName": "Ghosh",
+    "email": "soumabrataghosh2005@gmail.com",
+    "jobTitle": "Engineering Manager",
+    "department": {
+      "id": "dept_123",
+      "name": "Engineering"
+    }
+  }
+]
 ```
