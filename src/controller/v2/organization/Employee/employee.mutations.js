@@ -10,6 +10,7 @@ const createEmployee = async (req, res) => {
             firstName,
             lastName,
             email,
+            jobTitle,
             mobileNumber,
             emergencyContact,
             dateOfBirth,
@@ -107,6 +108,7 @@ const createEmployee = async (req, res) => {
                 departmentId:departmentId?departmentId:null,
                 managerId,
                 email,
+                jobTitle: jobTitle || null,
                 firstName,
                 lastName,
                 employeeId,
@@ -263,6 +265,7 @@ const updateEmployee = async (req, res) => {
             email,
             firstName,
             lastName,
+            jobTitle,
             employeeId,
             mobileNumber,
             emergencyContact,
@@ -281,6 +284,7 @@ const updateEmployee = async (req, res) => {
                 employeeId,
                 mobileNumber,
                 emergencyContact,
+                jobTitle: jobTitle !== undefined ? jobTitle : undefined,
                 status,
                 bankDetails: bankDetails ? {
                     upsert: {

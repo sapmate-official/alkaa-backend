@@ -1447,6 +1447,7 @@ export const completeOnboarding = [
                     firstName: formData.firstName || candidate.firstName,
                     lastName: formData.lastName || candidate.lastName,
                     employeeId,
+                    jobTitle: req.body.jobTitle || formData.jobTitle || null,
                     mobileNumber: formData.mobileNumber || candidate.mobileNumber,
                     hiredDate: candidate.hiredDate || new Date(),
                     dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : null,
