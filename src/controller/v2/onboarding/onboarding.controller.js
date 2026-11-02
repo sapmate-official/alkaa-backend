@@ -15,7 +15,13 @@ const prisma = new PrismaClient();
 
 // Create Initial Candidate
 export const createCandidate = [
-    body('email').isEmail().withMessage('Valid email is required'),
+    (req, res, next) => {
+        if (!req.body.email && req.body.personalEmail) {
+            req.body.email = req.body.personalEmail;
+        }
+        next();
+    },
+    body('email').isEmail().withMessage('Valid personal email is required'),
     body('firstName').notEmpty().withMessage('First name is required'),
     body('lastName').optional(),
     body('mobileNumber').optional(),
@@ -241,7 +247,11 @@ export const getCandidates = async (req, res) => {
             }
         });
 
-        res.status(200).json(candidates);
+        const formattedCandidates = candidates.map(c => ({
+            ...c,
+            personalEmail: c.email
+        }));
+        res.status(200).json(formattedCandidates);
     } catch (error) {
         console.error('Error fetching candidates:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -370,6 +380,7 @@ export const getCandidateReviewData = async (req, res) => {
             candidateInfo: {
                 id: candidate.id,
                 email: candidate.email,
+                personalEmail: candidate.email,
                 firstName: candidate.firstName,
                 lastName: candidate.lastName,
                 mobileNumber: candidate.mobileNumber,
@@ -515,7 +526,7 @@ export const updateCandidateData = [
             if (updateData.firstName) updateObject.firstName = updateData.firstName;
             if (updateData.lastName) updateObject.lastName = updateData.lastName;
             if (updateData.mobileNumber) updateObject.mobileNumber = updateData.mobileNumber;
-            if (updateData.email) updateObject.email = updateData.email;
+            if (updateData.personalEmail || updateData.email) updateObject.email = updateData.personalEmail || updateData.email;
             if (updateData.departmentId) updateObject.departmentId = updateData.departmentId;
             if (updateData.managerId) updateObject.managerId = updateData.managerId;
             if (updateData.hiredDate) updateObject.hiredDate = new Date(updateData.hiredDate);
