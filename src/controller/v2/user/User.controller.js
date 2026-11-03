@@ -23,6 +23,28 @@ const findUserByIdOrEmployeeId = async (identifier, includeOptions = {}) => {
     return user;
 };
 
+
+const sanitizeManagerEmails = (m) => {
+    if (!m) return m;
+    const { email: _e, ...rest } = m;
+    return {
+        ...rest,
+        personalEmail: m.personalEmail || m.email,
+        businessEmail: m.businessEmail || null
+    };
+};
+
+const sanitizeUserEmails = (u) => {
+    if (!u) return u;
+    const { email: _e, ...rest } = u;
+    return {
+        ...rest,
+        personalEmail: u.personalEmail || u.email,
+        businessEmail: u.businessEmail || null,
+        ...(u.manager !== undefined ? { manager: sanitizeManagerEmails(u.manager) } : {})
+    };
+};
+
 export const getUser = async (req, res) => {
     try {
     // Accept orgId from route params, query, body or authenticated user
@@ -61,7 +83,7 @@ export const getUser = async (req, res) => {
                 }
             }
         }});
-        res.status(200).json(users);
+        res.status(200).json(users.map(sanitizeUserEmails));
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });
     }
@@ -79,7 +101,8 @@ export const getUserById = async (req, res) => {
                         id: true,
                         firstName: true,
                         lastName: true,
-                        email: true,
+                        personalEmail: true,
+                        businessEmail: true,
                         employeeId: true,
                         jobTitle: true
                     }
@@ -108,7 +131,7 @@ export const getUserById = async (req, res) => {
             }
             return res.status(404).json({ error: 'User not found' });
         }
-        res.status(200).json({user});
+        res.status(200).json({ user: sanitizeUserEmails(user) });
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });
     }
@@ -1234,7 +1257,8 @@ export const fetchAllSubordinates = async (req, res) => {
                         id: true,
                         firstName: true,
                         lastName: true,
-                        email: true,
+                        personalEmail: true,
+                        businessEmail: true,
                         employeeId: true,
                         jobTitle: true
                     }
@@ -1247,7 +1271,7 @@ export const fetchAllSubordinates = async (req, res) => {
             }
         });
         
-        res.status(200).json(subordinates);
+        res.status(200).json(subordinates.map(sanitizeUserEmails));
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: 'Internal Server Error', error });
@@ -1308,7 +1332,8 @@ export const fetchAllUsersFromOrg = async (req, res) => {
                         id: true,
                         firstName: true,
                         lastName: true,
-                        email: true,
+                        personalEmail: true,
+                        businessEmail: true,
                         employeeId: true,
                         jobTitle: true
                     }
@@ -1321,7 +1346,7 @@ export const fetchAllUsersFromOrg = async (req, res) => {
             }
         });
         
-        res.status(200).json(users);
+        res.status(200).json(users.map(sanitizeUserEmails));
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: 'Internal Server Error', error });

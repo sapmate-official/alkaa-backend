@@ -610,7 +610,6 @@ This section documents the specific APIs updated to support the separation of **
     "employeeId": "ST2026715195752",
     "firstName": "Soumabrata",
     "lastName": "Ghosh",
-    "email": "soumabrata.ghosh@shapenxt.com",
     "businessEmail": "soumabrata.ghosh@shapenxt.com",
     "personalEmail": "soumabrataghosh2005@gmail.com",
     "status": "active",
@@ -623,7 +622,6 @@ This section documents the specific APIs updated to support the separation of **
       "id": "cmvr4vimf0001m29c98zzll1q",
       "firstName": "Souma",
       "lastName": "Ghosh",
-      "email": "soumabrataghosh2005@gmail.com",
       "employeeId": "ADM-001",
       "jobTitle": "Manager"
     }
@@ -633,7 +631,6 @@ This section documents the specific APIs updated to support the separation of **
     "employeeId": "ST202524171116",
     "firstName": "Parambrata",
     "lastName": "Ghosh",
-    "email": "parambrataghosh26@gmail.com",
     "businessEmail": null,
     "personalEmail": "parambrataghosh26@gmail.com",
     "status": "inactive",
@@ -657,7 +654,6 @@ This section documents the specific APIs updated to support the separation of **
   "employeeId": "ST2026715195752",
   "firstName": "Soumabrata",
   "lastName": "Ghosh",
-  "email": "soumabrata.ghosh@shapenxt.com",
   "businessEmail": "soumabrata.ghosh@shapenxt.com",
   "personalEmail": "soumabrataghosh2005@gmail.com",
   "status": "active",
@@ -670,7 +666,6 @@ This section documents the specific APIs updated to support the separation of **
     "id": "cmvr4vimf0001m29c98zzll1q",
     "firstName": "Souma",
     "lastName": "Ghosh",
-    "email": "soumabrataghosh2005@gmail.com",
     "employeeId": "ADM-001",
     "jobTitle": "Manager"
   }
@@ -738,7 +733,6 @@ curl -X PUT "https://api.alkaa.online/api/v2/user/cmvr4vimf0001m29c98zzll1q" \
   "message": "Onboarding completed successfully",
   "user": {
     "id": "usr_new12345",
-    "email": "newemployee@shapenxt.com",
     "businessEmail": "newemployee@shapenxt.com",
     "personalEmail": "candidate.personal@gmail.com",
     "firstName": "Rohit",
@@ -799,7 +793,6 @@ curl -X PUT "https://api.alkaa.online/api/v2/user/cmvr4vimf0001m29c98zzll1q" \
   "accessToken": "eyJhbGciOi...",
   "user": {
     "id": "cmvr4vimf0001m29c98zzll1q",
-    "email": "soumabrata.ghosh@shapenxt.com",
     "businessEmail": "soumabrata.ghosh@shapenxt.com",
     "personalEmail": "soumabrataghosh2005@gmail.com",
     "firstName": "Soumabrata",
@@ -836,7 +829,6 @@ The onboarding candidate APIs now explicitly accept and return `personalEmail`:
     "id": "cand_12345",
     "firstName": "Arun",
     "lastName": "Kumar",
-    "email": "newcandidate.personal@gmail.com",
     "personalEmail": "newcandidate.personal@gmail.com",
     "status": "INVITED",
     "annualPackage": 600000
@@ -864,7 +856,6 @@ Use these endpoints when an external automation tool (such as n8n, Power Automat
   {
     "id": "cand_987654",
     "personalEmail": "candidate.personal@gmail.com",
-    "email": "candidate.personal@gmail.com",
     "businessEmail": null,
     "firstName": "Rohit",
     "lastName": "Sharma",
@@ -886,7 +877,6 @@ Use these endpoints when an external automation tool (such as n8n, Power Automat
 {
   "id": "cand_987654",
   "personalEmail": "candidate.personal@gmail.com",
-  "email": "candidate.personal@gmail.com",
   "businessEmail": null,
   "firstName": "Rohit",
   "lastName": "Sharma",
@@ -917,7 +907,6 @@ Use these endpoints when an external automation tool (such as n8n, Power Automat
   "candidate": {
     "id": "cand_987654",
     "personalEmail": "candidate.personal@gmail.com",
-    "email": "candidate.personal@gmail.com",
     "firstName": "Rohit",
     "lastName": "Sharma",
     "status": "INVITED"
@@ -938,7 +927,6 @@ When a manager is assigned, the nested `manager` field returns:
   "id": "cmvr4vimf0001m29c98zzll1q",
   "firstName": "Souma",
   "lastName": "Ghosh",
-  "email": "soumabrataghosh2005@gmail.com",
   "employeeId": "ADM-001",
   "jobTitle": "Engineering Manager"
 }
@@ -949,7 +937,7 @@ If no manager is assigned to the employee, the field is `null`:
 ```
 
 #### Endpoints Populating the `manager` Relation
-The `manager` object (`firstName`, `lastName`, `email`, `employeeId`, `jobTitle`) is automatically included in:
+The `manager` object (`firstName`, `lastName`, `personalEmail`, `businessEmail`, `employeeId`, `jobTitle`) is automatically included in:
 1. `GET /api/v2/user/org/:orgId` — Organization employee list (`getUser`)
 2. `GET /api/v2/user/:id` — Single user profile details (`getUserById`)
 3. `GET /api/v2/user/subordinates/:managerId` — Subordinates assigned to a manager
@@ -974,7 +962,6 @@ The `manager` object (`firstName`, `lastName`, `email`, `employeeId`, `jobTitle`
     "employeeId": "ST2026715195752",
     "firstName": "Soumabrata",
     "lastName": "Ghosh",
-    "email": "soumabrata.ghosh@shapenxt.com",
     "businessEmail": "soumabrata.ghosh@shapenxt.com",
     "personalEmail": "soumabrataghosh2005@gmail.com",
     "status": "active",
@@ -987,7 +974,6 @@ The `manager` object (`firstName`, `lastName`, `email`, `employeeId`, `jobTitle`
       "id": "cmvr4vimf0001m29c98zzll1q",
       "firstName": "Souma",
       "lastName": "Ghosh",
-      "email": "soumabrataghosh2005@gmail.com",
       "employeeId": "ADM-001",
       "jobTitle": "Engineering Manager"
     },
@@ -1029,7 +1015,6 @@ The `manager` object (`firstName`, `lastName`, `email`, `employeeId`, `jobTitle`
       "firstName": "Soumabrata",
       "lastName": "Ghosh",
       "jobTitle": "Software Engineer",
-      "email": "soumabrata.ghosh@shapenxt.com",
       "businessEmail": "soumabrata.ghosh@shapenxt.com",
       "personalEmail": "soumabrataghosh2005@gmail.com",
       "department": {
@@ -1040,7 +1025,6 @@ The `manager` object (`firstName`, `lastName`, `email`, `employeeId`, `jobTitle`
         "id": "cmvr4vimf0001m29c98zzll1q",
         "firstName": "Souma",
         "lastName": "Ghosh",
-        "email": "soumabrataghosh2005@gmail.com",
         "employeeId": "ADM-001",
         "jobTitle": "Engineering Manager"
       }
@@ -1065,7 +1049,6 @@ The `manager` object (`firstName`, `lastName`, `email`, `employeeId`, `jobTitle`
     "firstName": "Soumabrata",
     "lastName": "Ghosh",
     "jobTitle": "Software Engineer",
-    "email": "soumabrata.ghosh@shapenxt.com",
     "businessEmail": "soumabrata.ghosh@shapenxt.com",
     "personalEmail": "soumabrataghosh2005@gmail.com",
     "department": {
@@ -1076,7 +1059,6 @@ The `manager` object (`firstName`, `lastName`, `email`, `employeeId`, `jobTitle`
       "id": "cmvr4vimf0001m29c98zzll1q",
       "firstName": "Souma",
       "lastName": "Ghosh",
-      "email": "soumabrataghosh2005@gmail.com",
       "employeeId": "ADM-001",
       "jobTitle": "Engineering Manager"
     }
@@ -1099,7 +1081,6 @@ The `manager` object (`firstName`, `lastName`, `email`, `employeeId`, `jobTitle`
     "employeeId": "ADM-001",
     "firstName": "Souma",
     "lastName": "Ghosh",
-    "email": "soumabrataghosh2005@gmail.com",
     "jobTitle": "Engineering Manager",
     "department": {
       "id": "dept_123",

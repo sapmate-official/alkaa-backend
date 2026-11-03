@@ -249,10 +249,13 @@ export const getCandidates = async (req, res) => {
             }
         });
 
-        const formattedCandidates = candidates.map(c => ({
-            ...c,
-            personalEmail: c.email
-        }));
+        const formattedCandidates = candidates.map(c => {
+            const { email: _e, businessEmail: _be, ...rest } = c;
+            return {
+                ...rest,
+                personalEmail: c.personalEmail || c.email
+            };
+        });
         res.status(200).json(formattedCandidates);
     } catch (error) {
         console.error('Error fetching candidates:', error);
@@ -315,8 +318,9 @@ export const getCandidateById = async (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
+        const { email: _e, businessEmail: _be, ...rest } = candidate;
         res.status(200).json({
-            ...candidate,
+            ...rest,
             personalEmail: candidate.personalEmail || candidate.email
         });
     } catch (error) {
@@ -1613,10 +1617,12 @@ export const completeOnboarding = [
                 message: 'Onboarding completed successfully',
                 user: {
                     id: user.id,
-                    email: user.email,
                     employeeId: user.employeeId,
                     firstName: user.firstName,
                     lastName: user.lastName,
+                    personalEmail: user.personalEmail || candidate.email,
+                    businessEmail: user.businessEmail || null,
+                    jobTitle: user.jobTitle || null,
                     department: user.department?.name,
                     manager: user.manager ? `${user.manager.firstName} ${user.manager.lastName}` : null
                 }

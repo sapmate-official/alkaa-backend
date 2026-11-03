@@ -43,7 +43,8 @@ const listOfLeave  = async (req, res) => {
                                 id: true,
                                 firstName: true,
                                 lastName: true,
-                                email: true,
+                                personalEmail: true,
+                                businessEmail: true,
                                 employeeId: true,
                                 jobTitle: true
                             }
@@ -53,7 +54,7 @@ const listOfLeave  = async (req, res) => {
                 leaveType: true
             }
         });
-        res.status(200).json(leaves);
+        res.status(200).json(leaves.map(l => ({ ...l, user: sanitizeUserEmails(l.user) })));
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: error.message });
@@ -178,7 +179,7 @@ const employeeList = async (req, res) => {
                 }
             }
         });
-        res.status(200).json(employees);
+        res.status(200).json(employees.map(sanitizeUserEmails));
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: error.message });
