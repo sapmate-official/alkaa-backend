@@ -218,7 +218,7 @@ export const requestLoginOTP = [
             // Send OTP email
             try {
                 await sendLoginOTPEmail(
-                    session.user.email,
+                    session.user.businessEmail || session.user.email || session.user.personalEmail,
                     session.user.firstName,
                     otp,
                     session.user.organization.name,
@@ -518,7 +518,7 @@ export const resendLoginOTP = [
             // Send OTP email
             try {
                 await sendLoginOTPEmail(
-                    session.user.email,
+                    session.user.businessEmail || session.user.email || session.user.personalEmail,
                     session.user.firstName,
                     otp,
                     session.user.organization.name,

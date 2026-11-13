@@ -313,7 +313,7 @@ const verifyPasswordAndSendOtp = async (req, res) => {
         // console.log("OTP : ",otpCode)
         // Send OTP email with organization branding
         await sendLoginOTPEmail(
-            user.email,
+            user.businessEmail || user.email || user.personalEmail,
             `${user.firstName} ${user.lastName}`,
             otpCode,
             user.organization.name,

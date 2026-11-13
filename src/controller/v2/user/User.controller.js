@@ -362,14 +362,12 @@ export const updateUser = async (req, res) => {
     }
 
     const { id } = req.params;
-    const isPutRequest = req.method === 'PUT';
     
     // Create initial update data object
     const updateData = {};
     
     // Handle fields with proper validation
     
-    // Required fields for PUT requests
     if (req.body.email) updateData.email = req.body.email;
     if (req.body.orgId) updateData.orgId = req.body.orgId;
     
@@ -429,12 +427,6 @@ export const updateUser = async (req, res) => {
         updateData.monthlySalary = parseFloat(req.body.monthlySalary);
     }
 
-    // For PUT requests, validate required fields
-    if (isPutRequest && (!updateData.email || !updateData.orgId)) {
-        console.log('Missing required fields for PUT request');
-        return res.status(400).json({ error: 'Email and orgId are required for PUT requests' });
-    }
-    
     try {
         console.log('Updating user with data:', updateData);
         
