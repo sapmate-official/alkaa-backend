@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import prisma from '../../../db/connectDb.js';
 import { sendLoginOTPEmail, sendLoginNotificationEmail } from '../../../util/sendEmail.js';
 import { generateTokens } from '../../../util/generate.js';
+import { stripSecrets } from '../../../util/sanitize.js';
 
 /**
  * Step 1: Verify credentials without full login
@@ -571,7 +572,7 @@ export const toggle2FA = async (req, res) => {
 
         res.status(200).json({
             message: `2FA ${enabled ? 'enabled' : 'disabled'} successfully`,
-            user: updatedUser
+            user: sanitizeUserData(updatedUser)
         });
 
     } catch (error) {
@@ -605,7 +606,7 @@ export const updateNotificationPreferences = async (req, res) => {
 
         res.status(200).json({
             message: 'Notification preferences updated successfully',
-            user: updatedUser
+            user: sanitizeUserData(updatedUser)
         });
 
     } catch (error) {
@@ -639,8 +640,7 @@ const generateAuthTokens = async (user) => {
 };
 
 const sanitizeUserData = (user) => {
-    const { hashedPassword, refreshToken, verificationToken, ...sanitizedUser } = user;
-    return sanitizedUser;
+    return stripSecrets(user);
 };
 
 const checkOrganization2FAPolicy = async (orgId) => {

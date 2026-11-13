@@ -2,6 +2,7 @@ import prisma from '../../../db/connectDb.js';
 import bcrypt from 'bcrypt';
 import { generateTokens } from '../../../util/generate.js';
 import { sendBillingEmail } from '../../../util/sendEmail.js';
+import { stripSecrets } from '../../../util/sanitize.js';
 
 // Get all super admins
 export const getSuperAdmins = async (req, res) => {
@@ -16,7 +17,7 @@ export const getSuperAdmins = async (req, res) => {
             }
         });
         
-        res.status(200).json(superAdmins);
+        res.status(200).json(superAdmins.map(stripSecrets));
     } catch (error) {
         res.status(500).json({ message: "Error fetching super admins", error: error.message });
     }
@@ -41,7 +42,7 @@ export const getSuperAdminById = async (req, res) => {
             return res.status(404).json({ message: "Super admin not found" });
         }
 
-        res.status(200).json(superAdmin);
+        res.status(200).json(stripSecrets(superAdmin));
     } catch (error) {
         res.status(500).json({ message: "Error fetching super admin", error: error.message });
     }
@@ -85,7 +86,7 @@ export const createSuperAdmin = async (req, res) => {
             }
         });
 
-        res.status(201).json(superAdmin);
+        res.status(201).json(stripSecrets(superAdmin));
     } catch (error) {
         res.status(500).json({ message: "Error creating super admin", error: error.message });
     }
@@ -127,7 +128,7 @@ export const updateSuperAdmin = async (req, res) => {
             }
         });
 
-        res.status(200).json(updatedSuperAdmin);
+        res.status(200).json(stripSecrets(updatedSuperAdmin));
     } catch (error) {
         res.status(500).json({ message: "Error updating super admin", error: error.message });
     }

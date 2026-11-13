@@ -1,6 +1,10 @@
 import prisma from "../../../db/connectDb.js";
 import { validationResult } from "express-validator";
 import { sendLeaveRequestEmail, sendLeaveStatusUpdateEmail } from "../../../util/sendEmail.js";
+import { stripSecrets } from "../../../util/sanitize.js";
+
+const sanitizeLeaveRequest = (record) =>
+    record && record.user ? { ...record, user: stripSecrets(record.user) } : record;
 
 
 
@@ -362,7 +366,7 @@ export const createLeaveRequest = async (req, res) => {
             }
         }
 
-        res.status(201).json(finalLeaveRequest);
+        res.status(201).json(sanitizeLeaveRequest(finalLeaveRequest));
     } catch (error) {
         console.error('Error in createLeaveRequest:', error);
         res.status(500).json({ error: error.message });
@@ -474,7 +478,7 @@ export const getLeaveRequestByManagerId = async (req, res) => {
                 }
             });
         }
-        res.status(200).json(leaveRequests);
+        res.status(200).json(leaveRequests.map(sanitizeLeaveRequest));
     } catch (error) {
         console.log(error)
         res.status(500).json({ error: error.message });
@@ -570,7 +574,7 @@ export const approveLeaveRequest = async (req, res) => {
         )
 
         res.status(200).json({
-            leaveRequest: updatedRequest,
+            leaveRequest: sanitizeLeaveRequest(updatedRequest),
             leaveBalance: updatedBalance
         });
 
@@ -646,7 +650,7 @@ export const rejectLeaveRequest = async (req, res) => {
             org_name.organization.name,
         )
 
-        res.status(200).json(updatedRequest);
+        res.status(200).json(sanitizeLeaveRequest(updatedRequest));
 
     } catch (error) {
         console.error(error);

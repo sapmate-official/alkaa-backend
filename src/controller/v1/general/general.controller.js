@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { generateTokens, generateTokensWithOrg } from "../../../util/generate.js";
 import crypto from "crypto";
 import { sendLoginOTPEmail } from "../../../util/sendEmail.js";
+import { stripSecrets } from "../../../util/sanitize.js";
 // Step 1: Check Email and Organizations
 const checkEmailForLogin = async (req, res) => {
     try {
@@ -533,7 +534,7 @@ const setPassword = async (req, res) => {
                 data: { hashedPassword, status: "active" },
             });
 
-            res.status(200).json(updatedUser);
+            res.status(200).json(stripSecrets(updatedUser));
         } else {
             res.status(404).json({ message: "User not found" });
         }
@@ -784,7 +785,7 @@ const validatetoken = async (req, res) => {
         
         res.status(200).json({ 
             message: "Token is valid", 
-            user: data,
+            user: stripSecrets(data),
             authenticated: true 
         });
     } catch (error) {
@@ -998,7 +999,7 @@ const updateProfile = async (req, res) => {
             where: { id: id },
             data: { name, email, role, status, annualPackage, hiredDate, dateOfBirth },
         });
-        res.status(200).json(user);
+        res.status(200).json(stripSecrets(user));
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

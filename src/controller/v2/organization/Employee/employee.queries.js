@@ -1,25 +1,5 @@
 import prisma from "../../../../db/connectDb.js";
-
-const sanitizeManagerEmails = (m) => {
-    if (!m) return m;
-    const { email: _e, ...rest } = m;
-    return {
-        ...rest,
-        personalEmail: m.personalEmail || m.email,
-        businessEmail: m.businessEmail || null
-    };
-};
-
-const sanitizeUserEmails = (u) => {
-    if (!u) return u;
-    const { email: _e, ...rest } = u;
-    return {
-        ...rest,
-        personalEmail: u.personalEmail || u.email,
-        businessEmail: u.businessEmail || null,
-        ...(u.manager !== undefined ? { manager: sanitizeManagerEmails(u.manager) } : {})
-    };
-};
+import { sanitizeUser } from "../../../../util/sanitize.js";
 
 
 // List all employees
@@ -57,7 +37,7 @@ const listOfEmployees = async (req, res) => {
         });
         console.log(employees);
 
-        res.json(employees.map(sanitizeUserEmails));
+        res.json(employees.map(sanitizeUser));
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -96,7 +76,7 @@ const getEmployeeById = async (req, res) => {
             return res.status(404).json({ error: 'Employee not found' });
         }
 
-        res.json(sanitizeUserEmails(employee));
+        res.json(sanitizeUser(employee));
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

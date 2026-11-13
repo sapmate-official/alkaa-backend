@@ -1,6 +1,7 @@
 import prisma from "../../../db/connectDb.js";
 import bcrypt from "bcrypt";
 import { sendPasswordResetEmail } from "../../../util/sendEmail.js";
+import { stripSecrets } from "../../../util/sanitize.js";
 
 const registerEmployee = async (req, res) => { 
     const { name, email, password="sapmate" } = req.body;
@@ -22,7 +23,7 @@ const registerEmployee = async (req, res) => {
             //send email with verificationToken\
             sendPasswordResetEmail(email,verificationToken)
         }
-        res.status(201).json(admin);
+        res.status(201).json(stripSecrets(admin));
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

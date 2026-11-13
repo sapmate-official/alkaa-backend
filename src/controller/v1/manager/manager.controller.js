@@ -1,6 +1,7 @@
 import prisma from "../../../db/connectDb.js";
 import bcrypt from "bcrypt";
 import { sendPasswordResetEmail } from "../../../util/sendEmail.js";
+import { stripSecrets } from "../../../util/sanitize.js";
 
 const registerManager = async (req, res) => { 
     const { name, email, password } = req.body;
@@ -21,7 +22,7 @@ const registerManager = async (req, res) => {
             //send email with verificationToken\
             sendPasswordResetEmail(email,verificationToken)
         }
-        res.status(201).json(admin);
+        res.status(201).json(stripSecrets(admin));
     } catch (error) {
         console.log(error)
         res.status(500).json({ error: error.message });
@@ -54,7 +55,7 @@ const listOfLeave  = async (req, res) => {
                 leaveType: true
             }
         });
-        res.status(200).json(leaves.map(l => ({ ...l, user: sanitizeUserEmails(l.user) })));
+        res.status(200).json(leaves.map(l => ({ ...l, user: stripSecrets(l.user) })));
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: error.message });
@@ -179,7 +180,7 @@ const employeeList = async (req, res) => {
                 }
             }
         });
-        res.status(200).json(employees.map(sanitizeUserEmails));
+        res.status(200).json(employees.map(stripSecrets));
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: error.message });

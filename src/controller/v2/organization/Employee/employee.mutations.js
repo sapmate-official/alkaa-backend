@@ -1,5 +1,6 @@
 import prisma from "../../../../db/connectDb.js";
 import { sendNewEmployeeWelcomeEmail } from "../../../../util/sendEmail.js";
+import { sanitizeUser } from "../../../../util/sanitize.js";
 //working solution
 // Create new employee
 const createEmployee = async (req, res) => {
@@ -245,7 +246,7 @@ const createEmployee = async (req, res) => {
         });
 
         console.log('Employee created successfully:', employee);
-        res.status(201).json(employee);
+        res.status(201).json(sanitizeUser(employee));
     } catch (error) {
         console.error('Error creating employee:', error);
         res.status(500).json({ error: error.message });
@@ -311,7 +312,7 @@ const updateEmployee = async (req, res) => {
             }
         });
 
-        res.json(employee);
+        res.json(sanitizeUser(employee));
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

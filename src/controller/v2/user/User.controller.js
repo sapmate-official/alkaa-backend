@@ -3,6 +3,7 @@ import { validationResult } from 'express-validator';
 import { sendPasswordResetEmail, sendNewEmployeeWelcomeEmail, sendDepartmentChangeEmail } from '../../../util/sendEmail.js';
 import { logProfileChange, logUserCreation, logUserStatusChange, logAuthActivity, logRoleChange, logUserDeletion, logDepartmentChange } from '../../../util/activityLogger.js';
 import bcrypt from 'bcrypt';
+import { sanitizeUser, stripSecrets } from '../../../util/sanitize.js';
 
 // Helper function to find user by id or employeeId
 const findUserByIdOrEmployeeId = async (identifier, includeOptions = {}) => {
@@ -23,27 +24,6 @@ const findUserByIdOrEmployeeId = async (identifier, includeOptions = {}) => {
     return user;
 };
 
-
-const sanitizeManagerEmails = (m) => {
-    if (!m) return m;
-    const { email: _e, ...rest } = m;
-    return {
-        ...rest,
-        personalEmail: m.personalEmail || m.email,
-        businessEmail: m.businessEmail || null
-    };
-};
-
-const sanitizeUserEmails = (u) => {
-    if (!u) return u;
-    const { email: _e, ...rest } = u;
-    return {
-        ...rest,
-        personalEmail: u.personalEmail || u.email,
-        businessEmail: u.businessEmail || null,
-        ...(u.manager !== undefined ? { manager: sanitizeManagerEmails(u.manager) } : {})
-    };
-};
 
 export const getUser = async (req, res) => {
     try {
@@ -83,7 +63,7 @@ export const getUser = async (req, res) => {
                 }
             }
         }});
-        res.status(200).json(users.map(sanitizeUserEmails));
+        res.status(200).json(users.map(sanitizeUser));
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });
     }
@@ -127,11 +107,11 @@ export const getUserById = async (req, res) => {
             const superAdmin = await prisma.superAdmin.findUnique({ where: { id } });
             if (superAdmin) {
                 return res.status(200).json({
-                    superAdmin});
+                    superAdmin: stripSecrets(superAdmin)});
             }
             return res.status(404).json({ error: 'User not found' });
         }
-        res.status(200).json({ user: sanitizeUserEmails(user) });
+        res.status(200).json({ user: sanitizeUser(user) });
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });
     }
@@ -333,7 +313,7 @@ export const createUser = async (req, res) => {
         // Return success response
         res.status(201).json({
             message: 'User created successfully',
-            user: newUser
+            user: sanitizeUser(newUser)
         });
     } catch (error) {
         console.error('Error creating user:', error);
@@ -620,7 +600,7 @@ export const updateUser = async (req, res) => {
         }
         
         console.log('User updated successfully:', updatedUser);
-        res.status(200).json(updatedUser);
+        res.status(200).json(sanitizeUser(updatedUser));
     } catch (error) {
         console.error('Error updating user:', error);
         
@@ -1263,7 +1243,7 @@ export const fetchAllSubordinates = async (req, res) => {
             }
         });
         
-        res.status(200).json(subordinates.map(sanitizeUserEmails));
+        res.status(200).json(subordinates.map(sanitizeUser));
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: 'Internal Server Error', error });
@@ -1338,7 +1318,7 @@ export const fetchAllUsersFromOrg = async (req, res) => {
             }
         });
         
-        res.status(200).json(users.map(sanitizeUserEmails));
+        res.status(200).json(users.map(sanitizeUser));
     } catch (error) {
         console.log(error);
         res.status(500).json({ error: 'Internal Server Error', error });
@@ -1371,7 +1351,7 @@ export const fetchManagers = async (req, res) => {
             return res.status(200).json([]);
         }
         
-        return res.status(200).json(managersWithPermissions);
+        return res.status(200).json(managersWithPermissions.map(sanitizeUser));
     } catch (error) {
         console.error("Error fetching managers:", error);
         return res.status(500).json({ error: 'Internal Server Error' });
@@ -1532,7 +1512,7 @@ export const updateUserDepartment = async (req, res) => {
         
         res.status(200).json({
             message: "User department updated successfully",
-            user: updatedUser,
+            user: sanitizeUser(updatedUser),
             departmentChange: {
                 from: oldDepartment?.name || 'Not Assigned',
                 to: newDepartment.name,
